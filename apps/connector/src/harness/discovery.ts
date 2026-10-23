@@ -3,6 +3,7 @@ import { join, dirname, resolve, isAbsolute } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createRequire } from 'node:module';
+import { homedir } from 'node:os';
 import type { HarnessInfo } from '../types';
 import type { ProcessCommand } from './rpc';
 
@@ -30,6 +31,12 @@ export async function findCodex(): Promise<string | null> {
     } catch { /* Missing app is reported in UI. */ }
     const npmCli = join(process.env.APPDATA ?? '', 'npm', 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
     if (await exists(npmCli)) return npmCli;
+  }
+  if (process.platform === 'darwin') {
+    for (const base of [join(homedir(), 'Applications'), '/Applications']) {
+      const bundled = join(base, 'Codex.app', 'Contents', 'Resources', 'codex');
+      if (await exists(bundled)) return bundled;
+    }
   }
   return null;
 }
@@ -80,6 +87,14 @@ export async function findLocalHarness(name: 'dsh' | 'workbuddy'): Promise<strin
       join(local, 'Programs', app, 'resources', 'app.asar.unpacked', 'cli', 'dist', 'codebuddy.js'),
     ]);
     for (const path of candidates) if (await exists(path)) return path;
+  }
+  if (process.platform === 'darwin') {
+    for (const base of [join(homedir(), 'Applications'), '/Applications']) {
+      const candidates = name === 'workbuddy'
+        ? ['WorkBuddy', 'CodeBuddy'].map(app => join(base, `${app}.app`, 'Contents/Resources/app.asar.unpacked/cli/bin/codebuddy'))
+        : [join(base, 'DeepSeek Harness.app', 'Contents/Resources/runtime/cli/bin/dsh')];
+      for (const path of candidates) if (await exists(path)) return path;
+    }
   }
   return null;
 }
