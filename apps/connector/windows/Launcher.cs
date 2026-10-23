@@ -207,15 +207,21 @@ namespace AgentArcade {
         private bool checkingUpdate;
         private bool updateAvailable;
         private static readonly Color Green = Color.FromArgb(43, 97, 76);
-        public ConnectorWindow(string runtimeRoot, int port) {
+        public ConnectorWindow(string runtimeRoot, int port, bool preview = false) {
             root = runtimeRoot;
-            Text = "同桌 · 本地连接器"; ClientSize = new Size(490, 407);
-            FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false;
+            SuspendLayout();
+            // Build the complete tree before DPI scaling. Incrementally adding
+            // auto-sized nested panels while scaling is active scales margins
+            // repeatedly on high-DPI desktops.
+            AutoScaleMode = AutoScaleMode.None;
+            Text = "同桌 · 本地连接器"; ClientSize = new Size(560, 540);
+            MinimumSize = new Size(520, 500); MaximizeBox = false;
+            AutoSize = true; AutoSizeMode = AutoSizeMode.GrowAndShrink;
             StartPosition = FormStartPosition.CenterScreen; BackColor = Color.FromArgb(247, 249, 243);
-            Font = new Font("Microsoft YaHei UI", 9F);
-            tray.Icon = SystemIcons.Application;
+            Font = new Font("Microsoft YaHei UI", 10F);
+            Icon = ConnectorIcon.Load(); tray.Icon = Icon;
             tray.Text = "同桌 · 本地连接器";
-            tray.Visible = true;
+            tray.Visible = !preview;
             var trayMenu = new ContextMenuStrip();
             trayMenu.Items.Add("显示窗口", null, delegate { RestoreFromTray(); });
             trayMenu.Items.Add("检查更新", null, delegate { RestoreFromTray(); CheckForUpdates(); });
@@ -224,27 +230,44 @@ namespace AgentArcade {
             tray.ContextMenuStrip = trayMenu;
             tray.DoubleClick += delegate { RestoreFromTray(); };
             Resize += delegate { if (WindowState == FormWindowState.Minimized) HideToTray(); };
-            var logo = new LogoPanel(); logo.Location = new Point(25, 29); logo.Size = new Size(39, 39); Controls.Add(logo);
-            var title = AddLabel("同桌 · 本地连接器", 78, 26, 375, 29, 16F, Green);
-            title.Font = new Font("Microsoft YaHei UI", 16F, FontStyle.Bold);
-            AddLabel("WINDOWS  /  PORTABLE", 80, 59, 350, 20, 8F, Color.FromArgb(141, 157, 128));
-            var panel = new Panel(); panel.Location = new Point(25, 105); panel.Size = new Size(440, 100); panel.BackColor = Color.White; Controls.Add(panel);
-            status.Text = "正在启动连接器…"; status.Location = new Point(19, 17); status.Size = new Size(405, 28); status.Font = new Font("Microsoft YaHei UI", 13F, FontStyle.Bold); status.ForeColor = Green; panel.Controls.Add(status);
-            account.Text = "正在检测 Codex、dsh 与 WorkBuddy"; account.Location = new Point(20, 55); account.Size = new Size(405, 29); account.ForeColor = Color.FromArgb(133, 151, 117); panel.Controls.Add(account);
-            detail.Text = "启动后，回到游戏网页点击「连接本机」。"; detail.Location = new Point(27, 225); detail.Size = new Size(435, 37); detail.ForeColor = Color.FromArgb(114, 135, 96); Controls.Add(detail);
-            version.Text = "当前版本 v" + UpdateChecker.CurrentVersionText; version.Location = new Point(28, 284); version.Size = new Size(305, 40); version.ForeColor = Color.FromArgb(114, 135, 96); Controls.Add(version);
-            update.Text = "检查更新"; update.Location = new Point(348, 280); update.Size = new Size(117, 36); update.FlatStyle = FlatStyle.Flat; update.ForeColor = Green; update.Click += delegate { if (updateAvailable) OpenUpdateDownload(); else CheckForUpdates(); }; Controls.Add(update);
-            AddLabel("本机端口  127.0.0.1:" + port, 28, 358, 195, 21, 8F, Color.FromArgb(155, 169, 141));
-            var minimize = new Button(); minimize.Text = "缩到托盘"; minimize.Location = new Point(232, 349); minimize.Size = new Size(105, 36); minimize.FlatStyle = FlatStyle.Flat; minimize.ForeColor = Green; minimize.Click += delegate { HideToTray(); }; Controls.Add(minimize);
-            var exit = new Button(); exit.Text = "退出连接器"; exit.Location = new Point(348, 349); exit.Size = new Size(117, 36); exit.BackColor = Green; exit.ForeColor = Color.White; exit.FlatStyle = FlatStyle.Flat; exit.FlatAppearance.BorderSize = 0; exit.Click += delegate { ExitConnector(); }; Controls.Add(exit);
+            var layout = new TableLayoutPanel(); layout.Dock = DockStyle.Fill; layout.Padding = new Padding(28);
+            layout.AutoSize = true; layout.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            layout.ColumnCount = 1; layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            layout.RowCount = 7; for (int i = 0; i < 6; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.AutoScroll = true; Controls.Add(layout);
+            var heading = new TableLayoutPanel(); heading.AutoSize = true; heading.Dock = DockStyle.Top;
+            heading.AutoSizeMode = AutoSizeMode.GrowAndShrink; heading.RowCount = 1; heading.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            heading.ColumnCount = 2; heading.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56)); heading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            heading.SizeChanged += delegate { FitText(heading); };
+            heading.Margin = new Padding(0, 0, 0, 24);
+            var logo = new LogoPanel(); logo.Size = new Size(39, 39); logo.Margin = new Padding(0, 6, 0, 0); heading.Controls.Add(logo, 0, 0);
+            var titles = Stack(); var title = AddText(titles, "同桌 · 本地连接器", 18F, Green);
+            title.Font = new Font(Font.FontFamily, 18F, FontStyle.Bold);
+            AddText(titles, "WINDOWS  /  PORTABLE", 8F, Color.FromArgb(118, 137, 105)); heading.Controls.Add(titles, 1, 0); layout.Controls.Add(heading, 0, 0);
+            var panel = Stack(); panel.BackColor = Color.White; panel.Padding = new Padding(20); panel.Margin = new Padding(0, 0, 0, 20);
+            ConfigureText(status, "正在启动连接器…", 13F, Green); status.Font = new Font(Font.FontFamily, 13F, FontStyle.Bold); status.Margin = new Padding(0, 0, 0, 10); panel.Controls.Add(status);
+            ConfigureText(account, "正在检测 Codex、dsh 与 WorkBuddy", 10F, Color.FromArgb(104, 124, 91)); panel.Controls.Add(account); layout.Controls.Add(panel, 0, 1);
+            ConfigureText(detail, "启动后，回到游戏网页点击「连接本机」。关闭窗口会继续在托盘运行。", 10F, Color.FromArgb(92, 112, 80)); detail.Margin = new Padding(0, 0, 0, 20); layout.Controls.Add(detail, 0, 2);
+            var updates = Stack(); updates.Margin = new Padding(0, 0, 0, 20);
+            ConfigureText(version, "当前版本 v" + UpdateChecker.CurrentVersionText, 9F, Color.FromArgb(104, 124, 91)); version.Margin = new Padding(0, 0, 0, 10); updates.Controls.Add(version);
+            StyleButton(update, "检查更新", false); update.Click += delegate { if (updateAvailable) OpenUpdateDownload(); else CheckForUpdates(); }; updates.Controls.Add(update); layout.Controls.Add(updates, 0, 3);
+            var address = AddText(layout, "本机地址  127.0.0.1:" + port + "  ·  登录凭据留在本机", 9F, Color.FromArgb(118, 137, 105)); address.Margin = new Padding(0, 0, 0, 18); layout.SetCellPosition(address, new TableLayoutPanelCellPosition(0, 4));
+            var actions = new FlowLayoutPanel(); actions.AutoSize = true; actions.Dock = DockStyle.Top; actions.WrapContents = true; actions.Margin = Padding.Empty;
+            var minimize = new Button(); StyleButton(minimize, "缩到托盘", false); minimize.Click += delegate { HideToTray(); }; actions.Controls.Add(minimize);
+            var exit = new Button(); StyleButton(exit, "退出连接器", true); exit.Click += delegate { ExitConnector(); }; actions.Controls.Add(exit); layout.Controls.Add(actions, 0, 5);
+            // Each text block takes the available column width and grows in
+            // height. The action row never overlaps long status/error messages.
+            layout.SizeChanged += delegate { FitText(layout); }; FitText(layout);
+            AutoScaleMode = AutoScaleMode.Dpi; AutoScaleDimensions = new SizeF(96F, 96F);
+            ResumeLayout(true);
             process.Output += HandleOutput;
             process.Exited += delegate(int code) { OnUI(delegate { if (!stopping) { process.Dispose(); status.Text = code == 0 ? "连接器已停止" : "连接器启动失败"; status.ForeColor = Color.FromArgb(166, 105, 72); detail.Text = lastLine; } }); };
-            Shown += delegate { try { process.Start(root); } catch (Exception error) { status.Text = "连接器启动失败"; detail.Text = error.Message; process.Dispose(); } };
+            Shown += delegate { FitText(layout); if (preview) return; try { process.Start(root); } catch (Exception error) { status.Text = "连接器启动失败"; detail.Text = error.Message; process.Dispose(); } };
             FormClosing += delegate(object sender, FormClosingEventArgs e) {
                 if (e.CloseReason == CloseReason.UserClosing && !exitRequested) { e.Cancel = true; HideToTray(); return; }
                 stopping = true; tray.Visible = false; process.Dispose();
             };
-            FormClosed += delegate { trayMenu.Dispose(); tray.Dispose(); };
+            Disposed += delegate { trayMenu.Dispose(); tray.Dispose(); process.Dispose(); };
         }
         private void HideToTray() { Hide(); ShowInTaskbar = false; }
         private void RestoreFromTray() { WindowState = FormWindowState.Normal; ShowInTaskbar = true; Show(); Activate(); }
@@ -267,8 +290,33 @@ namespace AgentArcade {
             try { Process.Start(new ProcessStartInfo(UpdateChecker.DownloadUrl) { UseShellExecute = true }); }
             catch { version.Text = "无法打开浏览器，请从游戏网页下载。"; }
         }
-        private Label AddLabel(string text, int x, int y, int width, int height, float size, Color color) {
-            var label = new Label(); label.Text = text; label.Location = new Point(x, y); label.Size = new Size(width, height); label.Font = new Font("Microsoft YaHei UI", size); label.ForeColor = color; Controls.Add(label); return label;
+        private static TableLayoutPanel Stack() {
+            var panel = new TableLayoutPanel(); panel.AutoSize = true; panel.AutoSizeMode = AutoSizeMode.GrowAndShrink; panel.Dock = DockStyle.Top;
+            panel.ColumnCount = 1; panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); panel.Margin = Padding.Empty;
+            panel.GrowStyle = TableLayoutPanelGrowStyle.AddRows;
+            panel.ControlAdded += delegate { panel.RowCount = panel.Controls.Count; while (panel.RowStyles.Count < panel.RowCount) panel.RowStyles.Add(new RowStyle(SizeType.AutoSize)); };
+            panel.SizeChanged += delegate { FitText(panel); }; return panel;
+        }
+        private void ConfigureText(Label label, string text, float size, Color color) {
+            label.AutoSize = true; label.Dock = DockStyle.Top; label.Margin = Padding.Empty;
+            label.Text = text; label.Font = new Font(Font.FontFamily, size); label.ForeColor = color;
+        }
+        private Label AddText(Control parent, string text, float size, Color color) {
+            var label = new Label(); ConfigureText(label, text, size, color); parent.Controls.Add(label); return label;
+        }
+        private static void FitText(Control parent) {
+            foreach (Control child in parent.Controls) {
+                var label = child as Label;
+                if (label != null) label.MaximumSize = new Size(Math.Max(100, parent.ClientSize.Width - parent.Padding.Horizontal - label.Margin.Horizontal), 0);
+                if (child.HasChildren) FitText(child);
+            }
+        }
+        private static void StyleButton(Button button, string text, bool primary) {
+            button.Text = text; button.AutoSize = true; button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            button.Padding = new Padding(16, 8, 16, 8); button.Margin = new Padding(0, 0, 12, 0);
+            button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = primary ? 0 : 1;
+            button.BackColor = primary ? Green : Color.FromArgb(247, 249, 243); button.ForeColor = primary ? Color.White : Green;
+            button.UseVisualStyleBackColor = false; button.Cursor = Cursors.Hand;
         }
         private void HandleOutput(string line) {
             if (line.Trim().Length > 0 && !line.StartsWith("AGENT_ARCADE_STATUS:")) lastLine = line.Trim();
@@ -281,9 +329,16 @@ namespace AgentArcade {
         private void OnUI(Action action) { if (IsDisposed || !IsHandleCreated) return; try { BeginInvoke(action); } catch (InvalidOperationException) { } }
     }
     internal sealed class LogoPanel : Panel {
+        private readonly Icon icon = ConnectorIcon.Load();
         protected override void OnPaint(PaintEventArgs e) {
-            Color[] colors = { Color.FromArgb(43, 97, 76), Color.FromArgb(142, 167, 119), Color.FromArgb(176, 195, 148), Color.FromArgb(62, 112, 78) };
-            for (int i = 0; i < 4; i++) using (var brush = new SolidBrush(colors[i])) e.Graphics.FillRectangle(brush, (i % 2) * 21, (i / 2) * 21, 17, 17);
+            e.Graphics.DrawIcon(icon, new Rectangle(0, 0, Width, Height));
+        }
+        protected override void Dispose(bool disposing) { if (disposing) icon.Dispose(); base.Dispose(disposing); }
+    }
+    internal static class ConnectorIcon {
+        internal static Icon Load() {
+            using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("AgentArcade.Icon"))
+            using (var icon = new Icon(stream, new Size(256, 256))) return (Icon)icon.Clone();
         }
     }
     internal static class Native {
