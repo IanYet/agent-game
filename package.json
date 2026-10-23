@@ -1,0 +1,45 @@
+{
+  "name": "agent-arcade",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A local game table for humans and their agents.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx scripts/dev.ts",
+    "dev:web": "vite --host 127.0.0.1",
+    "dev:connector": "tsx watch apps/connector/src/index.ts",
+    "build": "tsc --noEmit && vite build && node scripts/build.mjs",
+    "start": "node dist/connector/index.cjs",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "package:windows": "node scripts/package-windows.mjs",
+    "test:windows": "tsx scripts/test-windows-lifecycle.ts",
+    "check:codex": "tsx scripts/check-codex.ts"
+  },
+  "dependencies": {
+    "@agentclientprotocol/codex-acp": "2.2.2",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "express": "^5.1.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.18.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "esbuild": "^0.25.12",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.5",
+    "vitest": "^3.2.4"
+  }
+}
