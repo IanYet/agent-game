@@ -23,13 +23,14 @@ internal static class WindowsLayout {
         foreach (float scale in new float[] {1F, 1.5F, 2F}) {
             using (var host = new Panel { Size = new Size(4096, 4096) })
             using (var form = new ConnectorWindow("", 3211, true)) {
-                // A child form renders the actual native controls/chrome without
-                // Windows clamping its size to the runner's 1024x768 desktop.
+                // Construct the real form, including its normal DPI/layout code.
                 form.TopLevel = false; host.Controls.Add(form); host.CreateControl();
                 form.Show(); Application.DoEvents();
                 var fonts = new Dictionary<Control, Font>(); Fonts(form, fonts);
                 form.Scale(new SizeF(scale, scale));
                 foreach (var entry in fonts) entry.Key.Font = new Font(entry.Value.FontFamily, entry.Value.SizeInPoints * scale, entry.Value.Style);
+                var viewport = (Panel)form.Controls[0];
+                var content = (TableLayoutPanel)viewport.Controls[0];
                 foreach (string scenario in new string[] {"default", "ready", "connected", "error"}) {
                     Field<Label>(form, "status").Text = scenario == "ready" || scenario == "default" ? "●  已就绪，等待网页连接" : scenario == "connected" ? "●  游戏网页已连接" : "连接器启动失败";
                     Field<Label>(form, "account").Text = "Harness：Codex · ACP、Codex · App Server、dsh · DeepSeek Harness、WorkBuddy";
@@ -41,40 +42,57 @@ internal static class WindowsLayout {
                         Field<Label>(form, "version").Text = "当前版本 v" + UpdateChecker.CurrentVersionText;
                         Field<Button>(form, "update").Text = "检查更新";
                     }
-                    Application.DoEvents(); form.PerformLayout(); Application.DoEvents();
-                    // Hosted runners often have a 1024x768 virtual desktop.
-                    // A 200% preview is larger than that desktop; explicitly
-                    // allow the off-screen render to grow to its content size.
-                    // The product keeps scrolling available on small displays.
-                    for (int pass = 0; pass < 2; pass++) {
-                        Control root = form.Controls[0];
-                        Size needed = root.GetPreferredSize(new Size(root.Width, 0));
-                        form.MinimumSize = new Size((int)(520 * scale), needed.Height + form.Height - form.ClientSize.Height);
-                        form.PerformLayout(); Application.DoEvents();
+                    Application.DoEvents(); content.PerformLayout(); Application.DoEvents();
+                    if (scenario == "default") {
+                        try { CheckScrolling(form, viewport, scale); } catch (Exception error) { Console.WriteLine("Scroll check failed: " + error.Message); Dump(viewport, ""); Environment.Exit(1); }
+                        // WinForms constrains even child Forms to the virtual
+                        // desktop size. Render the SAME content controls in an
+                        // unconstrained panel so 200% images contain every row.
+                        viewport.Controls.Remove(content); host.Controls.Add(content);
+                        content.Dock = DockStyle.None;
+                        int width = (int)(504 * scale);
+                        content.MinimumSize = new Size(width, 0); content.MaximumSize = new Size(width, 0);
                     }
-                    if (scale == 1F && scenario == "ready" && Environment.GetEnvironmentVariable("LAYOUT_DEBUG") == "1") Dump(form, "");
-                    using (var bitmap = new Bitmap(form.Width, form.Height)) {
-                        form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+                    for (int pass = 0; pass < 3; pass++) {
+                        content.Size = new Size(content.MinimumSize.Width, content.GetPreferredSize(new Size(content.MinimumSize.Width, 0)).Height);
+                        content.PerformLayout(); Application.DoEvents();
+                    }
+                    using (var bitmap = new Bitmap(content.Width, content.Height)) {
+                        content.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
                         bitmap.Save(Path.Combine(args[0], scenario + "-" + (int)(scale * 100) + ".png"), ImageFormat.Png);
                     }
-                    Console.WriteLine("Checking " + scenario + " at " + (int)(scale * 100) + "%: " + form.Size);
-                    try { Check(form); } catch { Dump(form, ""); throw; }
+                    Console.WriteLine("Checking " + scenario + " at " + (int)(scale * 100) + "%: " + content.Size);
+                    try { Check(content, content); } catch { Dump(content, ""); throw; }
                 }
             }
         }
         Console.WriteLine("PASS: Windows layout at 100%, 150%, 200% with long Chinese status/error/update text. No connector process started.");
     }
-    private static void Check(Control parent) {
+    private static void Check(Control parent, Control viewport) {
         foreach (Control control in parent.Controls) {
             if (control is Label || control is Button) {
                 Size preferred = control.GetPreferredSize(new Size(control.Width, 0));
                 if (preferred.Height > control.Height + 2) throw new Exception("Clipped text: " + control.Text);
                 if (control.Right > parent.ClientSize.Width - parent.Padding.Right + 2) throw new Exception("Text outside column: " + control.Text);
-                var form = control.FindForm();
-                var visible = new Rectangle(form.PointToClient(control.PointToScreen(Point.Empty)), control.Size);
-                if (!form.ClientRectangle.Contains(visible)) throw new Exception("Control outside visible window: " + control.Text);
+                VisibleBounds(control, viewport);
             }
-            Check(control);
+            Check(control, viewport);
+        }
+    }
+    private static void VisibleBounds(Control control, Control viewport) {
+        var visible = new Rectangle(viewport.PointToClient(control.PointToScreen(Point.Empty)), control.Size);
+        if (!viewport.ClientRectangle.Contains(visible)) throw new Exception("Control outside visible area: " + control.Text);
+    }
+    private static void CheckScrolling(Form form, Panel content, float scale) {
+        form.AutoSize = false; form.MinimumSize = new Size(1, 1); form.Size = new Size((int)(520 * scale), (int)(380 * scale));
+        Application.DoEvents(); content.AutoScrollPosition = new Point(0, 100000); Application.DoEvents();
+        CheckExit(content, content); content.AutoScrollPosition = Point.Empty; Application.DoEvents();
+        Console.WriteLine("PASS: exit/minimize buttons reachable by scrolling in a short window at " + (int)(scale * 100) + "%.");
+    }
+    private static void CheckExit(Control parent, Control viewport) {
+        foreach (Control control in parent.Controls) {
+            if (control is Button && (control.Text == "退出连接器" || control.Text == "缩到托盘")) VisibleBounds(control, viewport);
+            CheckExit(control, viewport);
         }
     }
     private static void Fonts(Control control, Dictionary<Control, Font> fonts) {

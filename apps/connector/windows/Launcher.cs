@@ -232,11 +232,15 @@ namespace AgentArcade {
             tray.ContextMenuStrip = trayMenu;
             tray.DoubleClick += delegate { RestoreFromTray(); };
             Resize += delegate { if (WindowState == FormWindowState.Minimized) HideToTray(); };
-            var layout = new TableLayoutPanel(); layout.Dock = DockStyle.Fill; layout.Padding = new Padding(28);
+            // The scroll viewport must be separate from the auto-sized table.
+            // A Fill table with a percent filler row can get a negative row
+            // height on a short desktop and never expose its bottom buttons.
+            var viewport = new Panel(); viewport.Dock = DockStyle.Fill; viewport.AutoScroll = true; Controls.Add(viewport);
+            var layout = new TableLayoutPanel(); layout.Dock = DockStyle.Top; layout.Padding = new Padding(28);
             layout.AutoSize = true; layout.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             layout.ColumnCount = 1; layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            layout.RowCount = 7; for (int i = 0; i < 6; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.AutoScroll = true; Controls.Add(layout);
+            layout.RowCount = 6; for (int i = 0; i < 6; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            viewport.Controls.Add(layout);
             var heading = new TableLayoutPanel(); heading.AutoSize = true; heading.Dock = DockStyle.Top;
             heading.AutoSizeMode = AutoSizeMode.GrowAndShrink; heading.RowCount = 1; heading.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             heading.ColumnCount = 2; heading.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56)); heading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
