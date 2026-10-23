@@ -47,7 +47,7 @@ gh run list --repo IanYet/agent-game --workflow connector.yml
 gh run view <run-id> --repo IanYet/agent-game
 ```
 
-v0.4.1 修复 Codex ACP 出牌审批及网页的已结算任务收尾。网页最低版本要求连接器至少为 0.4.1；本次跨平台补包合入这份已实机验证的修复，沿用 0.4.1。原始实机证据与本次构建记录分别见验证文档。
+v0.4.1 修复 Codex ACP 出牌审批及网页的已结算任务收尾。网页最低版本要求连接器至少为 0.4.1；本次 0.4.2 纳入这份已实机验证的修复，并提供 Windows UI/图标更新和 macOS 支持。原始实机证据与本次构建记录分别见验证文档。
 
 此工作流不接受 push/tag 触发。矩阵使用 `windows-latest`（x64）、`macos-15`（arm64）、`macos-15-intel`（x64）；后两个标签已核对 [GitHub 官方 runner 列表](https://github.com/actions/runner-images)。CI 固定 Node 24.19.0，将本机相同架构运行时放入最终包。
 
@@ -55,7 +55,7 @@ v0.4.1 修复 Codex ACP 出牌审批及网页的已结算任务收尾。网页�
 
 全部构建通过后才运行唯一的 `publish` 作业。只有该作业有 `contents: write`；构建和 Pages 作业不持有 Release 写权限。仓库范围 concurrency 将手动运行排队，双架构不会同时修改 Release。打包或验证失败时发布作业被跳过。
 
-本次以已发布的 ACP 修复为基线，双端统一保持 **0.4.1、协议 4**，Windows AssemblyVersion/AssemblyFileVersion 为 0.4.1.0，不额外增加版本号。macOS Info.plist、包内元数据和 Release tag 均从 `apps/connector/version.json` 读取；打包时检查 Windows 两个版本属性一致。既有 v0.4.0 / v0.4.1 tag 不变，本次目标 Release 的标题和正文保留；不同于 tag 指向提交的补包来源以资产 `.build.json` 为准。没有对应 Release 时才创建新 Release，绝不移动已有 tag。
+本次以已发布的 ACP 修复为基线，双端统一为 **0.4.2、协议 4**，Windows AssemblyVersion/AssemblyFileVersion 为 0.4.2.0。macOS Info.plist、包内元数据和 Release tag 均从 `apps/connector/version.json` 读取；打包时检查 Windows 两个版本属性一致。新建 v0.4.2 时 tag 指向已验证源提交，既有 v0.4.0 / v0.4.1 tag 和资产不变；重跑同版本时保留目标 Release 的标题和正文；不同于 tag 指向提交的补包来源以资产 `.build.json` 为准。没有对应 Release 时才创建新 Release，绝不移动已有 tag。
 
 稳定资产：`tongzhuo-connector-windows-x64.exe`、`tongzhuo-connector-macos-arm64.zip`、`tongzhuo-connector-macos-x64.zip`。各有 `.sha256` 和 `.build.json`；另有 `package-win32-x64.json`、`package-darwin-arm64.json`、`package-darwin-x64.json` 记录对应自动运行检查。发布器先核对三个包的源提交、版本、大小、SHA-256 和运行证据，再上传临时命名资产并核对 GitHub digest；所有上传成功后才换成稳定名称，失败时尽力回滚本次变更。唯一发布器还会从三份已验证成品统一生成 SHA256SUMS.txt，替换既有 Windows 总校验文件，避免补包后遗留旧哈希；构建矩阵不写共享清单。Release 正文保留，各架构的说明和独立校验和分别上传。Actions artifact 用于作业交接/诊断，最终下载来自 [GitHub Release](https://github.com/IanYet/agent-game/releases/latest)。
 

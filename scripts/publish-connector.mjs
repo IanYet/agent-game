@@ -49,7 +49,7 @@ export async function publish({ repository, token, directory, sourceCommit, runI
   let release = await request(`${base}/releases/tags/${tag}`, { missing: true });
   if (!release) {
     release = await request(`${base}/releases`, { method: 'POST', body: { tag_name: tag, target_commitish: sourceCommit, name: `同桌连接器 ${tag}`, draft: false, prerelease: false,
-      body: `协议 4，Windows x64 与 macOS arm64/x64，自带 Node.js。\n\nmacOS 为开发分发包：只有 ad-hoc 签名，未 Developer ID 签名、未公证；首次打开按 Apple 对单个应用的官方说明处理。真实 Mac GUI、下载隔离及真实账户验收仍待完成。\n\n每个资产的 .sha256、.build.json 和 package-*.json 记录校验和、源提交、签名状态和自动运行验证。相同版本的补包以资产记录为准，既有 tag 不移动。` } });
+      body: `连接器 ${tag}，协议 4；Windows x64 与 macOS arm64/x64 均自带 Node.js。\n\n- Windows 窗口改用自动布局与完整换行，修复 DPI 缩放下文字截断和布局错乱。双端使用新的同桌图标。\n- 新增 macOS 原生菜单栏应用、退出入口、GUI PATH/Harness 发现和独立进程监护；macOS 13.5+，Apple Silicon 选 arm64，Intel 选 x64。\n- 纳入 v0.4.1 的 Codex ACP 合法游戏工具审批、暂停授权撤销和牌局收尾修复。网页最低连接器版本仍为 0.4.1。\n\nWindows 开发包未 Authenticode 签名。macOS 为开发分发包：只有 ad-hoc 签名，未 Developer ID 签名、未公证；首次打开请核对来源与 SHA-256，按 Apple 对单个应用的官方说明处理：https://support.apple.com/102445 。不应关闭 Gatekeeper 或删除下载隔离属性。真实 Mac GUI、下载隔离及真实账户验收仍待完成。\n\n每个资产的 .sha256、.build.json 和 package-*.json 记录校验和、源提交、签名状态和自动运行验证；SHA256SUMS.txt 同时汇总三套成品。GitHub runner 的自动运行使用明确的公开 ACP fixture，不证明真实账户推理。WorkBuddy 认证仍以专项验证结果为准。既有版本 tag 和资产保持不变。` } });
   }
   if (release.draft || release.prerelease) throw new Error('Refusing to publish stable downloads into a draft/prerelease.');
   const originalBody = release.body, originalName = release.name;
@@ -77,6 +77,7 @@ export async function publish({ repository, token, directory, sourceCommit, runI
     for (const file of files) if (!after.some(asset => asset.name === file.name && asset.digest === `sha256:${file.sha256}`)) throw new Error(`Release asset not verified: ${file.name}`);
     const tagAfter = await request(`${base}/git/ref/tags/${tag}`);
     if (tagBefore && tagBefore.object.sha !== tagAfter.object.sha) throw new Error('Tag changed externally while publishing.');
+    if (!tagBefore && tagAfter.object.sha !== sourceCommit) throw new Error('New tag does not point to the verified source commit.');
     const unchanged = await request(`${base}/releases/${release.id}`);
     if (unchanged.body !== originalBody || unchanged.name !== originalName) throw new Error('Release description changed externally while publishing.');
   } catch (error) {

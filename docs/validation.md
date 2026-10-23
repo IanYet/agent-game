@@ -2,9 +2,9 @@
 
 ## 2026-10-24：跨平台连接器与发布补包
 
-此轮合入 main 的 ACP 审批与网页收尾修复，双端统一保持连接器 **0.4.1、协议 4**，Windows 文件版本为 0.4.1.0；macOS Info.plist 从同一 version.json 生成。新增 macOS arm64/x64 `.app`（自带 Node、原生菜单栏、退出入口、Guardian）、macOS Application Support 路径、GUI PATH/Harness 发现；Windows 窗口改为自动布局、完整换行和一次 DPI 缩放。两端应用、Windows 窗口/托盘、macOS 菜单栏使用同一 SVG 源图标。
+此轮纳入 main 已发布的 0.4.1 ACP 审批与网页收尾修复，增加 UI/图标更新和 macOS 支持，双端统一升至连接器 **0.4.2、协议 4**，Windows 文件版本为 0.4.2.0；macOS Info.plist 从同一 version.json 生成。新增 macOS arm64/x64 `.app`（自带 Node、原生菜单栏、退出入口、Guardian）、macOS Application Support 路径、GUI PATH/Harness 发现；Windows 窗口改为自动布局、完整换行和一次 DPI 缩放。两端应用、Windows 窗口/托盘、macOS 菜单栏使用同一 SVG 源图标。
 
-合并 0.4.1 前的本地 Windows 已通过：107 项单元/集成测试、类型检查、网页构建、生产桥跨三种游戏不重建验证、6 项发布器失败/回滚测试、最终 EXE 无账户生命周期检查。界面以一致的 96-DPI 基准，分别放大几何和字体到 100%/150%/200%，渲染启动/已就绪/已连接/长错误和更新提示；检查文本首选高度、列边界及按钮在窗口内。高 DPI 桌面另有实际显示渲染检查；这不代替其他显示器/系统字体的人工验收。
+合并 0.4.1 前的本地 Windows 已通过：107 项单元/集成测试、类型检查、网页构建、生产桥跨三种游戏不重建验证、7 项发布器失败/回滚测试、最终 EXE 无账户生命周期检查。界面以一致的 96-DPI 基准，分别放大几何和字体到 100%/150%/200%，渲染启动/已就绪/已连接/长错误和更新提示；检查文本首选高度、列边界及按钮在窗口内。高 DPI 桌面另有实际显示渲染检查；这不代替其他显示器/系统字体的人工验收。
 
 首次 [GitHub 原生矩阵运行](https://github.com/IanYet/agent-game/actions/runs/39986533838)中，macos-15（arm64）与 macos-15-intel（x64）均通过完整构建、打包、代码签名结构检查以及最终 ZIP 的自动运行检查：
 

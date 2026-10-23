@@ -21,15 +21,20 @@ async function packages() {
   }
   return directory;
 }
-function github({ failPromote = false, wrongDigest = false } = {}) {
+function github({ failPromote = false, wrongDigest = false, newRelease = false } = {}) {
   const state = { calls: [], assets: [{ id: 10, name: assets[0], digest: 'sha256:old', size: 3 }, { id: 11, name: 'unrelated.txt' }, { id: 12, name: 'SHA256SUMS.txt', digest: 'sha256:legacy' }], body: 'Existing release notes must stay intact', tag: 'b'.repeat(40), next: 20 };
+  state.name = `Original ${tag}`; state.created = !newRelease;
+  if (newRelease) { state.assets = []; state.tag = null; }
   const response = (body, status = 200) => new Response(status === 204 ? null : JSON.stringify(structuredClone(body)), { status, headers: { 'Content-Type': 'application/json' } });
-  const release = () => ({ id: 1, name: `Original ${tag}`, body: state.body, tag_name: tag, html_url: `https://github.com/test/repo/releases/tag/${tag}`, upload_url: 'https://uploads.test/assets{?name,label}', draft: false, prerelease: false });
+  const release = () => ({ id: 1, name: state.name, body: state.body, tag_name: tag, html_url: `https://github.com/test/repo/releases/tag/${tag}`, upload_url: 'https://uploads.test/assets{?name,label}', draft: false, prerelease: false });
   const fetcher = async (url, options) => {
     const u = new URL(url), method = options.method ?? 'GET', body = options.body;
     state.calls.push({ method, path: u.pathname });
-    if (method === 'GET' && u.pathname.includes('/git/ref/')) return response({ object: { sha: state.tag } });
-    if (method === 'GET' && (u.pathname.endsWith(`/releases/tags/${tag}`) || u.pathname.endsWith('/releases/1'))) return response(release());
+    if (method === 'GET' && u.pathname.includes('/git/ref/')) return state.tag ? response({ object: { sha: state.tag } }) : response({}, 404);
+    if (method === 'GET' && (u.pathname.endsWith(`/releases/tags/${tag}`) || u.pathname.endsWith('/releases/1'))) return state.created ? response(release()) : response({}, 404);
+    if (method === 'POST' && u.pathname.endsWith('/releases')) {
+      const data = JSON.parse(body); state.created = true; state.tag = data.target_commitish; state.name = data.name; state.body = data.body; return response(release(), 201);
+    }
     if (method === 'GET' && u.pathname.endsWith('/releases/1/assets')) return response(state.assets);
     if (method === 'POST' && u.hostname === 'uploads.test') {
       const asset = { id: state.next++, name: u.searchParams.get('name'), size: body.length, digest: wrongDigest ? 'sha256:wrong' : `sha256:${createHash('sha256').update(body).digest('hex')}` };
@@ -88,5 +93,12 @@ test('a platform version differing from version.json prevents publishing', async
     const bytes = Buffer.from(asset), sha256 = createHash('sha256').update(bytes).digest('hex');
     await writeFile(path, JSON.stringify({ asset, sha256, version: '99.0.0', protocolVersion: 4, sourceCommit: commit, size: bytes.length, platform: 'darwin', arch: 'arm64' }));
     await assert.rejects(run, /Invalid package/); assert.equal(state.calls.length, 0);
+  });
+});
+test('creates a new Release at the verified source without rewriting other tags', async () => {
+  await exercise({ newRelease: true }, async (run, state) => {
+    await run(); assert.equal(state.tag, commit); assert.equal(state.assets.length, 13);
+    assert.ok(state.calls.some(c => c.method === 'POST' && c.path.endsWith('/releases')));
+    assert.ok(state.calls.filter(c => c.method !== 'GET').every(c => !c.path.includes('/git/')));
   });
 });

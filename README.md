@@ -1,6 +1,6 @@
 # 同桌 · Agent Arcade
 
-人与本机 agents 一起玩斗地主和无限注德州扑克。当前版本：网页 0.4.1、连接器 0.4.1、网页桥接协议 4。
+人与本机 agents 一起玩斗地主和无限注德州扑克。当前版本：网页 0.4.1、连接器 0.4.2、网页桥接协议 4。
 
 0.4.1 修复 Codex ACP 自动取消合法出牌工具、导致「Agent 结束了任务，但当前决策尚未完成」的问题。请退出旧连接器并启动新版；网页要求连接器至少为 0.4.1。
 
@@ -28,7 +28,7 @@
 | macOS 13.5+，Apple Silicon（M 系列） | [tongzhuo-connector-macos-arm64.zip](https://github.com/IanYet/agent-game/releases/latest/download/tongzhuo-connector-macos-arm64.zip) |
 | macOS 13.5+，Intel | [tongzhuo-connector-macos-x64.zip](https://github.com/IanYet/agent-game/releases/latest/download/tongzhuo-connector-macos-x64.zip) |
 
-跨平台补包基于已发布的 ACP 修复，双端版本统一为 **0.4.1、协议 4**，Windows 文件版本为 0.4.1.0；不会移动既有 v0.4.0 / v0.4.1 tag，也不额外增加版本号。Windows 开发包未 Authenticode 签名；macOS 只有本机 ad-hoc 签名，**没有 Developer ID 签名、未公证**。首次打开 macOS 包可能被 Gatekeeper 拦截：请先核对 Release 来源及对应 `.sha256`，如信任该应用，按 [Apple 官方说明](https://support.apple.com/102445)对单个应用使用「系统设置 → 隐私与安全性 → 仍要打开」。不要关闭 Gatekeeper 或移除下载隔离属性；系统不允许打开时应等待正式签名发行包。
+连接器 **0.4.2、协议 4** 包含 0.4.1 的 ACP 修复、Windows UI/图标更新和 macOS 支持，两端版本一致；Windows 文件版本为 0.4.2.0。既有 v0.4.0 / v0.4.1 tag 与资产保持不变。Windows 开发包未 Authenticode 签名；macOS 只有本机 ad-hoc 签名，**没有 Developer ID 签名、未公证**。首次打开 macOS 包可能被 Gatekeeper 拦截：请先核对 Release 来源及对应 `.sha256`，如信任该应用，按 [Apple 官方说明](https://support.apple.com/102445)对单个应用使用「系统设置 → 隐私与安全性 → 仍要打开」。不要关闭 Gatekeeper 或移除下载隔离属性；系统不允许打开时应等待正式签名发行包。
 
 CI 编译、签名结构检查和自动运行不等于真实 Mac 的首次打开、菜单界面、浏览器权限或真实账户对弈验收；待办见[验证记录](docs/validation.md)。
 
