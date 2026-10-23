@@ -3,6 +3,7 @@ import { resolve, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { preparePayload, packageMetadata } from './package-shared.mjs';
 import { connectorIcons } from './connector-icons.mjs';
+import { connectorPackageName } from './connector-assets.mjs';
 
 if (process.platform !== 'darwin' || !['arm64', 'x64'].includes(process.arch)) throw new Error('Package on a native macOS arm64 or x64 runner.');
 const arch = process.arch;
@@ -56,7 +57,7 @@ Codex、dsh、WorkBuddy 需自行安装并完成各自的官方登录；模型�
 如信任该应用，按 Apple 官方说明在系统设置 > 隐私与安全性中对本应用选择「仍要打开」。
 https://support.apple.com/102445
 不要全局关闭 Gatekeeper，不要移除下载隔离属性。若系统不允许打开，请等待签名发行包。
-CI 只验证原生编译、包结构及自动运行；没有完成真实 Mac GUI、隔离下载或真实账户对弈验收。
+首次打开、菜单操作和真实账户对弈需要在 Mac 上实际确认。
 
 数据/自定义 connector.config.json：~/Library/Application Support/AgentArcade/
 日志：~/Library/Logs/AgentArcade/connector.log
@@ -67,7 +68,7 @@ CI 只验证原生编译、包结构及自动运行；没有完成真实 Mac GUI
 for (const path of [join(resources, 'runtime/node'), join(bin, 'ConnectorGuardian'), app]) run('/usr/bin/codesign', ['--force', '--sign', '-', path]);
 run('/usr/bin/codesign', ['--verify', '--deep', '--strict', app]);
 run('/usr/bin/plutil', ['-lint', join(contents, 'Info.plist')]);
-const asset = resolve(`release/tongzhuo-connector-macos-${arch}.zip`);
+const asset = resolve('release', connectorPackageName('darwin', arch));
 run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', app, asset]);
 // Include the installation/signing notice alongside the .app in the ZIP.
 run('/usr/bin/zip', ['-j', asset, join(staging, '请先阅读.txt')]);

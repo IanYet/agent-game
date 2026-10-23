@@ -55,20 +55,6 @@ export const gameRegistry = new GameRegistry([existingGame, myGame]);
 
 随机发牌使用平台传入的 random，测试可提供种子随机源。平台使用浏览器加密随机源。
 
-## 可运行的非牌类例子
-
-[auction-fixture/definition.ts](../apps/web/src/games/auction-fixture/definition.ts) 是完整的密封竞价合约示例，测试时注册，生产大厅不加载。它不实现 Agent 或推理：
-
-- 支持 2–20 位参与者，验证使用 12 位，超出当前牌类游戏座位范围。
-- 每位参与者有独立预算和私有草案；所有未确认者同时待决策。
-- `auction.peek` 读取自己的预算与草案，不泄露其他报价。
-- `auction.offer({credits})` 可以反复修改，返回 text、structuredContent 和 image。
-- `auction.confirm({})` 才完成本玩家决策；再次确认被拒绝。
-- 决策 ID 包含 window 与 playerId，不含每次修改都递增的全局 revision。
-- 当前轮结束保留 room 会话，新轮撤销旧 decision 的行动授权。
-
-可以以它为契约参考，为自己的模块补充界面和领域规则。不要把测试驱动接入生产 Harness，或在用户缺少真实 Harness 时启用自动玩家。
-
 ## 工具与 schema
 
 ```ts
@@ -117,10 +103,9 @@ decisions: run => run.roster
 
 ## 验证与发布
 
-1. 写规则测试，验证合法/非法动作、结束条件、资源守恒和私有观察。
-2. 用通用运行时测试多决策、旧 ID、重复提交、暂停、超时与会话策略；参考 [dynamic.test.ts](../apps/web/src/runtime/dynamic.test.ts)。
-3. 运行 `npm test`、`npm run build:web`。
-4. 连接已构建的连接器验证 tools/list、tools/call 和结果。可使用 `npm run test:dynamic-connector` 的协议驱动流程，不需要调用模型。
-5. 部署 `dist/client/`。同一可信 origin 下新增游戏不更改连接器配置或 EXE。
+1. 在游戏目录写规则测试，覆盖合法与非法行动、回合推进、结束条件、结算、资源守恒和信息可见范围。
+2. 运行 `npm test` 和 `npm run build:web`。自动测试只覆盖游戏内容与规则，不为运行时、界面、协议或连接器另建测试。
+3. 打开网页并连接本机连接器，实际检查新游戏的设置、行动、暂停继续与回放。
+4. 部署 `dist/client/`。同一可信 origin 下新增游戏不更改连接器配置或 EXE。
 
 需要新的 Harness、原生权限或不被当前协议表达的平台能力时，才修改连接器并协商新 capability 或协议。

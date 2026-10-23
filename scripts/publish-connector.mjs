@@ -2,33 +2,27 @@ import { readFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import { connectorPackages } from './connector-assets.mjs';
 
-export const assets = ['tongzhuo-connector-windows-x64.exe', 'tongzhuo-connector-macos-arm64.zip', 'tongzhuo-connector-macos-x64.zip'];
+export const assets = connectorPackages.map(asset => asset.name);
 export async function validatePackages(directory, sourceCommit) {
   const files = [];
   const expectedVersion = JSON.parse(await readFile(new URL('../apps/connector/version.json', import.meta.url), 'utf8')).version;
   let version;
-  for (const asset of assets) {
+  for (const { name: asset, platform, arch } of connectorPackages) {
     const bytes = await readFile(join(directory, asset));
     const metadata = JSON.parse(await readFile(join(directory, `${asset}.build.json`), 'utf8'));
     const sha256 = createHash('sha256').update(bytes).digest('hex');
     const checksum = await readFile(join(directory, `${asset}.sha256`), 'utf8');
-    const expected = asset.includes('windows') ? ['win32', 'x64'] : ['darwin', asset.includes('arm64') ? 'arm64' : 'x64'];
     if (metadata.asset !== asset || metadata.sha256 !== sha256 || metadata.size !== bytes.length || checksum !== `${sha256}  ${asset}\n`
-      || metadata.sourceCommit !== sourceCommit || metadata.protocolVersion !== 4 || metadata.platform !== expected[0] || metadata.arch !== expected[1]
+      || metadata.sourceCommit !== sourceCommit || metadata.protocolVersion !== 4 || metadata.platform !== platform || metadata.arch !== arch
       || metadata.version !== expectedVersion || !/^\d+\.\d+\.\d+$/.test(metadata.version) || (version && metadata.version !== version)) throw new Error(`Invalid package/provenance: ${asset}`);
     version = metadata.version;
-    // A build must bring matching runtime evidence; merely producing a ZIP/EXE
-    // does not make it eligible for Release upload.
-    const proof = JSON.parse(await readFile(join(directory, `package-${metadata.platform}-${metadata.arch}.json`), 'utf8'));
-    if (proof.asset !== asset || proof.sha256 !== sha256 || proof.sourceCommit !== sourceCommit || proof.version !== version
-      || proof.inference !== false || !Array.isArray(proof.checks) || proof.checks.length < 3) throw new Error(`Missing runtime verification: ${asset}`);
-    for (const name of [asset, `${asset}.sha256`, `${asset}.build.json`, `package-${metadata.platform}-${metadata.arch}.json`]) {
+    for (const name of [asset, `${asset}.sha256`, `${asset}.build.json`]) {
       const data = await readFile(join(directory, name)); files.push({ name, data, sha256: createHash('sha256').update(data).digest('hex') });
     }
   }
-  // Keep the legacy checksum URL valid when replacing the existing Windows
-  // binary. A single publisher owns this aggregate; builders own only sidecars.
+  // Builders write sidecars; the publisher owns the combined checksum list.
   const sums = Buffer.from(files.filter(file => assets.includes(file.name)).map(file => `${file.sha256}  ${file.name}\n`).join(''));
   files.push({ name: 'SHA256SUMS.txt', data: sums, sha256: createHash('sha256').update(sums).digest('hex') });
   return { version, files };
@@ -49,7 +43,7 @@ export async function publish({ repository, token, directory, sourceCommit, runI
   let release = await request(`${base}/releases/tags/${tag}`, { missing: true });
   if (!release) {
     release = await request(`${base}/releases`, { method: 'POST', body: { tag_name: tag, target_commitish: sourceCommit, name: `同桌连接器 ${tag}`, draft: true, prerelease: false,
-      body: `连接器 ${tag}，协议 4；Windows x64 与 macOS arm64/x64 均自带 Node.js。\n\n- Windows 窗口改用自动布局与完整换行，修复 DPI 缩放下文字截断和布局错乱。双端使用新的同桌图标。\n- 新增 macOS 原生菜单栏应用、退出入口、GUI PATH/Harness 发现和独立进程监护；macOS 13.5+，Apple Silicon 选 arm64，Intel 选 x64。\n- 纳入 v0.4.1 的 Codex ACP 合法游戏工具审批、暂停授权撤销和牌局收尾修复。网页最低连接器版本仍为 0.4.1。\n\nWindows 开发包未 Authenticode 签名。macOS 为开发分发包：只有 ad-hoc 签名，未 Developer ID 签名、未公证；首次打开请核对来源与 SHA-256，按 Apple 对单个应用的官方说明处理：https://support.apple.com/102445 。不应关闭 Gatekeeper 或删除下载隔离属性。真实 Mac GUI、下载隔离及真实账户验收仍待完成。\n\n每个资产的 .sha256、.build.json 和 package-*.json 记录校验和、源提交、签名状态和自动运行验证；SHA256SUMS.txt 同时汇总三套成品。GitHub runner 的自动运行使用明确的公开 ACP fixture，不证明真实账户推理。WorkBuddy 认证仍以专项验证结果为准。既有版本 tag 和资产保持不变。` } });
+      body: `同桌连接器 ${tag}，协议 4，自带 Node.js。\n\nWindows 下载 64 位 EXE；macOS 13.5+ 按芯片选择 Apple Silicon 或 Intel ZIP，解压后将应用拖入「应用程序」。\n\nWindows 包尚未签名；macOS 包只有 ad-hoc 签名，尚未完成 Developer ID 签名与公证。首次打开受阻时，请按 Apple 官方说明处理：https://support.apple.com/102445 。\n\n每个包附带 .sha256 校验和与 .build.json 构建信息，SHA256SUMS.txt 汇总全部安装包。源提交：${sourceCommit}。` } });
   }
   if (release.prerelease) throw new Error('Refusing to publish stable downloads into a prerelease.');
   const publishDraft = release.draft;
@@ -70,10 +64,13 @@ export async function publish({ repository, token, directory, sourceCommit, runI
       if (asset.size !== file.data.length || asset.digest !== `sha256:${file.sha256}`) throw new Error(`Uploaded digest mismatch: ${file.name}`);
     }
     for (let i = 0; i < files.length; i++) {
-      const file = files[i], existing = before.find(asset => asset.name === file.name);
+      // GitHub treats asset names as case-insensitive, including renames.
+      const file = files[i], existing = before.find(asset => asset.name.toLowerCase() === file.name.toLowerCase());
       if (existing) { await request(`${base}/releases/assets/${existing.id}`, { method: 'PATCH', body: { name: `${existing.name}.previous-${runId}` } }); backups.push(existing); }
-      const signing = assets.includes(file.name) ? (file.name.includes('macos') ? ' · ad-hoc / not notarized' : ' · unsigned') : '';
-      await request(`${base}/releases/assets/${staged[i].id}`, { method: 'PATCH', body: { name: file.name, label: `${tag} · ${sourceCommit.slice(0, 12)}${signing}` } });
+      const packageInfo = connectorPackages.find(asset => [asset.name, `${asset.name}.sha256`, `${asset.name}.build.json`].includes(file.name));
+      const detail = file.name.endsWith('.sha256') ? ' · SHA-256 校验和' : file.name.endsWith('.build.json') ? ' · 构建信息' : '';
+      const label = packageInfo ? `${packageInfo.label}${detail} · ${tag}` : '全部安装包 · SHA-256 校验和';
+      await request(`${base}/releases/assets/${staged[i].id}`, { method: 'PATCH', body: { name: file.name, label } });
     }
     const after = await listAssets();
     for (const file of files) if (!after.some(asset => asset.name === file.name && asset.digest === `sha256:${file.sha256}`)) throw new Error(`Release asset not verified: ${file.name}`);

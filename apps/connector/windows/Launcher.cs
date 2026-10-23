@@ -157,7 +157,7 @@ namespace AgentArcade {
     }
 
     internal static class UpdateChecker {
-        internal const string DownloadUrl = "https://github.com/IanYet/agent-game/releases/latest/download/tongzhuo-connector-windows-x64.exe";
+        internal const string DownloadUrl = "https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-Windows-x64.exe";
         internal static string CurrentVersionText { get { return Assembly.GetExecutingAssembly().GetName().Version.ToString(3); } }
         internal sealed class Result {
             internal bool Available;
@@ -174,7 +174,7 @@ namespace AgentArcade {
             var release = new JavaScriptSerializer().Deserialize<ReleaseMetadata>(json);
             Version latest;
             if (release == null || release.draft || release.prerelease || String.IsNullOrEmpty(release.tag_name) || !Version.TryParse(release.tag_name.TrimStart('v', 'V'), out latest)) throw new InvalidDataException("无法识别最新版本。");
-            if (release.assets == null || !Array.Exists(release.assets, asset => asset.name == "tongzhuo-connector-windows-x64.exe")) throw new InvalidDataException("最新版本尚未提供 Windows 下载包。");
+            if (release.assets == null || !Array.Exists(release.assets, asset => asset.name == "TongZhuo-Connector-Windows-x64.exe")) throw new InvalidDataException("最新版本尚未提供 Windows 下载包。");
             var normalizedLatest = new Version(latest.Major, latest.Minor, Math.Max(0, latest.Build), Math.Max(0, latest.Revision));
             var normalizedCurrent = new Version(current.Major, current.Minor, Math.Max(0, current.Build), Math.Max(0, current.Revision));
             return new Result { Available = normalizedLatest > normalizedCurrent, LatestVersion = latest.ToString(latest.Build >= 0 ? 3 : 2) };
