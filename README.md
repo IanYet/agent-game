@@ -2,7 +2,7 @@
 
 人与本机 agents 一起玩游戏。首版实现斗地主。
 
-源码：[IanYet/agent-game](https://github.com/IanYet/agent-game) · 网页：[同桌 · Agent Arcade](https://ianyet.github.io/agent-game/)。
+源码：[IanYet/agent-game](https://github.com/IanYet/agent-game) · 网页：[同桌 · Agent Arcade](https://ianyet.github.io/agent-game/) · Windows EXE：[GitHub Releases](https://github.com/IanYet/agent-game/releases/latest)。
 
 这是两个独立交付物：
 
@@ -12,7 +12,7 @@
 ## 使用
 
 1. 在浏览器打开游戏网站。
-2. 下载并双击 `同桌连接器.exe`，等待「已就绪」。不需要安装 Node.js，也不需要解压。
+2. 下载并双击连接器 EXE，等待「已就绪」。Releases 文件名为 `tongzhuo-connector-windows-x64.exe`，本地打包名为 `同桌连接器.exe`。不需要安装 Node.js，也不需要解压。
 3. 网页点击 **连接 Codex**；如果浏览器询问本地网络权限，允许它访问本机连接器。
 4. 创建斗地主牌桌，选择 1 位真人 + 2 位 agents，或 3 位 agents 观战。也可直接与浏览器内的练习机器人游玩。
 5. 关闭连接器窗口即可退出。Windows 会结束它的所有子进程，包括 Node、ACP 适配器、Codex App Server 和工具宿主，并释放监听端口。
@@ -47,13 +47,13 @@ npm run test:windows
 - `dist/connector/`：连接器的构建中间产物。
 - `release/同桌连接器.exe`：最终单文件 Windows 应用。
 - `package:windows` 使用 Windows 自带的 C# 编译器生成原生窗口启动程序，把运行时与桥接程序作为资源嵌入 EXE；所有许可证一起嵌入。
-- 网站下载使用静态分片，浏览器拼接并校验 SHA-256 后保存为正常 EXE，以适配静态 CDN 的单文件大小限制；不需要下载后手动合并。
+- 正式网页从 GitHub Releases 下载单文件 EXE。本地构建还支持静态分片，浏览器拼接并校验 SHA-256 后保存为正常 EXE，以适配其他静态 CDN 的单文件大小限制；不需要下载后手动合并。
 
 构建发布顺序为 `build` → `package:windows` → 部署 `dist/client`。打包后，下载清单及分片同时写入 `apps/web/public/downloads/` 与 `dist/client/downloads/`。它们是忽略的构建产物。
 
 ## 独立部署与来源配置
 
-GitHub Pages 使用 `.github/workflows/pages.yml`：每次推送到 `main`，Windows runner 自动测试、构建网页、打包单文件 EXE，再将纯静态的 `dist/client/` 发布到 Pages。仓库 Settings → Pages 的 Source 选择 **GitHub Actions**。网页的连接器下载与该次构建一起发布，EXE 也保存在 Actions 的 `windows-connector-x64` artifact 中。
+GitHub Pages 使用 `.github/workflows/pages.yml`：每次推送到 `main`，Windows runner 自动测试、构建网页、打包单文件 EXE，再将纯静态的 `dist/client/` 发布到 Pages。仓库 Settings → Pages 的 Source 选择 **GitHub Actions**。网页下载按钮通过 `VITE_CONNECTOR_DOWNLOAD_URL` 指向最新 GitHub Release；每次构建的 EXE 也保存在 Actions 的 `windows-connector-x64` artifact 中。发布新版本时，将验证过的 EXE 以 `tongzhuo-connector-windows-x64.exe` 文件名上传到对应 Release 即可。
 
 Vite 的资源与下载路径支持仓库子路径。工作流使用 Pages 返回的 `base_path`；本地构建默认相对路径，也可用 `PAGES_BASE_PATH=/agent-game/` 显式指定。
 

@@ -34,6 +34,7 @@ jobs:
         run: npm run build
         env:
           PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+          VITE_CONNECTOR_DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/latest/download/tongzhuo-connector-windows-x64.exe
       - name: Package single portable Windows EXE
         run: npm run package:windows
       - name: Keep connector as a downloadable build artifact
