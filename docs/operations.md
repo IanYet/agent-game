@@ -19,6 +19,7 @@ npm run dev
 | `npm run package:windows` | Windows x64 上嵌入当前 Node 运行时、桥、适配器和许可证，生成单文件 EXE |
 | `npm run test:dynamic-connector` | 对已经存在的生产 bundle 进行跨游戏 HTTP/MCP 验证；不会重建它 |
 | `npm run test:windows` | 对最终 EXE 做真实原生会话、进程树、退出和端口复用检查 |
+| `npm run test:packaged-acp` | 对最终 EXE 做真实 ACP 四人德州、暂停继续及筹码守恒验证；显式消耗已登录账户额度 |
 
 生成包位于 `release/同桌连接器.exe`。打包脚本同时生成静态分片和 SHA-256 下载清单到 `apps/web/public/downloads/`、`dist/client/downloads/`；浏览器下载时自动拼接为单个 EXE 并校验，不需要用户合并文件。它们是被忽略的构建产物。
 
@@ -35,6 +36,8 @@ Pages Settings 的 Source 选择 GitHub Actions。工作流从 Pages 获取 base
 ## 连接器基线发行
 
 v0.4.0 是协议 4 的首个连接器基线。本次先发布已验证的功能，WorkBuddy 独立 CLI 的认证/真实推理问题继续在专项任务中处理，发行说明明确标注这一限制。
+
+v0.4.1 修复 Codex ACP 出牌审批及网页的已结算任务收尾。网页最低版本检查要求连接器至少为 0.4.1；发布前须通过最终 EXE 的真实 ACP 德州验证和 Windows 生命周期检查，具体证据见验证记录。
 
 只有桥接协议、原生 Harness 适配/能力、权限或连接器修复需要新的连接器发行。届时：
 

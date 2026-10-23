@@ -11,6 +11,6 @@ describe('独立的网页/连接器版本与能力协商',()=>{
    expect(typeof WEB_VERSION).toBe('string');expect(connectorRequirements.minimumVersion).toBe(CONNECTOR_VERSION);
  });
  it('最低修复版本、协议或能力缺失时给出更新提示',()=>{
-  for(const info of [{...valid,version:'0.3.99'},{...valid,version:'broken'},{...valid,protocolVersion:3},{...valid,capabilities:[]}])expect(connectorCompatibilityProblem(info)).toContain('下载兼容连接器');
+  for(const info of [{...valid,version:'0.4.0'},{...valid,version:'0.3.99'},{...valid,version:'broken'},{...valid,protocolVersion:3},{...valid,capabilities:[]}])expect(connectorCompatibilityProblem(info)).toContain('下载兼容连接器');
  });
 });

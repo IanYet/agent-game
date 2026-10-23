@@ -219,7 +219,10 @@ export class GameController {
           if(this.pending().some(d=>d.decisionId===decision.decisionId&&d.actorId===player.playerId))throw new Error('Agent 结束了任务，但当前决策尚未完成。点击继续可重试。');
           runtime.status='ready';runtime.message=undefined;runtime.turns++;this.refresh();
         }catch(e:any){
-          if(generation!==this.generation||this.paused)return;
+          // A human can finish the game while an agent is still returning from
+          // its already committed action. Session disposal then rejects that
+          // task; the completed game must keep its successful result.
+          if(generation!==this.generation||this.paused||(this.data.current&&this.module().finished(this.data.current.state)))return;
           runtime.status='error';runtime.message=`${player.name}：${e.message}`;this.paused=true;this.error=runtime.message;this.clearDeadline();this.active.clear();this.refresh();
           await this.client.pauseTurn().catch(()=>{});
         }finally{this.active.delete(decision.decisionId);}

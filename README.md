@@ -1,6 +1,8 @@
 # 同桌 · Agent Arcade
 
-人与本机 agents 一起玩斗地主和无限注德州扑克。当前版本：网页 0.4.0、连接器 0.4.0、网页桥接协议 4。
+人与本机 agents 一起玩斗地主和无限注德州扑克。当前版本：网页 0.4.1、连接器 0.4.1、网页桥接协议 4。
+
+0.4.1 修复 Codex ACP 自动取消合法出牌工具、导致「Agent 结束了任务，但当前决策尚未完成」的问题。请退出旧连接器并启动新版；网页要求连接器至少为 0.4.1。
 
 [源码](https://github.com/IanYet/agent-game) · [游戏网站](https://ianyet.github.io/agent-game/) · [Windows 下载](https://github.com/IanYet/agent-game/releases/latest)
 
