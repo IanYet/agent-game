@@ -55,9 +55,11 @@ try {
   await firstClient.disconnect();
   console.log('PASS: force-killing the EXE alone killed all descendants and released the listening port.');
 
-  const normal = start(['--exit-after-ms=10000']); await waitFor(ready); const secondClient = await idlePlayer();
+  // The timer starts with the EXE, before native harness/catalog discovery.
+  // Allow startup plus creation of the idle ACP player before exercising disposal.
+  const normal = start(['--exit-after-ms=30000']); await waitFor(ready); const secondClient = await idlePlayer();
   const secondTree = descendants(normal.pid!); assert.ok(secondTree.length >= 3);
-  await waitFor(async () => !alive(normal.pid!) && secondTree.every(pid => !alive(pid)) && await canBind(), 20_000);
+  await waitFor(async () => !alive(normal.pid!) && secondTree.every(pid => !alive(pid)) && await canBind(), 40_000);
   await secondClient.disconnect();
   console.log('PASS: normal disposal killed all descendants and released the listening port.');
 
