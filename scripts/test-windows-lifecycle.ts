@@ -41,7 +41,7 @@ function start(args: string[]) {
 }
 async function idlePlayer() {
   const client = new ConnectorClient(endpoint, browserFetch); await client.connect();
-  const { sessionId } = await client.createSession({ roomId: randomUUID(), seat: 0, kind: 'codex-acp', name: '生命周期测试' });
+  const { sessionId } = await client.createSession({ scopeId:randomUUID(),playerId:'lifecycle-player',kind:'codex-acp',name:'生命周期测试',displayTitle:'生命周期测试',instructions:'Do not run inference.',tools:[{name:'lifecycle_probe',description:'Read lifecycle probe',inputSchema:{type:'object'}}] });
   assert.ok(sessionId); return client;
 }
 try {
@@ -55,9 +55,11 @@ try {
   await firstClient.disconnect();
   console.log('PASS: force-killing the EXE alone killed all descendants and released the listening port.');
 
-  const normal = start(['--exit-after-ms=10000']); await waitFor(ready); const secondClient = await idlePlayer();
+  // The timer starts with the EXE, before native harness/catalog discovery.
+  // Allow startup plus creation of the idle ACP player before exercising disposal.
+  const normal = start(['--exit-after-ms=30000']); await waitFor(ready); const secondClient = await idlePlayer();
   const secondTree = descendants(normal.pid!); assert.ok(secondTree.length >= 3);
-  await waitFor(async () => !alive(normal.pid!) && secondTree.every(pid => !alive(pid)) && await canBind(), 20_000);
+  await waitFor(async () => !alive(normal.pid!) && secondTree.every(pid => !alive(pid)) && await canBind(), 40_000);
   await secondClient.disconnect();
   console.log('PASS: normal disposal killed all descendants and released the listening port.');
 

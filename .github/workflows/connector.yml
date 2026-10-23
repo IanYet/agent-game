@@ -1,0 +1,30 @@
+name: Build Windows connector
+
+# Game publication does not run this workflow. Build a connector baseline deliberately.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  connector:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build:connector
+      - run: npm run test:dynamic-connector
+      - run: npm run package:windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-connector-x64
+          path: release/同桌连接器.exe
+          if-no-files-found: error

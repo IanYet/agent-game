@@ -1,12 +1,14 @@
-import type { ModelInfo, AgentSettings, HarnessInfo } from '@agent-game/protocol';
-import type { PlayerKind } from '@agent-game/core';
+import type { ModelInfo, AgentSettings, HarnessInfo, PlayerKind } from '@agent-game/protocol';
 
-const labels: Record<string, string> = { none: '无', minimal: '极低', low: '低', medium: '中', high: '高', xhigh: '更高', max: '最高', ultra: '极高' };
+const labels: Record<string, string> = { none: '无', off: '关闭', disabled: '关闭', enabled: '默认', minimal: '极低', low: '低', medium: '中', high: '高', xhigh: '更高', max: '最高', ultra: '极高' };
+export const kindName: Record<string, string> = { human: '真人玩家', 'codex-acp': 'Codex · ACP', codex: 'Codex · App Server', dsh: 'dsh · DeepSeek Harness', workbuddy: 'WorkBuddy' };
 export function effortLabel(effort?: string) { return effort ? labels[effort] ?? effort : '模型默认'; }
 
 const defaultHarnesses: HarnessInfo[] = [
   { id: 'codex-acp', name: 'Codex · ACP', protocol: 'ACP', available: true },
   { id: 'codex', name: 'Codex · App Server', protocol: 'Codex App Server', available: true },
+  { id: 'dsh', name: 'dsh · DeepSeek Harness', protocol: 'ACP', available: true },
+  { id: 'workbuddy', name: 'WorkBuddy', protocol: 'ACP', available: true },
 ];
 export function AgentHarnessField({ harnesses, kind, label, onChange }: { harnesses?: HarnessInfo[]; kind: PlayerKind; label: string; onChange: (kind: PlayerKind) => void }) {
   const choices = harnesses?.length ? harnesses : defaultHarnesses;

@@ -1,8 +1,8 @@
-import { cardLabel, createDeck, shuffle, sortCards } from './cards';
+import { cardLabel, createDeck, shuffle, sortCards } from '@agent-game/core';
 import { beats, classify, enumeratePlays } from './combinations';
-import type { DoudizhuState, GameAction, GameDefinition, GameEvent, GameView, LegalAction, PlayerConfig, Seat } from './types';
+import { type DoudizhuState, type GameAction, type GameEvent, type GameView, type LegalAction, } from './types';
 
-export class RuleError extends Error { constructor(message: string) { super(message); this.name = 'RuleError'; } }
+import {RuleError,type PlayerConfig,type Seat} from '@agent-game/core';
 export const nextSeat = (seat: Seat): Seat => ((seat + 1) % 3) as Seat;
 
 function event(state: DoudizhuState, entry: Omit<GameEvent, 'seq' | 'time'>): void {
@@ -11,7 +11,7 @@ function event(state: DoudizhuState, entry: Omit<GameEvent, 'seq' | 'time'>): vo
 
 export function createGame(id: string, configs: PlayerConfig[], options: { random?: () => number; round?: number; scores?: number[]; firstBidder?: Seat } = {}): DoudizhuState {
   if (configs.length !== 3) throw new RuleError('斗地主需要恰好 3 名玩家');
-  if (configs.some(p => !['human', 'codex', 'codex-acp'].includes(p.kind))) throw new RuleError('牌桌包含不支持的玩家类型');
+  if (configs.some(p => !['human','agent'].includes(p.kind))) throw new RuleError('牌桌包含无效的控制方式');
   if (configs.filter(p => p.kind === 'human').length > 1) throw new RuleError('一张牌桌最多只能有 1 名真人玩家');
   if (configs.some(p => !p.name.trim() || p.name.length > 32)) throw new RuleError('玩家名称需要 1–32 个字符');
   const deck = shuffle(createDeck(), options.random ?? Math.random);
@@ -113,5 +113,3 @@ export function viewGame(state: DoudizhuState, viewer: Seat | null): GameView {
     legalActions: viewer === null ? [] : getLegalActions(state, viewer),
   };
 }
-
-export const doudizhu: GameDefinition<DoudizhuState, GameView, GameAction> = { id: 'doudizhu', name: '斗地主', playerCount: 3, create: createGame, apply: applyAction, view: viewGame, legalActions: getLegalActions };
