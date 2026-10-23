@@ -27,7 +27,7 @@ async function freePort(): Promise<number> {
 async function until(check: () => boolean, timeout = 10_000) {
   const start = Date.now(); while (!check()) { if (Date.now() - start > timeout) throw new Error('condition timed out'); await new Promise(resolve => setTimeout(resolve, 15)); }
 }
-async function fixture(options: { blockFirstTurn?: boolean; customRaise?: boolean } = {}) {
+async function fixture(options: { blockFirstTurn?: boolean; customRaise?: boolean; holdRiverCompletion?: boolean } = {}) {
   const port = await freePort();
   const info: ConnectorInfo = { version: CONNECTOR_VERSION, protocolVersion: PROTOCOL_VERSION, capabilities:[...CONNECTOR_CAPABILITIES], platform: 'win32', port, harnesses: [], models: [], auth: 'chatgpt' };
   const contexts: HarnessContext[] = []; const calls: string[] = []; const closed: string[] = []; const duplicateErrors: boolean[] = [];
@@ -40,6 +40,7 @@ async function fixture(options: { blockFirstTurn?: boolean; customRaise?: boolea
     const client = new Client({ name: 'test-agent', version: '1' });
     await client.connect(new StreamableHTTPClientTransport(new URL(context.mcpUrl)));
     const sessionId = randomUUID();
+    let rejectCompletion: ((error: Error) => void) | undefined;
     return {
       sessionId,
       playTurn: async (_prompt, signal, settings) => {
@@ -58,8 +59,13 @@ async function fixture(options: { blockFirstTurn?: boolean; customRaise?: boolea
         if (custom) raised = true;
         const acted = await invoke('game_act', { ...(custom ?? { actionId: action.id }), revision: state.revision }); expect(acted.isError).not.toBe(true);
         const duplicate = await invoke('game_act', { actionId: action.id, revision: state.revision }); duplicateErrors.push(duplicate.isError === true);
+        if (options.holdRiverCompletion && state.phase === 'river') await new Promise<void>((_resolve, reject) => {
+          rejectCompletion = reject;
+          const abort = () => reject(new Error('Agent 会话已关闭'));
+          if (signal.aborted) abort(); else signal.addEventListener('abort', abort, { once: true });
+        });
       },
-      close: async () => { closed.push(sessionId); await client.close(); },
+      close: async () => { closed.push(sessionId); rejectCompletion?.(new Error('Agent 会话已关闭')); await client.close(); },
     };
   } };
   const adapters = new Map<string, HarnessAdapter>();
@@ -245,8 +251,8 @@ describe('静态网页 ↔ 独立连接器 ↔ 标准 MCP', () => {
     await f.game.resume(); await until(()=>f.turns.length>1);
     expect(f.turns[1].sessionId).toBe(sessionId); expect(f.contexts).toHaveLength(9);
   });
-  it('真人完成最后一次行动也立即关闭会话；本机恢复保留筹码并默认暂停',async()=>{
-    const f=await fixture(); await f.game.connect();
+  it.each([false,true])('真人结算时关闭会话，不把尚未返回的 Agent 任务标成错误；恢复保留筹码（延迟任务：%s）',async holdRiverCompletion=>{
+    const f=await fixture({holdRiverCompletion}); await f.game.connect();
     await f.game.create([{name:'你',kind:'human'},{name:'Agent',kind:'workbuddy'}],{gameId:'holdem'});
     await until(()=>f.contexts.length===1);
     f.game.humanAction({type:'call'});
@@ -255,7 +261,9 @@ describe('静态网页 ↔ 独立连接器 ↔ 标准 MCP', () => {
       if(f.game.getSnapshot().game?.phase==='finished') break;
       f.game.humanAction({type:'check'});
     }
-    expect(f.game.getSnapshot().game?.phase).toBe('finished'); await until(()=>f.closed.length===1);
+    expect(f.game.getSnapshot().game?.phase).toBe('finished');
+    await until(()=>f.closed.length===1&&f.game.getSnapshot().seats.every(seat=>!seat.sessionId));
+    expect(f.game.getSnapshot().error).toBeNull();
     const restored=new GameController(f.store); expect(restored.getSnapshot().paused).toBe(true);
     const before=f.game.getSnapshot().game!, after=restored.getSnapshot().game!;
     expect(after).toEqual(before); expect(restored.getSnapshot().history[0].gameId).toBe('holdem');
