@@ -46,7 +46,7 @@ execFileSync(compiler, [
   `/resource:${temporaryArchive},AgentArcade.Payload`, resolve('apps/connector/windows/Launcher.cs'),
 ], { stdio: 'inherit', windowsHide: true });
 await mkdir('apps/web/public/downloads', { recursive: true });
-await mkdir('dist/web/downloads', { recursive: true });
+await mkdir('dist/client/downloads', { recursive: true });
 // Split static assets below common CDN per-file limits. The browser assembles a
 // single portable EXE in memory, verifies SHA-256, and downloads it with one click.
 const bytes = await readFile(executable);
@@ -56,10 +56,10 @@ for (let offset = 0; offset < bytes.length; offset += chunkSize) {
   const name = `connector-${String(parts.length + 1).padStart(2, '0')}.part`;
   const chunk = bytes.subarray(offset, offset + chunkSize);
   await writeFile(join('apps/web/public/downloads', name), chunk);
-  await writeFile(join('dist/web/downloads', name), chunk);
+  await writeFile(join('dist/client/downloads', name), chunk);
   parts.push(name);
 }
 const manifest = JSON.stringify({ fileName: '同桌连接器.exe', size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), parts }, null, 2);
 await writeFile('apps/web/public/downloads/manifest.json', manifest);
-await writeFile('dist/web/downloads/manifest.json', manifest);
+await writeFile('dist/client/downloads/manifest.json', manifest);
 console.log(`Single-file portable EXE ready: ${executable}\nStatic site download updated. No installer, no registry changes. Windows Job Object owns all child processes.`);

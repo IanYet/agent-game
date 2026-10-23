@@ -41,13 +41,13 @@ npm run package:windows
 npm run test:windows
 ```
 
-- `dist/web/`：完整静态网站，部署整个目录即可。
+- `dist/client/`：完整静态网站，部署整个目录即可。
 - `dist/connector/`：连接器的构建中间产物。
 - `release/同桌连接器.exe`：最终单文件 Windows 应用。
 - `package:windows` 使用 Windows 自带的 C# 编译器生成原生窗口启动程序，把运行时与桥接程序作为资源嵌入 EXE；所有许可证一起嵌入。
 - 网站下载使用静态分片，浏览器拼接并校验 SHA-256 后保存为正常 EXE，以适配静态 CDN 的单文件大小限制；不需要下载后手动合并。
 
-构建发布顺序为 `build` → `package:windows` → 部署 `dist/web`。打包后，下载清单及分片同时写入 `apps/web/public/downloads/` 与 `dist/web/downloads/`。它们是忽略的构建产物。
+构建发布顺序为 `build` → `package:windows` → 部署 `dist/client`。打包后，下载清单及分片同时写入 `apps/web/public/downloads/` 与 `dist/client/downloads/`。它们是忽略的构建产物。
 
 ## 独立部署与来源配置
 
