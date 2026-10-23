@@ -1,4 +1,4 @@
-name: Build Windows connector and deploy Pages
+name: Deploy static game website
 
 on:
   push:
@@ -14,8 +14,8 @@ concurrency:
 
 jobs:
   build:
-    runs-on: windows-latest
-    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       pages: read
@@ -30,21 +30,12 @@ jobs:
         uses: actions/configure-pages@v5
       - run: npm ci
       - run: npm test
-      - name: Build static website and local bridge
-        run: npm run build
+      - name: Build static website
+        run: npm run build:web
         env:
           PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
           VITE_CONNECTOR_DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/latest/download/tongzhuo-connector-windows-x64.exe
-      - name: Package single portable Windows EXE
-        run: npm run package:windows
-      - name: Keep connector as a downloadable build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-connector-x64
-          path: release/同桌连接器.exe
-          if-no-files-found: error
-      - name: Upload static website with connector download
-        uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: dist/client
 
