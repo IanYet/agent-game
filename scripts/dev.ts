@@ -1,5 +1,8 @@
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
+
+// Generate the ACP extension before the connector is started in development.
+execFileSync(process.execPath, ['scripts/build.mjs'], { stdio: 'inherit', windowsHide: true });
 
 const children = [
   spawn(process.execPath, [resolve('node_modules/tsx/dist/cli.mjs'), 'watch', 'apps/connector/src/index.ts'], { stdio: 'inherit', windowsHide: true }),

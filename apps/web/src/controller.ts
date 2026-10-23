@@ -1,8 +1,8 @@
-import { applyAction, chooseBotAction, createGame, DOUDIZHU_RULES, getLegalActions, viewGame, type DoudizhuState, type GameAction, type PlayerConfig, type Seat } from '@agent-game/core';
+import { applyAction, createGame, DOUDIZHU_RULES, getLegalActions, viewGame, type DoudizhuState, type GameAction, type PlayerConfig, type Seat } from '@agent-game/core';
 import type { AppSnapshot, BrowserToolRequest, ConnectorInfo, MatchSummary, SeatRuntime, ToolResponse } from '@agent-game/protocol';
-import { ConnectorClient } from './connector';
+import { ConnectorClient, ConnectorVersionError } from './connector';
 
-interface SavedGames { version: 1; current: DoudizhuState | null; archives: DoudizhuState[] }
+interface SavedGames { version: 1; current: DoudizhuState | null; archives: DoudizhuState[]; persistConversations?: boolean }
 export interface LocalStore { getItem: (key: string) => string | null; setItem: (key: string, value: string) => void }
 const STORE_KEY = 'agent-arcade.games.v1';
 const response = (value: unknown, isError = false): ToolResponse => ({ content: [{ type: 'text', text: JSON.stringify(value) }], ...(isError ? { isError } : {}) });
@@ -16,18 +16,22 @@ export class GameController {
   private seats: SeatRuntime[] = [];
   private info: ConnectorInfo | null = null;
   private connected = false;
+  private connectorUpdateRequired = false;
   private paused = true;
   private error: string | null = null;
   private generation = 0;
   private pumpTask: Promise<void> | null = null;
   private active: { seat: Seat; revision: number; used: boolean } | null = null;
-  botDelayMs = 850;
   constructor(private store: LocalStore, private client = new ConnectorClient()) {
     try {
       const raw = store.getItem(STORE_KEY);
       if (raw) {
         const saved = JSON.parse(raw);
-        if (saved.version === 1 && Array.isArray(saved.archives) && (!saved.current || (saved.current.gameId === 'doudizhu' && saved.current.players?.length === 3 && Array.isArray(saved.current.events)))) this.data = saved;
+        if (saved.version === 1 && Array.isArray(saved.archives)) {
+          const supported = (game: any) => game?.gameId === 'doudizhu' && game.players?.length === 3 && Array.isArray(game.events) && game.players.every((p: any) => ['human', 'codex', 'codex-acp'].includes(p.kind));
+          this.data = { ...saved, current: supported(saved.current) ? saved.current : null, archives: saved.archives.filter(supported) };
+          if ((saved.current && !this.data.current) || saved.archives.length !== this.data.archives.length) this.save();
+        }
       }
     } catch { this.error = '上次牌局未能恢复，可以重新创建牌桌。'; }
     this.resetSeats(); this.refresh();
@@ -40,6 +44,7 @@ export class GameController {
     };
     client.onDisconnect = () => {
       this.connected = false;
+      this.seats.forEach(s => { delete s.sessionId; });
       if (this.data.current?.players.some(p => p.kind === 'codex' || p.kind === 'codex-acp') && this.data.current.phase !== 'finished') { this.paused = true; this.generation++; this.active = null; this.error = '连接器已断开，牌局已暂停。重新连接后可以继续。'; this.seats.forEach(s => s.status = 'paused'); }
       this.refresh();
     };
@@ -49,27 +54,35 @@ export class GameController {
   private resetSeats() { this.seats = this.data.current?.players.map(p => ({ seat: p.seat, kind: p.kind, status: 'idle', turns: 0, tokens: 0 })) ?? []; }
   private refresh() {
     const game = this.data.current; const viewer = game?.players.find(p => p.kind === 'human')?.seat ?? null;
-    this.snapshot = { connector: this.info, connected: this.connected, game: game ? viewGame(game, viewer) : null, seats: structuredClone(this.seats), paused: this.paused, error: this.error, history: [...this.data.archives].reverse().map(summary) };
+    this.snapshot = { connector: this.info, connected: this.connected, connectorUpdateRequired: this.connectorUpdateRequired, game: game ? viewGame(game, viewer) : null, seats: structuredClone(this.seats), paused: this.paused, persistConversations: this.data.persistConversations === true, error: this.error, history: [...this.data.archives].reverse().map(summary) };
     this.listeners.forEach(listener => listener());
   }
   private save() {
     try { this.store.setItem(STORE_KEY, JSON.stringify(this.data)); }
     catch { this.data.archives = this.data.archives.slice(-5); try { this.store.setItem(STORE_KEY, JSON.stringify(this.data)); } catch { this.error = '浏览器存储空间不足，本局仍可游玩，但刷新后可能无法恢复。'; } }
   }
-  async connect(): Promise<void> { this.info = await this.client.connect(); this.connected = true; this.error = null; this.refresh(); }
+  async connect(): Promise<void> {
+    try { this.info = await this.client.connect(); this.connected = true; this.connectorUpdateRequired = false; this.error = null; this.refresh(); }
+    catch (error) {
+      if (error instanceof ConnectorVersionError) { this.info = error.connector; this.connected = false; this.connectorUpdateRequired = true; this.error = error.message; this.refresh(); }
+      throw error;
+    }
+  }
   async disconnect(): Promise<void> { await this.pause(); await this.client.disconnect(); this.connected = false; this.refresh(); }
-  async create(players: PlayerConfig[]): Promise<void> {
+  async create(players: PlayerConfig[], options?: { persistConversations?: boolean }): Promise<void> {
     const game = createGame(crypto.randomUUID(), players, { random: secureRandom });
-    if (players.some(p => p.kind === 'codex' || p.kind === 'codex-acp') && !this.connected) throw new Error('请先连接 Codex，或选择练习机器人');
+    if (!this.connected) throw new Error('请先启动本地连接器，并连接 Codex');
     await this.pause();
-    this.data.current = game; this.paused = false; this.error = null; this.resetSeats(); this.save(); this.refresh(); this.schedule();
+    await this.client.stopSessions();
+    this.data.current = game; this.data.persistConversations = options?.persistConversations === true; this.paused = false; this.error = null; this.resetSeats(); this.save(); this.refresh(); this.schedule();
   }
   async nextRound(): Promise<void> {
     const old = this.data.current;
     if (!old || old.phase !== 'finished') throw new Error('当前牌局尚未结束');
     if (old.players.some(p => p.kind === 'codex' || p.kind === 'codex-acp') && !this.connected) throw new Error('请先重新连接 Codex');
     await this.pause();
-    this.data.current = createGame(old.id, old.players.map(({ name, kind, model }) => ({ name, kind, model })), { random: secureRandom, round: old.round + 1, scores: old.players.map(p => p.score), firstBidder: ((old.firstBidder + 1) % 3) as Seat });
+    await this.client.stopSessions();
+    this.data.current = createGame(old.id, old.players.map(({ name, kind, model, reasoningEffort }) => ({ name, kind, model, reasoningEffort })), { random: secureRandom, round: old.round + 1, scores: old.players.map(p => p.score), firstBidder: ((old.firstBidder + 1) % 3) as Seat });
     this.paused = false; this.error = null; this.resetSeats(); this.save(); this.refresh(); this.schedule();
   }
   humanAction(action: GameAction): void {
@@ -90,14 +103,22 @@ export class GameController {
   async pause(): Promise<void> {
     this.paused = true; this.generation++; this.active = null;
     this.seats.forEach(s => { if (s.status !== 'error') s.status = 'paused'; }); this.refresh();
-    await this.client.stopSessions().catch(() => {}); await this.pumpTask;
-    this.seats.forEach(s => { delete s.sessionId; });
+    await this.client.pauseTurn(); await this.pumpTask;
+    this.refresh();
   }
   async resume(): Promise<void> {
     const game = this.data.current;
     if (!game || game.phase === 'finished') return;
     if (game.players.some(p => p.kind === 'codex' || p.kind === 'codex-acp') && !this.connected) throw new Error('请先连接 Codex');
-    await this.pause(); this.error = null; this.paused = false; this.resetSeats(); this.refresh(); this.schedule();
+    if (!this.paused) return;
+    this.error = null; this.paused = false; this.seats.forEach(s => { s.status = s.sessionId ? 'ready' : 'idle'; s.message = undefined; }); this.refresh(); this.schedule();
+  }
+  configurePlayers(players: PlayerConfig[]): void {
+    const game = this.data.current;
+    if (!game || !this.paused || game.phase === 'finished') throw new Error('请先暂停当前牌局，再调整玩家设置');
+    if (players.length !== 3) throw new Error('玩家设置不完整');
+    game.players = game.players.map((player, i) => player.kind === 'human' ? player : { ...player, model: players[i].model || undefined, reasoningEffort: players[i].reasoningEffort || undefined });
+    this.save(); this.refresh();
   }
   replay(id: string, round: number): DoudizhuState | undefined { return this.data.archives.find(g => g.id === id && g.round === round); }
   clearError(): void { this.error = null; this.refresh(); }
@@ -140,27 +161,22 @@ export class GameController {
       const seat = game.turn; const player = game.players[seat]; const runtime = this.seats[seat];
       if (player.kind === 'human') break;
       try {
-        if (player.kind === 'bot') {
-          runtime.status = 'thinking'; runtime.message = '正在选牌'; this.refresh();
-          await new Promise(resolve => setTimeout(resolve, this.botDelayMs));
-          if (this.paused || generation !== this.generation) break;
-          this.commit(seat, chooseBotAction(game, seat).action, game.revision); runtime.turns++; runtime.status = 'ready'; runtime.message = undefined; this.refresh(); continue;
-        }
         if (!runtime.sessionId) {
           runtime.status = 'connecting'; runtime.message = '创建独立玩家会话'; this.refresh();
-          const { sessionId } = await this.client.createSession({ roomId: game.id, seat, kind: player.kind, name: player.name, ...(player.model ? { model: player.model } : {}) });
-          if (this.paused || generation !== this.generation) break;
+          const { sessionId } = await this.client.createSession({ roomId: game.id, round: game.round, persistConversation: this.data.persistConversations === true, seat, kind: player.kind, name: player.name, ...(player.model ? { model: player.model } : {}), ...(player.reasoningEffort ? { reasoningEffort: player.reasoningEffort } : {}) });
           runtime.sessionId = sessionId;
+          if (this.data.persistConversations) runtime.conversationId = sessionId;
+          if (this.paused || generation !== this.generation) { runtime.status = 'paused'; this.refresh(); break; }
         }
         runtime.status = 'thinking'; runtime.message = '正在思考'; this.active = { seat, revision: game.revision, used: false }; this.refresh();
-        const result = await this.client.playTurn(runtime.sessionId, `你是座位 ${seat} 的玩家 ${player.name}。第 ${game.round} 局，revision=${game.revision}，${game.phase === 'bidding' ? '请叫分' : '轮到你出牌'}。通过 agent_game MCP 读取状态，执行恰好一次合法行动，然后结束任务。`, game.revision);
+        const result = await this.client.playTurn(runtime.sessionId, `你是座位 ${seat} 的玩家 ${player.name}。第 ${game.round} 局，revision=${game.revision}，${game.phase === 'bidding' ? '请叫分' : '轮到你出牌'}。通过 agent_game MCP 读取状态，执行恰好一次合法行动，然后结束任务。`, game.revision, { model: player.model, reasoningEffort: player.reasoningEffort });
         if (this.paused || generation !== this.generation) break;
         if (!this.active?.used || !result.acted) throw new Error('Agent 结束了任务但没有执行游戏行动。点击继续可重试。');
         this.active = null; runtime.status = 'ready'; runtime.message = undefined; runtime.turns++; this.refresh();
       } catch (error: any) {
         if (generation !== this.generation || this.paused) break;
         this.active = null; this.paused = true; runtime.status = 'error'; this.error = `${player.name}：${error.message}`; runtime.message = this.error; this.refresh();
-        void this.client.stopSessions().catch(() => {}); break;
+        await this.client.stopSessions().catch(() => {}); this.seats.forEach(s => { delete s.sessionId; }); break;
       }
     }
     this.active = null;

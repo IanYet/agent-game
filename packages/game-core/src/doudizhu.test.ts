@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, chooseBotAction, classify, createDeck, createGame, enumeratePlays, getLegalActions, viewGame, beats, RuleError } from './index';
+import { applyAction, classify, createDeck, createGame, enumeratePlays, getLegalActions, viewGame, beats, RuleError } from './index';
 import type { Card, PlayerConfig, Seat } from './types';
 
-const players: PlayerConfig[] = [{ name: '你', kind: 'human' }, { name: 'Atlas', kind: 'bot' }, { name: 'Nova', kind: 'bot' }];
+const players: PlayerConfig[] = [{ name: '你', kind: 'human' }, { name: 'Atlas', kind: 'codex-acp' }, { name: 'Nova', kind: 'codex-acp' }];
 const deck = createDeck();
 function cards(ranks: number[]): Card[] {
   const used = new Set<string>();
@@ -47,7 +47,7 @@ describe('牌局、权限与计分', () => {
     expect(new Set(all.map(c => c.id)).size).toBe(54);
     expect(state.players.map(p => p.hand.length)).toEqual([17, 17, 17]);
     expect(() => createGame('bad', [...players.slice(0, 2), { name: 'B', kind: 'human' }])).toThrow(RuleError);
-    expect(() => createGame('agents', players.map(p => ({ ...p, kind: 'bot' })))).not.toThrow();
+    expect(() => createGame('agents', players.map(p => ({ ...p, kind: 'codex-acp' })))).not.toThrow();
   });
   it('玩家视图只披露自己手牌；观战不能查看任何手牌或叫分时的底牌', () => {
     const state = createGame('test', players);
@@ -97,7 +97,8 @@ describe('牌局、权限与计分', () => {
       let state = createGame('simulation', players, { random: seeded(seed) });
       let steps = 0;
       while (state.phase !== 'finished' && steps++ < 600) {
-        const action = chooseBotAction(state, state.turn);
+        const legal = getLegalActions(state, state.turn);
+        const action = state.phase === 'bidding' ? legal.find(a => a.id === 'bid-3')! : legal.find(a => a.action.type === 'play') ?? legal[0];
         state = applyAction(state, state.turn, action.action);
         const held = state.players.flatMap(p => p.hand.map(c => c.id));
         const played = state.events.filter(e => e.type === 'play').flatMap(e => e.cards!.map(c => c.id));

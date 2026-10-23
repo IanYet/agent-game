@@ -7,7 +7,7 @@ import { LocalBridge } from '../apps/connector/src/bridge';
 import { createConnectorServer } from '../apps/connector/src/server';
 import { ConnectorClient } from '../apps/web/src/connector';
 import { GameController } from '../apps/web/src/controller';
-import type { ConnectorInfo } from '../packages/protocol/src';
+import { APP_VERSION, type ConnectorInfo } from '../packages/protocol/src';
 import type { HarnessAdapter } from '../apps/connector/src/types';
 
 // Explicit real-harness smoke check. Normal npm test never makes inference requests.
@@ -18,14 +18,13 @@ const kind = process.argv.includes('--native') ? 'codex' : 'codex-acp';
 const modelIndex = process.argv.indexOf('--model');
 const model = modelIndex >= 0 ? process.argv[modelIndex + 1] : inspection.models.find(m => /luna/.test(m.id))?.id;
 const port = Number(process.env.SMOKE_PORT ?? 3321);
-const info: ConnectorInfo = { version: 'smoke', protocolVersion: 1, platform: process.platform, port, harnesses: discovery.harnesses, models: inspection.models, auth: inspection.auth };
+const info: ConnectorInfo = { version: APP_VERSION, protocolVersion: 2, platform: process.platform, port, harnesses: discovery.harnesses, models: inspection.models, auth: inspection.auth };
 const bridge = new LocalBridge(info, new Map<string, HarnessAdapter>([['codex', new CodexAdapter(discovery.codexPath, inspection.mcpServers)], ['codex-acp', new AcpAdapter(discovery.acpPath, discovery.codexPath, inspection.mcpServers)]]), resolve('.cache', `smoke-${randomUUID()}`));
 const service = createConnectorServer(bridge, ['http://127.0.0.1:4173']); await service.listen();
 const browserFetch: typeof fetch = (url, options) => fetch(url, { ...options, headers: { ...Object.fromEntries(new Headers(options?.headers).entries()), Origin: 'http://127.0.0.1:4173' } });
 const client = new ConnectorClient(`http://127.0.0.1:${port}`, browserFetch);
 const values = new Map<string, string>();
 const game = new GameController({ getItem: key => values.get(key) ?? null, setItem: (key, value) => { values.set(key, value); } }, client);
-game.botDelayMs = 1;
 let lastRevision = 0; let lastStatus = '';
 const started = Date.now();
 const targetRevision = Number(process.env.SMOKE_TARGET ?? 7);

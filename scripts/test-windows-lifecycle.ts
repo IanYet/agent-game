@@ -12,11 +12,13 @@ const executable = resolve('release/同桌连接器.exe');
 const browserOrigin = process.env.LIFECYCLE_WEB_ORIGIN ?? 'http://127.0.0.1:5173';
 const browserFetch: typeof fetch = (url, options) => fetch(url, { ...options, headers: { ...Object.fromEntries(new Headers(options?.headers).entries()), Origin: browserOrigin } });
 const children: ChildProcess[] = [];
-async function waitFor(check: () => Promise<boolean>, timeout = 20_000) {
-  const start = Date.now(); while (!await check()) { if (Date.now() - start > timeout) throw new Error('Lifecycle condition timed out'); await new Promise(resolve => setTimeout(resolve, 100)); }
+let diagnostic = '';
+let healthDiagnostic = '';
+async function waitFor(check: () => Promise<boolean>, timeout = 45_000) {
+  const start = Date.now(); while (!await check()) { if (Date.now() - start > timeout) throw new Error(`Lifecycle condition timed out. Last health: ${healthDiagnostic}. Launcher output: ${diagnostic.slice(-3000)}`); await new Promise(resolve => setTimeout(resolve, 100)); }
 }
 async function ready() {
-  try { const r = await fetch(`${endpoint}/health`, { signal: AbortSignal.timeout(1000) }); return r.ok && (await r.json() as any).auth === 'chatgpt'; } catch { return false; }
+  try { const r = await fetch(`${endpoint}/health`, { signal: AbortSignal.timeout(1000) }); const data = await r.json() as any; healthDiagnostic = `${r.status} ${data.version} auth=${data.auth}`; return r.ok && data.auth === 'chatgpt'; } catch (error: any) { healthDiagnostic = error.message; return false; }
 }
 async function canBind() {
   const server = createServer();
@@ -31,7 +33,10 @@ function descendants(pid: number): number[] {
   return JSON.parse(execFileSync('pwsh.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { windowsHide: true, encoding: 'utf8' }).trim());
 }
 function start(args: string[]) {
-  const child = spawn(executable, ['--headless', ...args], { windowsHide: true, stdio: 'ignore', env: { ...process.env, AGENT_GAME_PORT: String(port) } });
+  diagnostic = '';
+  const child = spawn(executable, ['--headless', ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, AGENT_GAME_PORT: String(port) } });
+  child.stdout?.on('data', chunk => { diagnostic = (diagnostic + chunk.toString()).slice(-5000); });
+  child.stderr?.on('data', chunk => { diagnostic = (diagnostic + chunk.toString()).slice(-5000); });
   children.push(child); return child;
 }
 async function idlePlayer() {

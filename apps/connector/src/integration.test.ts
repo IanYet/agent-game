@@ -10,6 +10,7 @@ import { GameController } from '../../web/src/controller';
 import { LocalBridge } from './bridge';
 import { createConnectorServer } from './server';
 import type { ConnectorInfo, HarnessAdapter, HarnessContext } from './types';
+import { APP_VERSION, type AgentSettings } from '@agent-game/protocol';
 
 const ORIGIN = 'http://127.0.0.1:5173';
 const cleanups: Array<() => Promise<void>> = [];
@@ -24,10 +25,13 @@ async function freePort(): Promise<number> {
 async function until(check: () => boolean, timeout = 10_000) {
   const start = Date.now(); while (!check()) { if (Date.now() - start > timeout) throw new Error('condition timed out'); await new Promise(resolve => setTimeout(resolve, 15)); }
 }
-async function fixture() {
+async function fixture(options: { blockFirstTurn?: boolean } = {}) {
   const port = await freePort();
-  const info: ConnectorInfo = { version: 'test', protocolVersion: 1, platform: 'win32', port, harnesses: [], models: [], auth: 'chatgpt' };
+  const info: ConnectorInfo = { version: APP_VERSION, protocolVersion: 2, platform: 'win32', port, harnesses: [], models: [], auth: 'chatgpt' };
   const contexts: HarnessContext[] = []; const calls: string[] = []; const closed: string[] = []; const duplicateErrors: boolean[] = [];
+  const createdKinds: string[] = [];
+  const turns: Array<{ sessionId: string; settings?: AgentSettings }> = [];
+  let blocked = false;
   const adapter: HarnessAdapter = { id: 'codex-acp', createSession: async context => {
     contexts.push(context);
     const client = new Client({ name: 'test-agent', version: '1' });
@@ -35,7 +39,12 @@ async function fixture() {
     const sessionId = randomUUID();
     return {
       sessionId,
-      playTurn: async () => {
+      playTurn: async (_prompt, signal, settings) => {
+        turns.push({ sessionId, settings });
+        if (options.blockFirstTurn && !blocked) {
+          blocked = true;
+          await new Promise<void>((_resolve, reject) => { const abort = () => reject(new Error('test turn interrupted')); if (signal.aborted) abort(); else signal.addEventListener('abort', abort, { once: true }); });
+        }
         const invoke = async (name: string, args = {}) => { calls.push(name); const r = await client.callTool({ name, arguments: args }); return { isError: r.isError === true, data: JSON.parse((r.content as Array<{ text: string }>)[0].text) }; };
         const { data: state } = await invoke('game_get_state');
         expect(state.players.filter((p: any) => p.hand).map((p: any) => p.seat)).toEqual([context.seat]);
@@ -48,14 +57,16 @@ async function fixture() {
       close: async () => { closed.push(sessionId); await client.close(); },
     };
   } };
-  const bridge = new LocalBridge(info, new Map([['codex-acp', adapter]]), resolve('.cache', `integration-${randomUUID()}`));
+  const adapters = new Map<string, HarnessAdapter>();
+  for (const id of ['codex-acp', 'codex']) adapters.set(id, { id, createSession: context => { createdKinds.push(id); return adapter.createSession(context); } });
+  const bridge = new LocalBridge(info, adapters, resolve('.cache', `integration-${randomUUID()}`));
   const service = createConnectorServer(bridge, [ORIGIN]); await service.listen();
   const endpoint = `http://127.0.0.1:${port}`;
   const browserFetch: typeof fetch = (url, options) => fetch(url, { ...options, headers: { ...Object.fromEntries(new Headers(options?.headers).entries()), Origin: ORIGIN } });
   const client = new ConnectorClient(endpoint, browserFetch);
-  const store = memoryStore(); const game = new GameController(store, client); game.botDelayMs = 0;
+  const store = memoryStore(); const game = new GameController(store, client);
   cleanups.push(() => service.close()); cleanups.push(() => game.disconnect());
-  return { game, client, store, bridge, endpoint, contexts, calls, closed, duplicateErrors, browserFetch };
+  return { game, client, store, bridge, endpoint, contexts, calls, closed, duplicateErrors, browserFetch, turns, createdKinds };
 }
 
 describe('静态网页 ↔ 独立连接器 ↔ 标准 MCP', () => {
@@ -78,11 +89,20 @@ describe('静态网页 ↔ 独立连接器 ↔ 标准 MCP', () => {
   });
   it('浏览器本地存储恢复牌局，恢复后暂停，不自动消耗订阅', async () => {
     const { game, store } = await fixture();
-    await game.create([{ name: '你', kind: 'human' }, { name: 'B', kind: 'bot' }, { name: 'C', kind: 'bot' }]);
+    await game.connect();
+    await game.create([{ name: '你', kind: 'human' }, { name: 'B', kind: 'codex-acp' }, { name: 'C', kind: 'codex-acp' }]);
     const restored = new GameController(store);
     expect(restored.getSnapshot().game?.id).toBe(game.getSnapshot().game?.id);
     expect(restored.getSnapshot().paused).toBe(true);
     expect(restored.getSnapshot().game?.players.filter(p => p.hand)).toHaveLength(1);
+  });
+  it('版本不兼容时阻止握手并提示下载；更新连接器后可直接重连', async () => {
+    const f = await fixture(); f.bridge.info.version = '0.1.9';
+    await expect(f.game.connect()).rejects.toThrow('请下载最新连接器');
+    expect(f.game.getSnapshot()).toMatchObject({ connected: false, connectorUpdateRequired: true, connector: { version: '0.1.9' } });
+    f.bridge.info.version = APP_VERSION;
+    await f.game.connect();
+    expect(f.game.getSnapshot()).toMatchObject({ connected: true, connectorUpdateRequired: false, error: null });
   });
   it('三个独立会话走真实 HTTP MCP 完成整局，手牌隔离，拒绝重复行动，自动收尾', async () => {
     const f = await fixture(); await f.game.connect();
@@ -96,6 +116,11 @@ describe('静态网页 ↔ 独立连接器 ↔ 标准 MCP', () => {
     await until(() => f.closed.length === 3); expect(state.game?.viewer).toBeNull();
     const oldUrl = f.contexts[0].mcpUrl;
     expect((await fetch(oldUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status).toBe(401);
+    await f.game.nextRound();
+    await until(() => f.game.getSnapshot().game?.phase === 'finished' || !!f.game.getSnapshot().error, 15_000);
+    expect(f.game.getSnapshot().error).toBeNull(); expect(f.contexts).toHaveLength(6);
+    expect(new Set(f.contexts.map(c => c.mcpUrl)).size).toBe(6);
+    expect(f.contexts.slice(3).every(c => c.round === 2)).toBe(true);
   });
   it('连接断开后立即暂停，旧的座位凭据失效', async () => {
     const f = await fixture(); await f.game.connect();
@@ -105,5 +130,65 @@ describe('静态网页 ↔ 独立连接器 ↔ 标准 MCP', () => {
     await f.bridge.disconnect();
     await until(() => !f.game.getSnapshot().connected);
     expect(f.game.getSnapshot().paused).toBe(true);
+  });
+  it('暂停中断行动但不销毁玩家；继续沿用会话，模型与强度可以分别调整', async () => {
+    const f = await fixture({ blockFirstTurn: true });
+    f.bridge.info.models = [
+      { id: 'a', name: 'A', isDefault: true, defaultReasoningEffort: 'low', supportedReasoningEfforts: [{ effort: 'low', description: '' }, { effort: 'high', description: '' }] },
+      { id: 'b', name: 'B', isDefault: false, defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ effort: 'medium', description: '' }] },
+    ];
+    await f.game.connect();
+    await f.game.create([{ name: '你', kind: 'human' }, { name: 'Atlas', kind: 'codex-acp', model: 'a', reasoningEffort: 'high' }, { name: 'Nova', kind: 'codex-acp', model: 'b', reasoningEffort: 'medium' }], { persistConversations: true });
+    f.game.humanAction({ type: 'bid', value: 0 });
+    await until(() => f.turns.length === 1);
+    const sessionId = f.turns[0].sessionId;
+    await f.game.pause();
+    expect(f.closed).toHaveLength(0);
+    expect(f.game.getSnapshot().seats[1].sessionId).toBe(sessionId);
+    expect(f.game.getSnapshot().seats[1].conversationId).toBe(sessionId);
+    expect(f.contexts[0]).toMatchObject({ persistConversation: true, model: 'a', reasoningEffort: 'high' });
+    expect(f.turns[0].settings).toEqual({ model: 'a', reasoningEffort: 'high' });
+    const players = f.game.getSnapshot().game!.players.map(p => ({ ...p })); players[1].model = 'b'; players[1].reasoningEffort = undefined;
+    f.game.configurePlayers(players);
+    await f.game.resume();
+    await until(() => f.turns.length >= 3 && f.game.getSnapshot().game?.turn === 0);
+    expect(f.contexts).toHaveLength(2);
+    expect(f.turns[1]).toEqual({ sessionId, settings: { model: 'b', reasoningEffort: 'medium' } });
+    expect(f.closed).toHaveLength(0);
+    await f.game.pause();
+    const restored = new GameController(f.store);
+    expect(restored.getSnapshot().persistConversations).toBe(true);
+    expect(restored.getSnapshot().game!.players[1].model).toBe('b');
+  });
+  it('同桌按座位路由不同 Harness，各自使用自己的模型目录和默认强度', async () => {
+    const f = await fixture();
+    f.bridge.info.harnesses = [
+      { id: 'codex-acp', name: 'ACP', available: true, protocol: 'ACP', models: [{ id: 'a', name: 'A', isDefault: true, defaultReasoningEffort: 'high', supportedReasoningEfforts: [{ effort: 'high', description: '' }] }] },
+      { id: 'codex', name: 'Native', available: true, protocol: 'Codex App Server', models: [{ id: 'b', name: 'B', isDefault: true, defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ effort: 'medium', description: '' }] }] },
+    ];
+    await f.game.connect();
+    await expect(f.client.createSession({ roomId: randomUUID(), seat: 1, name: 'A', kind: 'codex', model: 'a' })).rejects.toThrow('所选模型');
+    await f.game.create([{ name: '你', kind: 'human' }, { name: 'ACP', kind: 'codex-acp' }, { name: 'Native', kind: 'codex' }]);
+    f.game.humanAction({ type: 'bid', value: 0 });
+    await until(() => f.contexts.length === 2 && f.game.getSnapshot().game?.turn === 0);
+    await f.game.pause();
+    expect(f.game.getSnapshot().error).toBeNull();
+    expect(f.createdKinds).toEqual(['codex-acp', 'codex']);
+    expect(f.contexts.map(c => [c.model, c.reasoningEffort])).toEqual([['a', 'high'], ['b', 'medium']]);
+    const seats = f.game.getSnapshot().seats;
+    expect(new Set(f.turns.map(t => t.sessionId))).toEqual(new Set([seats[1].sessionId, seats[2].sessionId]));
+    for (const turn of f.turns) expect(turn.settings).toEqual(turn.sessionId === seats[1].sessionId ? { model: 'a', reasoningEffort: 'high' } : { model: 'b', reasoningEffort: 'medium' });
+    expect(new Set(f.contexts.map(c => c.mcpUrl)).size).toBe(2);
+  });
+  it('默认关闭对话保留，拒绝未知模型或不支持的思考强度', async () => {
+    const f = await fixture(); await f.game.connect();
+    f.bridge.info.models = [{ id: 'a', name: 'A', isDefault: true, supportedReasoningEfforts: [{ effort: 'low', description: '' }] }];
+    await expect(f.client.createSession({ roomId: randomUUID(), seat: 1, name: 'A', kind: 'codex-acp', model: 'unknown' })).rejects.toThrow('所选模型');
+    await expect(f.client.createSession({ roomId: randomUUID(), seat: 1, name: 'A', kind: 'codex-acp', model: 'a', reasoningEffort: 'ultra' })).rejects.toThrow('思考强度');
+    await f.game.create([{ name: '你', kind: 'human' }, { name: 'B', kind: 'codex-acp' }, { name: 'C', kind: 'codex-acp' }]);
+    f.game.humanAction({ type: 'bid', value: 0 }); await until(() => f.contexts.length > 0);
+    expect(f.contexts[0].persistConversation).toBe(false);
+    expect(f.game.getSnapshot().persistConversations).toBe(false);
+    expect(f.game.getSnapshot().seats.every(s => !s.conversationId)).toBe(true);
   });
 });

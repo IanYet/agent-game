@@ -27,7 +27,11 @@ export class JsonRpcProcess extends EventEmitter {
       } else if (this.pending.has(message.id)) {
         const pending = this.pending.get(message.id)!;
         clearTimeout(pending.timer); this.pending.delete(message.id);
-        if (message.error) pending.reject(new Error(message.error.message ?? 'RPC request failed'));
+        if (message.error) {
+          if (process.env.AGENT_GAME_DEBUG === '1' && message.error.data) console.error('[RPC error detail]', JSON.stringify(message.error.data).replace(/https?:\/\/[^\s"\\]+/g, '[endpoint]').replace(/Bearer\s+\S+|sk-[A-Za-z0-9_-]+|[A-Za-z0-9_-]{40,}/g, '[redacted]').slice(0, 1200));
+          const detail = typeof message.error.data?.details === 'string' ? `：${message.error.data.details}` : '';
+          pending.reject(new Error(`${message.error.message ?? 'RPC request failed'}${detail}`.replace(/https?:\/\/\S+/g, '[endpoint]').replace(/Bearer\s+\S+|sk-[A-Za-z0-9_-]+/g, '[redacted]').slice(0, 700)));
+        }
         else pending.resolve(message.result);
       }
     });

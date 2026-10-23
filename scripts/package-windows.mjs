@@ -11,8 +11,8 @@ await mkdir(join(destination, 'dist', 'connector'), { recursive: true });
 await copyFile(process.execPath, join(destination, 'runtime', 'node.exe'));
 await cp(resolve('dist/connector'), join(destination, 'dist', 'connector'), { recursive: true });
 await copyFile('connector.config.json', join(destination, 'connector.config.json'));
-await writeFile(join(destination, 'package.json'), '{"name":"agent-arcade-connector","version":"0.1.0","private":true}\n');
-await writeFile(join(destination, '使用说明.txt'), '\uFEFF同桌 · Windows 本地连接器\r\n\r\n1. 在浏览器打开游戏网页。\r\n2. 双击「同桌连接器.exe」，无需安装或解压，也无需 Node.js。\r\n3. 回到网页，点击「连接 Codex」。允许浏览器访问本地网络。\r\n4. 关闭连接器窗口会结束其所有子进程，并释放本机监听端口。\r\n\r\n本机需要已经安装 Codex，并使用 ChatGPT 订阅登录。\r\n运行时自动展开到系统临时目录，不修改注册表。\r\n', 'utf8');
+await writeFile(join(destination, 'package.json'), '{"name":"agent-arcade-connector","version":"0.2.0","private":true}\n');
+await writeFile(join(destination, '使用说明.txt'), '\uFEFF同桌 · Windows 本地连接器\r\n\r\n1. 在浏览器打开游戏网页。\r\n2. 双击「同桌连接器.exe」，无需安装或解压，也无需 Node.js。\r\n3. 回到网页，点击「连接 Codex」。允许浏览器访问本地网络。\r\n4. 在窗口或托盘菜单选择「退出连接器」会结束其所有子进程，并释放本机监听端口。\r\n\r\n本机需要已经安装 Codex，并使用 ChatGPT 订阅登录。\r\n运行时自动展开到系统临时目录，不修改注册表。\r\n', 'utf8');
 await cp('THIRD_PARTY_NOTICES.md', join(destination, 'THIRD_PARTY_NOTICES.md'));
 await mkdir(join(destination, 'licenses'), { recursive: true });
 const runtimeLicensePath = resolve('.cache', `node-LICENSE-v${process.versions.node}.txt`);
@@ -42,6 +42,7 @@ execFileSync(compiler, [
   '/nologo', '/optimize+', '/target:winexe', '/platform:x64',
   `/out:${executable}`, `/win32manifest:${resolve('apps/connector/windows/app.manifest')}`,
   '/reference:System.dll', '/reference:System.Core.dll', '/reference:System.Drawing.dll', '/reference:System.Windows.Forms.dll',
+  '/reference:System.Net.Http.dll', '/reference:System.Web.Extensions.dll',
   '/reference:System.IO.Compression.dll', '/reference:System.IO.Compression.FileSystem.dll',
   `/resource:${temporaryArchive},AgentArcade.Payload`, resolve('apps/connector/windows/Launcher.cs'),
 ], { stdio: 'inherit', windowsHide: true });

@@ -2,17 +2,19 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
-import type { BrowserToolRequest, ConnectorEvent, GameTool, SessionRequest, ToolResponse } from '@agent-game/protocol';
+import { modelsForHarness, type AgentSettings, type BrowserToolRequest, type ConnectorEvent, type GameTool, type SessionRequest, type ToolResponse } from '@agent-game/protocol';
 import type { AgentSession, ConnectorInfo, HarnessAdapter } from './types';
 import { GAME_INSTRUCTIONS } from './harness/instructions';
+import { resolveSettings } from './harness/settings';
 
 interface PlayerSession { session: AgentSession; request: SessionRequest; mcpToken: string }
+interface ActiveTurn { sessionId: string; controller: AbortController; revision: number; acted: boolean; done?: Promise<void> }
 export class LocalBridge extends EventEmitter {
   private owner: { token: string; origin: string; attached: boolean } | null = null;
   private sessions = new Map<string, PlayerSession>();
   private capabilities = new Map<string, SessionRequest>();
   private pending = new Map<string, { resolve: (response: ToolResponse) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
-  private active: { sessionId: string; controller: AbortController; revision: number; acted: boolean } | null = null;
+  private active: ActiveTurn | null = null;
   private generation = 0;
   private creating = false;
   private attachTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -40,6 +42,7 @@ export class LocalBridge extends EventEmitter {
   }
   async callBrowser(request: Omit<BrowserToolRequest, 'id'>): Promise<ToolResponse> {
     if (!this.owner?.attached) throw new Error('游戏网页已断开');
+    const authorizedTurn = request.tool === 'game_act' ? this.active : null;
     if (request.tool === 'game_act') {
       const session = this.active && this.sessions.get(this.active.sessionId);
       if (!this.active || !session || session.request.seat !== request.seat || session.request.roomId !== request.roomId || this.active.acted || request.args.revision !== this.active.revision) throw new Error('当前没有此座位的行动授权，或本轮已行动');
@@ -50,7 +53,7 @@ export class LocalBridge extends EventEmitter {
       this.pending.set(id, { resolve, reject, timer });
       this.emitEvent({ type: 'tool', request: { ...request, id } });
     });
-    if (request.tool === 'game_act' && !response.isError && this.active) this.active.acted = true;
+    if (!response.isError && authorizedTurn && this.active === authorizedTurn) authorizedTurn.acted = true;
     return response;
   }
   toolResult(id: string, response: ToolResponse): void {
@@ -64,6 +67,7 @@ export class LocalBridge extends EventEmitter {
     if ([...this.sessions.values()].some(s => s.request.seat === request.seat)) throw new Error('该座位已经有一个玩家会话');
     const adapter = this.adapters.get(request.kind);
     if (!adapter) throw new Error('所选 harness 不可用');
+    request = { ...request, ...resolveSettings(modelsForHarness(this.info, request.kind), request) };
     this.creating = true;
     const generation = this.generation;
     const mcpToken = randomBytes(24).toString('hex'); this.capabilities.set(mcpToken, request);
@@ -81,14 +85,23 @@ export class LocalBridge extends EventEmitter {
     } catch (error) { this.capabilities.delete(mcpToken); throw error; }
     finally { this.creating = false; }
   }
-  async playTurn(sessionId: string, prompt: string, revision: number): Promise<{ acted: boolean }> {
+  async playTurn(sessionId: string, prompt: string, revision: number, settings?: AgentSettings): Promise<{ acted: boolean }> {
     const player = this.sessions.get(sessionId);
     if (!player) throw new Error('找不到玩家会话，请重新连接');
     if (this.active) throw new Error('已有玩家正在行动');
-    const active = { sessionId, controller: new AbortController(), revision, acted: false };
+    const requested = settings ?? player.request;
+    const resolved = resolveSettings(modelsForHarness(this.info, player.request.kind), requested);
+    const active: ActiveTurn = { sessionId, controller: new AbortController(), revision, acted: false };
     this.active = active;
-    try { await player.session.playTurn(prompt, active.controller.signal); return { acted: active.acted }; }
+    active.done = player.session.playTurn(prompt, active.controller.signal, resolved);
+    try { await active.done; return { acted: active.acted }; }
     finally { if (this.active === active) this.active = null; }
+  }
+  async pauseTurn(): Promise<void> {
+    const active = this.active;
+    if (!active) return;
+    active.controller.abort();
+    await active.done?.catch(() => {});
   }
   async stopSessions(): Promise<void> {
     this.generation++; this.active?.controller.abort(); this.active = null;

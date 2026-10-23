@@ -1,4 +1,9 @@
-import { CONNECTOR_PORT, PROTOCOL_VERSION, type BrowserToolRequest, type ConnectorEvent, type ConnectorInfo, type SessionRequest, type ToolResponse } from '@agent-game/protocol';
+import { CONNECTOR_PORT, PROTOCOL_VERSION, type AgentSettings, type BrowserToolRequest, type ConnectorEvent, type ConnectorInfo, type SessionRequest, type ToolResponse } from '@agent-game/protocol';
+import { connectorCompatibilityProblem } from './compatibility';
+
+export class ConnectorVersionError extends Error {
+  constructor(message: string, readonly connector: ConnectorInfo) { super(message); this.name = 'ConnectorVersionError'; }
+}
 
 export class ConnectorClient {
   private token = '';
@@ -19,7 +24,8 @@ export class ConnectorClient {
   }
   async connect(): Promise<ConnectorInfo> {
     const info = await this.request<ConnectorInfo>('/health');
-    if (info.protocolVersion !== PROTOCOL_VERSION) throw new Error('连接器版本不匹配，请下载最新便携包');
+    const problem = connectorCompatibilityProblem(info);
+    if (problem) throw new ConnectorVersionError(problem, info);
     const result = await this.request<{ token: string; info: ConnectorInfo }>('/api/connect', 'POST', { protocolVersion: PROTOCOL_VERSION });
     this.token = result.token;
     const stream = new AbortController(); this.stream = stream; const generation = ++this.generation;
@@ -54,7 +60,8 @@ export class ConnectorClient {
     return result.info;
   }
   createSession(request: SessionRequest): Promise<{ sessionId: string }> { return this.request('/api/sessions', 'POST', request); }
-  playTurn(sessionId: string, prompt: string, revision: number): Promise<{ acted: boolean }> { return this.request(`/api/sessions/${encodeURIComponent(sessionId)}/turn`, 'POST', { prompt, revision }); }
+  playTurn(sessionId: string, prompt: string, revision: number, settings?: AgentSettings): Promise<{ acted: boolean }> { return this.request(`/api/sessions/${encodeURIComponent(sessionId)}/turn`, 'POST', { prompt, revision, settings }); }
+  async pauseTurn(): Promise<void> { if (this.token) await this.request('/api/pause', 'POST'); }
   async stopSessions(): Promise<void> { if (this.token) await this.request('/api/sessions', 'DELETE'); }
   async disconnect(): Promise<void> {
     this.generation++;

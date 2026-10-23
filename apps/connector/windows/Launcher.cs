@@ -3,18 +3,23 @@ using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.IO.Compression;
+using System.Diagnostics;
+using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using Microsoft.Win32.SafeHandles;
 
 [assembly: AssemblyTitle("同桌 · 本地连接器")]
 [assembly: AssemblyDescription("Portable local bridge for Agent Arcade")]
-[assembly: AssemblyVersion("0.1.0.0")]
-[assembly: AssemblyFileVersion("0.1.0.0")]
+[assembly: AssemblyVersion("0.2.0.0")]
+[assembly: AssemblyFileVersion("0.2.0.0")]
 
 namespace AgentArcade {
     internal static class Program {
@@ -23,6 +28,7 @@ namespace AgentArcade {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             bool headless = Array.IndexOf(args, "--headless") >= 0;
+            if (headless) Console.SetOut(new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true });
             int exitAfter = 0;
             foreach (string arg in args) if (arg.StartsWith("--exit-after-ms=")) Int32.TryParse(arg.Substring("--exit-after-ms=".Length), out exitAfter);
             int port = 3211;
@@ -31,7 +37,7 @@ namespace AgentArcade {
             bool first;
             using (var instance = new Mutex(true, "Local\\AgentArcade.Connector." + port, out first)) {
                 if (!first) {
-                    if (!headless) MessageBox.Show("本地连接器已经在运行。请回到游戏网页，点击「连接 Codex」。", "同桌", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    if (!headless) MessageBox.Show("本地连接器已经在运行。可从右下角托盘打开窗口，或回到游戏网页连接 Codex。", "同桌", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return 0;
                 }
                 try {
@@ -39,7 +45,7 @@ namespace AgentArcade {
                     string sidecar = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "connector.config.json");
                     if (File.Exists(sidecar)) File.Copy(sidecar, Path.Combine(root, "connector.config.json"), true);
                     if (headless) {
-                        using (var process = new JobProcess()) { process.Start(root); if (exitAfter > 0) Thread.Sleep(exitAfter); else process.Wait(); }
+                        using (var process = new JobProcess()) { process.Output += line => Console.WriteLine(line); process.Start(root); if (exitAfter > 0) Thread.Sleep(exitAfter); else process.Wait(); }
                     } else {
                         Application.Run(new ConnectorWindow(root, port));
                     }
@@ -142,10 +148,46 @@ namespace AgentArcade {
                 if (disposed) return; disposed = true;
                 if (job != IntPtr.Zero) { Native.CloseHandle(job); job = IntPtr.Zero; }
                 if (process != IntPtr.Zero) {
-                    // A normal window close waits for the owned listener to die.
+                    // Explicit exit waits for the owned listener to die.
                     if (Native.WaitForSingleObject(process, 5000) == 0x00000102) Native.TerminateProcess(process, 1);
                     Native.CloseHandle(process); process = IntPtr.Zero;
                 }
+            }
+        }
+    }
+
+    internal static class UpdateChecker {
+        internal const string DownloadUrl = "https://github.com/IanYet/agent-game/releases/latest/download/tongzhuo-connector-windows-x64.exe";
+        internal static string CurrentVersionText { get { return Assembly.GetExecutingAssembly().GetName().Version.ToString(3); } }
+        internal sealed class Result {
+            internal bool Available;
+            internal string LatestVersion;
+        }
+        public sealed class ReleaseMetadata {
+            public string tag_name { get; set; }
+            public bool draft { get; set; }
+            public bool prerelease { get; set; }
+            public ReleaseAsset[] assets { get; set; }
+        }
+        public sealed class ReleaseAsset { public string name { get; set; } }
+        internal static Result ParseResponse(string json, Version current) {
+            var release = new JavaScriptSerializer().Deserialize<ReleaseMetadata>(json);
+            Version latest;
+            if (release == null || release.draft || release.prerelease || String.IsNullOrEmpty(release.tag_name) || !Version.TryParse(release.tag_name.TrimStart('v', 'V'), out latest)) throw new InvalidDataException("无法识别最新版本。");
+            if (release.assets == null || !Array.Exists(release.assets, asset => asset.name == "tongzhuo-connector-windows-x64.exe")) throw new InvalidDataException("最新版本尚未提供 Windows 下载包。");
+            var normalizedLatest = new Version(latest.Major, latest.Minor, Math.Max(0, latest.Build), Math.Max(0, latest.Revision));
+            var normalizedCurrent = new Version(current.Major, current.Minor, Math.Max(0, current.Build), Math.Max(0, current.Revision));
+            return new Result { Available = normalizedLatest > normalizedCurrent, LatestVersion = latest.ToString(latest.Build >= 0 ? 3 : 2) };
+        }
+        internal static async Task<Result> CheckAsync() {
+            // The bundled csc targets the legacy CLR defaults; GitHub requires TLS 1.2.
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            using (var client = new HttpClient()) {
+                client.Timeout = TimeSpan.FromSeconds(12);
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("AgentArcade-Connector/" + CurrentVersionText);
+                client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+                string json = await client.GetStringAsync("https://api.github.com/repos/IanYet/agent-game/releases/latest").ConfigureAwait(false);
+                return ParseResponse(json, Assembly.GetExecutingAssembly().GetName().Version);
             }
         }
     }
@@ -155,16 +197,33 @@ namespace AgentArcade {
         private readonly Label status = new Label();
         private readonly Label detail = new Label();
         private readonly Label account = new Label();
+        private readonly NotifyIcon tray = new NotifyIcon();
+        private readonly Label version = new Label();
+        private readonly Button update = new Button();
         private readonly string root;
         private string lastLine = "请确认本机已安装 Codex，并使用 ChatGPT 订阅登录。";
         private bool stopping;
+        private bool exitRequested;
+        private bool checkingUpdate;
+        private bool updateAvailable;
         private static readonly Color Green = Color.FromArgb(43, 97, 76);
         public ConnectorWindow(string runtimeRoot, int port) {
             root = runtimeRoot;
-            Text = "同桌 · 本地连接器"; ClientSize = new Size(490, 345);
+            Text = "同桌 · 本地连接器"; ClientSize = new Size(490, 407);
             FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen; BackColor = Color.FromArgb(247, 249, 243);
             Font = new Font("Microsoft YaHei UI", 9F);
+            tray.Icon = SystemIcons.Application;
+            tray.Text = "同桌 · 本地连接器";
+            tray.Visible = true;
+            var trayMenu = new ContextMenuStrip();
+            trayMenu.Items.Add("显示窗口", null, delegate { RestoreFromTray(); });
+            trayMenu.Items.Add("检查更新", null, delegate { RestoreFromTray(); CheckForUpdates(); });
+            trayMenu.Items.Add(new ToolStripSeparator());
+            trayMenu.Items.Add("退出连接器", null, delegate { ExitConnector(); });
+            tray.ContextMenuStrip = trayMenu;
+            tray.DoubleClick += delegate { RestoreFromTray(); };
+            Resize += delegate { if (WindowState == FormWindowState.Minimized) HideToTray(); };
             var logo = new LogoPanel(); logo.Location = new Point(25, 29); logo.Size = new Size(39, 39); Controls.Add(logo);
             var title = AddLabel("同桌 · 本地连接器", 78, 26, 375, 29, 16F, Green);
             title.Font = new Font("Microsoft YaHei UI", 16F, FontStyle.Bold);
@@ -173,12 +232,40 @@ namespace AgentArcade {
             status.Text = "正在启动连接器…"; status.Location = new Point(19, 17); status.Size = new Size(405, 28); status.Font = new Font("Microsoft YaHei UI", 13F, FontStyle.Bold); status.ForeColor = Green; panel.Controls.Add(status);
             account.Text = "正在检测本机 Codex 登录"; account.Location = new Point(20, 55); account.Size = new Size(405, 29); account.ForeColor = Color.FromArgb(133, 151, 117); panel.Controls.Add(account);
             detail.Text = "启动后，回到游戏网页点击「连接 Codex」。"; detail.Location = new Point(27, 225); detail.Size = new Size(435, 37); detail.ForeColor = Color.FromArgb(114, 135, 96); Controls.Add(detail);
-            AddLabel("本机端口  127.0.0.1:" + port, 28, 289, 270, 21, 8F, Color.FromArgb(155, 169, 141));
-            var exit = new Button(); exit.Text = "退出连接器"; exit.Location = new Point(348, 280); exit.Size = new Size(117, 36); exit.BackColor = Green; exit.ForeColor = Color.White; exit.FlatStyle = FlatStyle.Flat; exit.FlatAppearance.BorderSize = 0; exit.Click += delegate { Close(); }; Controls.Add(exit);
+            version.Text = "当前版本 v" + UpdateChecker.CurrentVersionText; version.Location = new Point(28, 284); version.Size = new Size(305, 40); version.ForeColor = Color.FromArgb(114, 135, 96); Controls.Add(version);
+            update.Text = "检查更新"; update.Location = new Point(348, 280); update.Size = new Size(117, 36); update.FlatStyle = FlatStyle.Flat; update.ForeColor = Green; update.Click += delegate { if (updateAvailable) OpenUpdateDownload(); else CheckForUpdates(); }; Controls.Add(update);
+            AddLabel("本机端口  127.0.0.1:" + port, 28, 358, 195, 21, 8F, Color.FromArgb(155, 169, 141));
+            var minimize = new Button(); minimize.Text = "缩到托盘"; minimize.Location = new Point(232, 349); minimize.Size = new Size(105, 36); minimize.FlatStyle = FlatStyle.Flat; minimize.ForeColor = Green; minimize.Click += delegate { HideToTray(); }; Controls.Add(minimize);
+            var exit = new Button(); exit.Text = "退出连接器"; exit.Location = new Point(348, 349); exit.Size = new Size(117, 36); exit.BackColor = Green; exit.ForeColor = Color.White; exit.FlatStyle = FlatStyle.Flat; exit.FlatAppearance.BorderSize = 0; exit.Click += delegate { ExitConnector(); }; Controls.Add(exit);
             process.Output += HandleOutput;
             process.Exited += delegate(int code) { OnUI(delegate { if (!stopping) { process.Dispose(); status.Text = code == 0 ? "连接器已停止" : "连接器启动失败"; status.ForeColor = Color.FromArgb(166, 105, 72); detail.Text = lastLine; } }); };
             Shown += delegate { try { process.Start(root); } catch (Exception error) { status.Text = "连接器启动失败"; detail.Text = error.Message; process.Dispose(); } };
-            FormClosing += delegate { stopping = true; process.Dispose(); };
+            FormClosing += delegate(object sender, FormClosingEventArgs e) {
+                if (e.CloseReason == CloseReason.UserClosing && !exitRequested) { e.Cancel = true; HideToTray(); return; }
+                stopping = true; tray.Visible = false; process.Dispose();
+            };
+            FormClosed += delegate { trayMenu.Dispose(); tray.Dispose(); };
+        }
+        private void HideToTray() { Hide(); ShowInTaskbar = false; }
+        private void RestoreFromTray() { WindowState = FormWindowState.Normal; ShowInTaskbar = true; Show(); Activate(); }
+        private void ExitConnector() { exitRequested = true; Close(); }
+        private async void CheckForUpdates() {
+            if (checkingUpdate || stopping) return;
+            checkingUpdate = true; update.Enabled = false; update.Text = "检查中…";
+            try {
+                var result = await UpdateChecker.CheckAsync();
+                if (IsDisposed || stopping) return;
+                updateAvailable = result.Available;
+                version.Text = "当前 v" + UpdateChecker.CurrentVersionText + (result.Available ? " · 发现 v" + result.LatestVersion : " · 已是最新版本");
+                update.Text = result.Available ? "下载更新" : "重新检查";
+            } catch {
+                if (IsDisposed || stopping) return;
+                version.Text = "检查失败，请确认网络后重试。"; updateAvailable = false; update.Text = "重试检查";
+            } finally { checkingUpdate = false; if (!IsDisposed && !stopping) update.Enabled = true; }
+        }
+        private void OpenUpdateDownload() {
+            try { Process.Start(new ProcessStartInfo(UpdateChecker.DownloadUrl) { UseShellExecute = true }); }
+            catch { version.Text = "无法打开浏览器，请从游戏网页下载。"; }
         }
         private Label AddLabel(string text, int x, int y, int width, int height, float size, Color color) {
             var label = new Label(); label.Text = text; label.Location = new Point(x, y); label.Size = new Size(width, height); label.Font = new Font("Microsoft YaHei UI", size); label.ForeColor = color; Controls.Add(label); return label;
@@ -186,8 +273,8 @@ namespace AgentArcade {
         private void HandleOutput(string line) {
             if (line.Trim().Length > 0 && !line.StartsWith("AGENT_ARCADE_STATUS:")) lastLine = line.Trim();
             OnUI(delegate {
-                if (line == "AGENT_ARCADE_STATUS:ready") { status.Text = "●  已就绪，等待网页连接"; detail.Text = "回到游戏网页，点击「连接 Codex」。"; }
-                else if (line == "AGENT_ARCADE_STATUS:connected") { status.Text = "●  游戏网页已连接"; detail.Text = "关闭连接器会停止所有玩家任务，并释放本机端口。"; }
+                if (line == "AGENT_ARCADE_STATUS:ready") { status.Text = "●  已就绪，等待网页连接"; tray.Text = "同桌 · 等待网页连接"; detail.Text = "回到网页连接 Codex。最小化或关闭窗口会留在托盘。"; }
+                else if (line == "AGENT_ARCADE_STATUS:connected") { status.Text = "●  游戏网页已连接"; tray.Text = "同桌 · 游戏网页已连接"; detail.Text = "托盘中继续运行。选择「退出连接器」会停止所有玩家并释放端口。"; }
                 else if (line.Trim().StartsWith("Codex：")) account.Text = line.Trim();
             });
         }

@@ -59,6 +59,5 @@ export async function discoverHarnesses(root: string): Promise<{ harnesses: Harn
   return { codexPath, acpPath, harnesses: [
     { id: 'codex-acp', name: 'Codex · ACP', protocol: 'Agent Client Protocol v1', available: !!codexPath && !!acpPath, version, detail: codexPath && acpPath ? '复用本机 Codex 登录' : '尚未找到本机 Codex', ...(codexPath ? { path: codexPath } : {}) },
     { id: 'codex', name: 'Codex · App Server', protocol: 'Codex App Server', available: !!codexPath, version, detail: '官方原生协议', ...(codexPath ? { path: codexPath } : {}) },
-    { id: 'bot', name: '练习机器人', protocol: 'Local rules', available: true, detail: '无需模型，不消耗订阅额度' },
   ] };
 }

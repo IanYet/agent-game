@@ -1,6 +1,7 @@
 import { JsonRpcProcess, abortError } from './rpc';
 import { executableCommand } from './discovery';
 import { GAME_INSTRUCTIONS } from './instructions';
+import { playerConversationTitle } from './settings';
 import type { AgentSession, HarnessAdapter, HarnessContext, ModelInfo } from '../types';
 
 export function subscriptionEnvironment(): NodeJS.ProcessEnv {
@@ -56,29 +57,36 @@ export class CodexAdapter implements HarnessAdapter {
       if (method === 'thread/tokenUsage/updated') context.onUsage(params.tokenUsage?.total?.totalTokens ?? 0);
     });
     try {
-      await rpc.call('initialize', { clientInfo: { name: 'agent_arcade', title: '同桌 Agent Arcade', version: '0.1.0' } });
+      await rpc.call('initialize', { clientInfo: { name: 'agent_arcade', title: '同桌 Agent Arcade', version: '0.2.0' } });
       rpc.notify('initialized');
       const account = await rpc.call('account/read', { refreshToken: false });
       if (!account.account || account.account.type !== 'chatgpt') throw new Error('请先运行 codex login，使用 ChatGPT 订阅登录 Codex');
       const result = await rpc.call('thread/start', {
         cwd: context.cwd, ...(context.model ? { model: context.model } : {}),
         sandbox: 'read-only', approvalPolicy: 'never', developerInstructions: GAME_INSTRUCTIONS,
-        config: gameConfig(context.mcpUrl, this.disabledServers), ephemeral: true,
+        config: gameConfig(context.mcpUrl, this.disabledServers), ephemeral: !context.persistConversation,
       }, 90_000);
       const sessionId: string = result.thread.id;
+      if (context.persistConversation) await rpc.call('thread/name/set', { threadId: sessionId, name: playerConversationTitle(context) });
       return {
         sessionId,
-        playTurn: async (prompt, signal) => {
+        playTurn: async (prompt, signal, settings) => {
           if (signal.aborted) throw abortError();
+          turnId = null;
           await new Promise<void>((resolve, reject) => {
             let settled = false;
             const finish = (error?: Error) => { if (settled) return; settled = true; clearTimeout(timer); signal.removeEventListener('abort', abort); activeDone = null; error ? reject(error) : resolve(); };
-            const abort = () => { if (turnId) void rpc.call('turn/interrupt', { threadId: sessionId, turnId }).catch(() => {}); finish(abortError()); };
-            const timer = setTimeout(() => { abort(); }, 180_000);
-            activeDone = finish; signal.addEventListener('abort', abort, { once: true });
-            rpc.call('turn/start', { threadId: sessionId, input: [{ type: 'text', text: prompt }], effort: 'low' }).then(result => {
+            // Wait for turn/completed before allowing resume to send a new turn.
+            // The abort may arrive while turn/start is still being acknowledged.
+            let interrupting = false;
+            const interrupt = () => { if (turnId && !interrupting) { interrupting = true; void rpc.call('turn/interrupt', { threadId: sessionId, turnId }).catch(finish); } };
+            const abort = () => { interrupt(); };
+            const timer = setTimeout(() => { interrupt(); finish(new Error('Codex 回合超时')); }, 180_000);
+            activeDone = error => finish(signal.aborted ? abortError() : error); signal.addEventListener('abort', abort, { once: true });
+            rpc.call('turn/start', { threadId: sessionId, input: [{ type: 'text', text: prompt }], model: settings?.model ?? context.model ?? result.model, effort: settings?.reasoningEffort ?? context.reasoningEffort ?? result.reasoningEffort }).then(result => {
+              if (settled) return;
               turnId = result.turn?.id ?? turnId;
-              if (signal.aborted && turnId) void rpc.call('turn/interrupt', { threadId: sessionId, turnId }).catch(() => {});
+              if (signal.aborted) interrupt();
             }).catch(finish);
           });
         },
@@ -92,11 +100,11 @@ export async function inspectCodex(path: string): Promise<{ models: ModelInfo[];
   const command = await executableCommand(path, ['app-server', '--listen', 'stdio://']);
   const rpc = new JsonRpcProcess({ ...command, env: subscriptionEnvironment() });
   try {
-    await rpc.call('initialize', { clientInfo: { name: 'agent_arcade', version: '0.1.0' } }); rpc.notify('initialized');
+    await rpc.call('initialize', { clientInfo: { name: 'agent_arcade', version: '0.2.0' } }); rpc.notify('initialized');
     const result = await rpc.call('model/list', { limit: 100 });
     const account = await rpc.call('account/read', { refreshToken: false });
     const configuration = await rpc.call('config/read', { includeLayers: false });
-    const models = (result.data ?? []).filter((m: any) => !m.hidden).map((m: any) => ({ id: m.model ?? m.id, name: m.displayName ?? m.model ?? m.id, isDefault: !!m.isDefault }));
+    const models = (result.data ?? []).filter((m: any) => !m.hidden).map((m: any) => ({ id: m.model ?? m.id, name: m.displayName ?? m.model ?? m.id, isDefault: !!m.isDefault, defaultReasoningEffort: m.defaultReasoningEffort, supportedReasoningEfforts: (m.supportedReasoningEfforts ?? []).map((e: any) => ({ effort: e.reasoningEffort, description: e.description ?? e.reasoningEffort })) }));
     return { models, auth: account.account?.type === 'chatgpt' ? 'chatgpt' : account.account?.type === 'apiKey' ? 'apiKey' : 'missing', mcpServers: Object.keys(configuration.config?.mcp_servers ?? {}) };
   } finally { await rpc.close(); }
 }

@@ -11,6 +11,7 @@ function event(state: DoudizhuState, entry: Omit<GameEvent, 'seq' | 'time'>): vo
 
 export function createGame(id: string, configs: PlayerConfig[], options: { random?: () => number; round?: number; scores?: number[]; firstBidder?: Seat } = {}): DoudizhuState {
   if (configs.length !== 3) throw new RuleError('斗地主需要恰好 3 名玩家');
+  if (configs.some(p => !['human', 'codex', 'codex-acp'].includes(p.kind))) throw new RuleError('牌桌包含不支持的玩家类型');
   if (configs.filter(p => p.kind === 'human').length > 1) throw new RuleError('一张牌桌最多只能有 1 名真人玩家');
   if (configs.some(p => !p.name.trim() || p.name.length > 32)) throw new RuleError('玩家名称需要 1–32 个字符');
   const deck = shuffle(createDeck(), options.random ?? Math.random);

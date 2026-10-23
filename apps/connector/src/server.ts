@@ -1,7 +1,7 @@
 import express, { type ErrorRequestHandler } from 'express';
 import { createServer } from 'node:http';
 import { z } from 'zod';
-import type { ConnectorEvent } from '@agent-game/protocol';
+import { PROTOCOL_VERSION, type ConnectorEvent } from '@agent-game/protocol';
 import type { LocalBridge } from './bridge';
 import { registerMcp } from './mcp';
 
@@ -24,7 +24,7 @@ export function createConnectorServer(bridge: LocalBridge, allowedOrigins: strin
   app.get('/health', (_req, res) => res.json({ name: 'Agent Arcade Connector', ...bridge.info }));
   app.post('/api/connect', (req, res) => {
     if (!req.headers.origin || !origins.has(req.headers.origin)) { res.status(403).json({ error: '请从受信任的游戏网页点击连接' }); return; }
-    z.object({ protocolVersion: z.literal(1) }).parse(req.body);
+    z.object({ protocolVersion: z.literal(PROTOCOL_VERSION) }).parse(req.body);
     const token = bridge.connect(req.headers.origin); res.json({ token, info: bridge.info });
   });
   app.use('/api', (req, res, next) => {
@@ -47,13 +47,14 @@ export function createConnectorServer(bridge: LocalBridge, allowedOrigins: strin
     bridge.toolResult(body.id, body.response); res.json({ ok: true });
   });
   app.post('/api/sessions', async (req, res) => {
-    const request = z.object({ roomId: z.string().uuid(), seat: z.union([z.literal(0), z.literal(1), z.literal(2)]), kind: z.enum(['codex', 'codex-acp']), name: z.string().min(1).max(32), model: z.string().min(1).max(100).optional() }).parse(req.body);
+    const request = z.object({ roomId: z.string().uuid(), round: z.number().int().positive().optional(), persistConversation: z.boolean().optional(), seat: z.union([z.literal(0), z.literal(1), z.literal(2)]), kind: z.enum(['codex', 'codex-acp']), name: z.string().min(1).max(32), model: z.string().min(1).max(100).optional(), reasoningEffort: z.string().min(1).max(30).optional() }).parse(req.body);
     res.status(201).json(await bridge.createSession(request));
   });
   app.post('/api/sessions/:id/turn', async (req, res) => {
-    const { prompt, revision } = z.object({ prompt: z.string().min(1).max(6000), revision: z.number().int().min(1) }).parse(req.body);
-    res.json(await bridge.playTurn(req.params.id as string, prompt, revision));
+    const { prompt, revision, settings } = z.object({ prompt: z.string().min(1).max(6000), revision: z.number().int().min(1), settings: z.object({ model: z.string().min(1).max(100).optional(), reasoningEffort: z.string().min(1).max(30).optional() }).optional() }).parse(req.body);
+    res.json(await bridge.playTurn(req.params.id as string, prompt, revision, settings));
   });
+  app.post('/api/pause', async (_req, res) => { await bridge.pauseTurn(); res.json({ ok: true }); });
   app.delete('/api/sessions', async (_req, res) => { await bridge.stopSessions(); res.json({ ok: true }); });
   app.post('/api/disconnect', async (_req, res) => { await bridge.disconnect(); res.json({ ok: true }); });
   registerMcp(app, bridge);
