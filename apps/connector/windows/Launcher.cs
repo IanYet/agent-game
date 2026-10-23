@@ -198,6 +198,8 @@ namespace AgentArcade {
         private readonly Label detail = new Label();
         private readonly Label account = new Label();
         private readonly NotifyIcon tray = new NotifyIcon();
+        private readonly Icon appIcon = ConnectorIcon.Load(256);
+        private readonly Icon trayIcon = ConnectorIcon.Load(SystemInformation.SmallIconSize.Width);
         private readonly Label version = new Label();
         private readonly Button update = new Button();
         private readonly string root;
@@ -219,7 +221,7 @@ namespace AgentArcade {
             AutoSize = true; AutoSizeMode = AutoSizeMode.GrowAndShrink;
             StartPosition = FormStartPosition.CenterScreen; BackColor = Color.FromArgb(247, 249, 243);
             Font = new Font("Microsoft YaHei UI", 10F);
-            Icon = ConnectorIcon.Load(); tray.Icon = Icon;
+            Icon = appIcon; tray.Icon = trayIcon;
             tray.Text = "同桌 · 本地连接器";
             tray.Visible = !preview;
             var trayMenu = new ContextMenuStrip();
@@ -267,7 +269,7 @@ namespace AgentArcade {
                 if (e.CloseReason == CloseReason.UserClosing && !exitRequested) { e.Cancel = true; HideToTray(); return; }
                 stopping = true; tray.Visible = false; process.Dispose();
             };
-            Disposed += delegate { trayMenu.Dispose(); tray.Dispose(); process.Dispose(); };
+            Disposed += delegate { trayMenu.Dispose(); tray.Dispose(); appIcon.Dispose(); trayIcon.Dispose(); process.Dispose(); };
         }
         private void HideToTray() { Hide(); ShowInTaskbar = false; }
         private void RestoreFromTray() { WindowState = FormWindowState.Normal; ShowInTaskbar = true; Show(); Activate(); }
@@ -329,16 +331,16 @@ namespace AgentArcade {
         private void OnUI(Action action) { if (IsDisposed || !IsHandleCreated) return; try { BeginInvoke(action); } catch (InvalidOperationException) { } }
     }
     internal sealed class LogoPanel : Panel {
-        private readonly Icon icon = ConnectorIcon.Load();
+        private readonly Icon icon = ConnectorIcon.Load(256);
         protected override void OnPaint(PaintEventArgs e) {
             e.Graphics.DrawIcon(icon, new Rectangle(0, 0, Width, Height));
         }
         protected override void Dispose(bool disposing) { if (disposing) icon.Dispose(); base.Dispose(disposing); }
     }
     internal static class ConnectorIcon {
-        internal static Icon Load() {
+        internal static Icon Load(int size) {
             using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("AgentArcade.Icon"))
-            using (var icon = new Icon(stream, new Size(256, 256))) return (Icon)icon.Clone();
+            using (var icon = new Icon(stream, new Size(size, size))) return (Icon)icon.Clone();
         }
     }
     internal static class Native {
