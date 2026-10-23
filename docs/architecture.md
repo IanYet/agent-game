@@ -49,7 +49,7 @@ sequenceDiagram
 | `decisionId` | 模块定义的待完成决策 ID |
 | Harness `sessionId` | 原生进程或线程返回的会话 ID，与上述身份独立 |
 
-模块返回决策集合 `{decisionId, actorId, allowedTools?, deadline?}[]`。一个玩家同时只运行一个原生 prompt，不同玩家可以并发。斗地主与德州返回单个行动者；竞价示例返回所有未确认的参与者。
+模块返回决策集合 `{decisionId, actorId, allowedTools?, deadline?}[]`。一个玩家同时只运行一个原生 prompt，不同玩家可以并发。斗地主与德州返回单个行动者；同时决策的游戏可以返回多个参与者。
 
 模块通过移除对应决策表示完成。一个决策可以调用多个工具、修改草案多次再确认；Agent 结束 prompt 后该决策仍存在，平台就暂停并报告未完成。平台没有「必须成功调用恰好一次 game_act」的假设。
 
@@ -68,7 +68,7 @@ sequenceDiagram
 模块声明 `lifecycle.sessionScope`：
 
 - `run`：当前局/手结束关闭会话并撤销 capability，下一局重建。斗地主和德州采用此策略。
-- `room`：当前轮结束保留上下文；下一轮同身份、同控制方式、同名称且工具注册表相同的玩家复用会话。改变控制或工具声明只重建受影响的会话。竞价 fixture 用此策略验证。
+- `room`：当前轮结束保留上下文；下一轮同身份、同控制方式、同名称且工具注册表相同的玩家复用会话。改变控制或工具声明只重建受影响的会话。
 
 `eagerAgents:true` 会在首次决策前建立全部 Agent 会话，德州用它提供每手起始观察。懒创建适用于斗地主等顺序游戏。
 

@@ -85,9 +85,9 @@ function HistoryPage({state,onSetup}:{state:AppSnapshot;onSetup:()=>void}){
 
 function ConnectorDownload({ onError, label = '下载 Windows 连接器' }: { onError: (message: string) => void; label?: string }) {
   const [progress, setProgress] = useState<number | null>(null);
-  const releaseDownload = import.meta.env.VITE_CONNECTOR_DOWNLOAD_URL ?? 'https://github.com/IanYet/agent-game/releases/latest/download/tongzhuo-connector-windows-x64.exe';
-  const macArm = import.meta.env.VITE_CONNECTOR_MACOS_ARM64_DOWNLOAD_URL ?? 'https://github.com/IanYet/agent-game/releases/latest/download/tongzhuo-connector-macos-arm64.zip';
-  const macIntel = import.meta.env.VITE_CONNECTOR_MACOS_X64_DOWNLOAD_URL ?? 'https://github.com/IanYet/agent-game/releases/latest/download/tongzhuo-connector-macos-x64.zip';
+  const releaseDownload = import.meta.env.VITE_CONNECTOR_DOWNLOAD_URL ?? 'https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-Windows-x64.exe';
+  const macArm = import.meta.env.VITE_CONNECTOR_MACOS_ARM64_DOWNLOAD_URL ?? 'https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-macOS-Apple-Silicon.zip';
+  const macIntel = import.meta.env.VITE_CONNECTOR_MACOS_X64_DOWNLOAD_URL ?? 'https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-macOS-Intel.zip';
   const download = async () => {
     setProgress(0);
     try {

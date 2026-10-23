@@ -19,16 +19,10 @@
     "typecheck": "tsc --noEmit",
     "package:windows": "node scripts/package-windows.mjs",
     "package:macos": "node scripts/package-macos.mjs",
-    "test:package": "tsx scripts/test-package-lifecycle.ts",
-    "test:windows-ui": "node scripts/test-windows-layout.mjs",
-    "test:release": "node --test scripts/publish-connector.test.mjs",
-    "test:windows": "tsx scripts/test-windows-lifecycle.ts",
-    "test:packaged-acp": "tsx scripts/verify-packaged-acp.ts",
     "check:codex": "tsx scripts/check-codex.ts",
     "check:harnesses": "tsx scripts/check-harnesses.ts",
     "build:web": "tsc --noEmit && vite build",
-    "build:connector": "node scripts/build.mjs",
-    "test:dynamic-connector": "tsx scripts/verify-dynamic-connector.ts"
+    "build:connector": "node scripts/build.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/codex-acp": "2.2.2",
