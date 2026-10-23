@@ -120,6 +120,8 @@ MCP 工具：
 
 ## dsh 与 WorkBuddy 接入
 
+Windows 安装发现同时支持桌面附带的 CLI。dsh 保留官方 Electron Node carrier 的 ASAR 加载；创建 ACP 会话后等待其原生模型目录注册稳定，再显示模型或应用座位设置，避免启动早期遗漏账户模型。
+
 `dsh` 明确指官方 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，通过 `dsh --profile acp --patch <本次会话覆盖文件>` 的 ACP stdio 接入。连接器读取标准 `configOptions` 的原始模型 ID（包括 provider 信息）和逐模型 `thought_level`，不会替换成 Claude Code 或 Codex 的模型。原生 `DSH_HOME`、模型提供方、账户和凭据不被复制或改写。旧版官方 ACP 若不支持 HTTP MCP/配置选项/工具守卫，会显示未就绪。覆盖文件和工具守卫仅在本次进程有效，只允许四个座位 MCP 工具，拒绝文件、终端、其他 MCP 和子 Agent。关闭历史时将 JSONL 放入连接器的本手隔离目录，关闭会话后删除；不登记到用户 dsh 会话目录。
 
 WorkBuddy 使用其官方文档描述的 [CodeBuddy 公开 ACP 协议](https://www.codebuddy.ai/docs/cli/acp)，从 `workbuddy` / `codebuddy` CLI 或 `WORKBUDDY_PATH` 指定入口启动。也自动发现 Windows 桌面安装附带的官方 Node 启动器，保留它自己的版本和产品初始化。桌面 lite bundle 使用 `--serve --acp` 提供 stdio ACP，附带的原生 gateway 限制在随机 loopback 端口，使用仅本进程持有的随机密码，不修改全局 gateway 配置；参数依据[官方 CLI 文档](https://www.codebuddy.ai/docs/cli/cli-reference)与[环境变量说明](https://www.codebuddy.ai/docs/cli/env-vars)。要求 CLI 提供 HTTP MCP、模型目录、`--tools`、`--allowedTools`、严格 MCP 配置、进程级设置覆盖和关闭历史能力。只开启游戏 MCP，禁用内置工具、无关 MCP、hooks、自动记忆和后台任务；模型和思考强度均从该 CLI 的 ACP 目录取得。不会伪造 WorkBuddy 私有身份字段，也不会提取桌面登录凭据。桌面登录未向独立公开 CLI 提供有效登录时，需在支持独立 ACP 的官方 CLI 中完成 `/login`；连接器不能保证不同客户端的订阅可互通。

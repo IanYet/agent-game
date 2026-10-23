@@ -16,7 +16,7 @@ const fixtureSource = String.raw`
 import { createInterface } from 'node:readline';
 import { appendFileSync, readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-const args=process.argv.slice(2), dsh=process.argv[1].includes('dsh-fixture');
+const args=process.argv.slice(2), dsh=process.argv[1].includes('dsh-');
 if(args.includes('--help')) { console.log('--acp --serve --tools --allowedTools --strict-mcp-config --mcp-config --settings --no-session-persistence'); process.exit(0); }
 if(args.includes('--version')) { console.log('test'); process.exit(0); }
 const log=process.argv[1]+'.log';
@@ -29,23 +29,23 @@ if(dsh) {
   appendFileSync(log,JSON.stringify({patch})+'\n');
 }
 const ids=dsh?['["other","x"]','["deepseek-official","main"]']:['other-model','workbuddy-main'];
-let model=ids[1],effort='high',pending;
-const options=()=>[{id:'model',category:'model',type:'select',currentValue:model,options:[{group:'native',options:ids.map(value=>({value,name:value===ids[1]?'Main':'Other'}))}]},{id:'reasoning_effort',category:'thought_level',type:'select',currentValue:effort,options:(model===ids[1]?['medium','high']:['low']).map(value=>({value,name:value}))}];
+let model=ids[1],effort='high',pending,createdAt=0;
+const options=()=>[{id:'model',category:'model',type:'select',currentValue:model,options:[{group:'native',options:(process.argv[1].includes('delayed') && Date.now()-createdAt<200 ? ids.slice(1) : ids).map(value=>({value,name:value===ids[1]?'Main':'Other'}))}]},{id:'reasoning_effort',category:'thought_level',type:'select',currentValue:effort,options:(model===ids[1]?['medium','high']:['low']).map(value=>({value,name:value}))}];
 const send=(id,result)=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',id,result})+'\n');
 const lines=createInterface({input:process.stdin});
 lines.on('line',async line=>{
   const m=JSON.parse(line); appendFileSync(log,JSON.stringify(m)+'\n');
   if(m.method==='initialize') send(m.id,{protocolVersion:1,...(!args.includes('--serve')?{agentInfo:{name:dsh?'deepseek-harness-acp':'codebuddy',version:'test'}}:{}),agentCapabilities:{mcpCapabilities:{http:true},sessionCapabilities:{close:{}}}});
-  else if(m.method==='session/new') send(m.id,{sessionId:crypto.randomUUID(),configOptions:options()});
+  else if(m.method==='session/new') {createdAt=Date.now();send(m.id,{sessionId:crypto.randomUUID(),configOptions:options()});}
   else if(m.method==='session/set_config_option') { if(m.params.configId==='model'){model=m.params.value;effort=model===ids[1]?'high':'low';}else effort=m.params.value;send(m.id,{configOptions:options()}); }
   else if(m.method==='session/prompt') { if(m.params.prompt[0].text.includes('BLOCK'))pending=m.id;else send(m.id,{stopReason:'end_turn'}); }
   else if(m.method==='session/cancel') { if(pending){send(pending,{stopReason:'cancelled'});pending=undefined;} }
   else if(m.method==='session/close') send(m.id,{});
 });
 `;
-async function fixture(kind: 'dsh'|'workbuddy', lite=false) {
+async function fixture(kind: 'dsh'|'workbuddy', lite=false, delayed=false) {
   const root=await mkdtemp(join(tmpdir(),'agent-arcade-test-')); roots.push(root);
-  const path=join(root,lite?'codebuddy-lite-wb.mjs':`${kind}-fixture.mjs`); await writeFile(path,fixtureSource);
+  const path=join(root,lite?'codebuddy-lite-wb.mjs':`${kind}-${delayed?'delayed-':''}fixture.mjs`); await writeFile(path,fixtureSource);
   const context: HarnessContext={cwd:root,roomId:'table',gameId:'holdem',handId:'hand1',seat:7,name:'Agent',mcpUrl:'http://127.0.0.1:1234/mcp/table/capability',persistConversation:false,initialState:JSON.stringify({chips:997,startingChips:1000}),onActivity:()=>{},onUsage:()=>{}};
   const adapter=new ExternalAcpAdapter(kind,path); return {root,path,context,adapter,log:async()=> (await readFile(path+'.log','utf8')).trim().split('\n').map(line=>JSON.parse(line))};
 }
@@ -83,6 +83,13 @@ describe('独立 Harness 的公开 ACP 适配',()=>{
     const f=await fixture('workbuddy');
     const adapter=new ExternalAcpAdapter('workbuddy',f.path,'--acp --tools --allowedTools --strict-mcp-config --mcp-config --settings');
     await expect(adapter.createSession(f.context)).rejects.toThrow('不支持关闭历史');
+  });
+  it('dsh 账户模型延迟注册时，目录探测与座位创建等待原生目录稳定',async()=>{
+    const f=await fixture('dsh',false,true), inspected=await f.adapter.inspect();
+    expect(inspected.models).toHaveLength(2);
+    const session=await f.adapter.createSession({...f.context,model:inspected.models[0].id,reasoningEffort:'low'});
+    await session.close();
+    expect((await f.log()).some(m=>m.method==='session/prompt')).toBe(false);
   });
   it('WorkBuddy 桌面 lite 公开 ACP 使用隔离的 loopback gateway，接受可选 agentInfo 缺省',async()=>{
     const f=await fixture('workbuddy',true);

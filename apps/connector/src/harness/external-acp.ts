@@ -100,6 +100,22 @@ export class ExternalAcpAdapter implements HarnessAdapter {
       if (this.id === 'workbuddy' && identity && !/workbuddy|codebuddy/i.test(identity)) throw new Error('WORKBUDDY_PATH 指向的服务不是 WorkBuddy/CodeBuddy');
       const result = await rpc.call('session/new', { cwd: context.cwd, mcpServers: mountGame ? [{ type: 'http', name: 'agent_game', url: context.mcpUrl, headers: [] }] : [] }, 45_000);
       if (typeof result.sessionId !== 'string' || !result.sessionId) throw new Error('ACP 没有返回有效会话 ID');
+      if (this.id === 'dsh') {
+        // Desktop dsh can answer session/new while account providers are still
+        // registering. Re-read its native options until the catalog settles;
+        // otherwise the UI can lose the account route or reject a selected model.
+        const started = Date.now(); let stable = 0;
+        let previous = JSON.stringify(modelsFromAcp(result.configOptions ?? []).map(m => m.id));
+        while (Date.now() - started < 1500) {
+          const model = modelOption(result.configOptions ?? []); if (!model) break;
+          await new Promise(resolve => setTimeout(resolve, 150));
+          result.configOptions = (await rpc.call('session/set_config_option', { sessionId: result.sessionId, configId: model.id, value: model.currentValue }, 15_000)).configOptions ?? [];
+          const ids = JSON.stringify(modelsFromAcp(result.configOptions).map(m => m.id));
+          stable = ids === previous ? stable + 1 : 0; previous = ids;
+          const found = !context.model || flattenChoices(modelOption(result.configOptions)?.options).some(m => m.value === context.model);
+          if (stable >= 2 && Date.now() - started >= 450 && found) break;
+        }
+      }
       return { rpc, init, result, resetText: () => { agentText = ''; }, failureText: () => agentText.replace(/https?:\/\/\S+/g, '[endpoint]').replace(/Bearer\s+\S+|sk-[A-Za-z0-9_-]+/gi, '[redacted]').trim().slice(0, 600) };
     } catch (error: any) {
       await rpc.close();
