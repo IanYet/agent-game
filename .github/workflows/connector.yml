@@ -62,7 +62,7 @@ jobs:
           include-hidden-files: true
           retention-days: 14
       - name: Save Windows UI previews
-        if: runner.os == 'Windows'
+        if: always() && runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: connector-windows-ui

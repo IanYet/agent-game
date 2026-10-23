@@ -38,12 +38,23 @@ internal static class WindowsLayout {
                         Field<Button>(form, "update").Text = "检查更新";
                     }
                     Application.DoEvents(); form.PerformLayout(); Application.DoEvents();
+                    // Hosted runners often have a 1024x768 virtual desktop.
+                    // A 200% preview is larger than that desktop; explicitly
+                    // allow the off-screen render to grow to its content size.
+                    // The product keeps scrolling available on small displays.
+                    for (int pass = 0; pass < 2; pass++) {
+                        Control root = form.Controls[0];
+                        Size needed = root.GetPreferredSize(new Size(root.Width, 0));
+                        form.MinimumSize = new Size((int)(520 * scale), needed.Height + form.Height - form.ClientSize.Height);
+                        form.PerformLayout(); Application.DoEvents();
+                    }
                     if (scale == 1F && scenario == "ready" && Environment.GetEnvironmentVariable("LAYOUT_DEBUG") == "1") Dump(form, "");
-                    Check(form);
                     using (var bitmap = new Bitmap(form.Width, form.Height)) {
                         form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
                         bitmap.Save(Path.Combine(args[0], scenario + "-" + (int)(scale * 100) + ".png"), ImageFormat.Png);
                     }
+                    Console.WriteLine("Checking " + scenario + " at " + (int)(scale * 100) + "%: " + form.Size);
+                    try { Check(form); } catch { Dump(form, ""); throw; }
                 }
             }
         }
