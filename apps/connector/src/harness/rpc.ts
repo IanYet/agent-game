@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { EventEmitter } from 'node:events';
 
@@ -70,7 +70,11 @@ export class JsonRpcProcess extends EventEmitter {
     this.child.stdin.end();
     if (this.child.exitCode === null) {
       await new Promise<void>(resolve => {
-        const timeout = setTimeout(() => { this.child.kill(); resolve(); }, 1800);
+        const timeout = setTimeout(() => {
+          if (process.platform === 'win32' && this.child.pid && this.child.exitCode === null) {
+            execFile('taskkill.exe', ['/PID', String(this.child.pid), '/T', '/F'], { windowsHide: true, timeout: 5000 }, () => resolve());
+          } else { this.child.kill(); resolve(); }
+        }, 1800);
         timeout.unref();
         this.child.once('exit', () => { clearTimeout(timeout); resolve(); });
       });

@@ -1,13 +1,13 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, writeFile, rm } from 'node:fs/promises';
+import { join, resolve, sep } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { modelsForHarness, type AgentSettings, type BrowserToolRequest, type ConnectorEvent, type GameTool, type SessionRequest, type ToolResponse } from '@agent-game/protocol';
 import type { AgentSession, ConnectorInfo, HarnessAdapter } from './types';
-import { GAME_INSTRUCTIONS } from './harness/instructions';
+import { gameInstructions } from './harness/instructions';
 import { resolveSettings } from './harness/settings';
 
-interface PlayerSession { session: AgentSession; request: SessionRequest; mcpToken: string }
+interface PlayerSession { session: AgentSession; request: SessionRequest; mcpToken: string; cwd: string }
 interface ActiveTurn { sessionId: string; controller: AbortController; revision: number; acted: boolean; done?: Promise<void> }
 export class LocalBridge extends EventEmitter {
   private owner: { token: string; origin: string; attached: boolean } | null = null;
@@ -21,7 +21,6 @@ export class LocalBridge extends EventEmitter {
   constructor(readonly info: ConnectorInfo, private adapters: Map<string, HarnessAdapter>, private dataDirectory: string) { super(); }
   connect(origin: string): string {
     if (this.owner) throw new Error('连接器已被另一个网页占用，请关闭那张网页后重试');
-    if (this.info.auth !== 'chatgpt') throw new Error('请先打开 Codex 并使用 ChatGPT 订阅登录，再重启连接器');
     const token = randomBytes(32).toString('hex'); this.owner = { token, origin, attached: false };
     this.attachTimeout = setTimeout(() => { if (!this.owner?.attached) void this.disconnect(); }, 15_000);
     return token;
@@ -45,7 +44,7 @@ export class LocalBridge extends EventEmitter {
     const authorizedTurn = request.tool === 'game_act' ? this.active : null;
     if (request.tool === 'game_act') {
       const session = this.active && this.sessions.get(this.active.sessionId);
-      if (!this.active || !session || session.request.seat !== request.seat || session.request.roomId !== request.roomId || this.active.acted || request.args.revision !== this.active.revision) throw new Error('当前没有此座位的行动授权，或本轮已行动');
+      if (!this.active || !session || session.request.seat !== request.seat || session.request.roomId !== request.roomId || session.request.handId !== request.handId || this.active.acted || request.args.revision !== this.active.revision) throw new Error('当前没有此座位的行动授权，或本轮已行动');
     }
     const id = randomUUID();
     const response = await new Promise<ToolResponse>((resolve, reject) => {
@@ -71,18 +70,18 @@ export class LocalBridge extends EventEmitter {
     this.creating = true;
     const generation = this.generation;
     const mcpToken = randomBytes(24).toString('hex'); this.capabilities.set(mcpToken, request);
+    const cwd = join(this.dataDirectory, 'sessions', randomUUID());
     try {
-      const cwd = join(this.dataDirectory, 'sessions', randomUUID());
-      await mkdir(cwd, { recursive: true }); await writeFile(join(cwd, 'AGENTS.md'), GAME_INSTRUCTIONS, 'utf8');
+      await mkdir(cwd, { recursive: true }); await writeFile(join(cwd, 'AGENTS.md'), gameInstructions(request), 'utf8');
       const session = await adapter.createSession({
         ...request, cwd, mcpUrl: `http://127.0.0.1:${this.info.port}/mcp/${request.roomId}/${mcpToken}`,
         onActivity: (text, tool) => this.emitEvent({ type: 'activity', seat: request.seat, text, tool }),
         onUsage: tokens => this.emitEvent({ type: 'usage', seat: request.seat, tokens }),
       });
       if (generation !== this.generation || !this.owner?.attached) { await session.close(); throw new Error('连接已结束'); }
-      this.sessions.set(session.sessionId, { session, request, mcpToken });
+      this.sessions.set(session.sessionId, { session, request, mcpToken, cwd });
       return { sessionId: session.sessionId };
-    } catch (error) { this.capabilities.delete(mcpToken); throw error; }
+    } catch (error) { this.capabilities.delete(mcpToken); if (!request.persistConversation) await this.removeTemporaryWorkspace(cwd); throw error; }
     finally { this.creating = false; }
   }
   async playTurn(sessionId: string, prompt: string, revision: number, settings?: AgentSettings): Promise<{ acted: boolean }> {
@@ -108,7 +107,11 @@ export class LocalBridge extends EventEmitter {
     this.capabilities.clear();
     for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(new Error('会话已结束')); } this.pending.clear();
     const sessions = [...this.sessions.values()]; this.sessions.clear();
-    await Promise.allSettled(sessions.map(s => s.session.close()));
+    await Promise.allSettled(sessions.map(async s => { try { await s.session.close(); } finally { if (!s.request.persistConversation) await this.removeTemporaryWorkspace(s.cwd); } }));
+  }
+  private async removeTemporaryWorkspace(cwd: string) {
+    const root = resolve(this.dataDirectory, 'sessions'), target = resolve(cwd);
+    if (target.startsWith(root + sep) && /^[0-9a-f-]{36}$/i.test(target.slice(root.length + 1))) await rm(target, { recursive: true, force: true }).catch(() => {});
   }
   async disconnect(expectedOwnerToken?: string): Promise<void> {
     if (expectedOwnerToken && this.owner?.token !== expectedOwnerToken) return;

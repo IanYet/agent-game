@@ -1,6 +1,7 @@
-export type Seat = 0 | 1 | 2;
+export type Seat = number;
 export type Suit = 'S' | 'H' | 'C' | 'D' | 'J';
-export type PlayerKind = 'human' | 'codex' | 'codex-acp';
+export const PLAYER_KINDS = ['human', 'codex', 'codex-acp', 'dsh', 'workbuddy'] as const;
+export type PlayerKind = typeof PLAYER_KINDS[number];
 export interface Card { id: string; rank: number; suit: Suit }
 export type CombinationKind = 'single' | 'pair' | 'triple' | 'triple_single' | 'triple_pair' | 'straight' | 'pair_straight' | 'airplane' | 'airplane_single' | 'airplane_pair' | 'four_two_single' | 'four_two_pair' | 'bomb' | 'rocket';
 export interface Combination { kind: CombinationKind; rank: number; size: number; chain: number; label: string }

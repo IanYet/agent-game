@@ -18,8 +18,8 @@ using Microsoft.Win32.SafeHandles;
 
 [assembly: AssemblyTitle("同桌 · 本地连接器")]
 [assembly: AssemblyDescription("Portable local bridge for Agent Arcade")]
-[assembly: AssemblyVersion("0.2.0.0")]
-[assembly: AssemblyFileVersion("0.2.0.0")]
+[assembly: AssemblyVersion("0.3.0.0")]
+[assembly: AssemblyFileVersion("0.3.0.0")]
 
 namespace AgentArcade {
     internal static class Program {
@@ -37,7 +37,7 @@ namespace AgentArcade {
             bool first;
             using (var instance = new Mutex(true, "Local\\AgentArcade.Connector." + port, out first)) {
                 if (!first) {
-                    if (!headless) MessageBox.Show("本地连接器已经在运行。可从右下角托盘打开窗口，或回到游戏网页连接 Codex。", "同桌", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    if (!headless) MessageBox.Show("本地连接器已经在运行。可从右下角托盘打开窗口，或回到游戏网页连接本机。", "同桌", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return 0;
                 }
                 try {
@@ -201,7 +201,7 @@ namespace AgentArcade {
         private readonly Label version = new Label();
         private readonly Button update = new Button();
         private readonly string root;
-        private string lastLine = "请确认本机已安装 Codex，并使用 ChatGPT 订阅登录。";
+        private string lastLine = "请确认所选 Harness 已安装并登录；各自使用已有模型目录。";
         private bool stopping;
         private bool exitRequested;
         private bool checkingUpdate;
@@ -230,8 +230,8 @@ namespace AgentArcade {
             AddLabel("WINDOWS  /  PORTABLE", 80, 59, 350, 20, 8F, Color.FromArgb(141, 157, 128));
             var panel = new Panel(); panel.Location = new Point(25, 105); panel.Size = new Size(440, 100); panel.BackColor = Color.White; Controls.Add(panel);
             status.Text = "正在启动连接器…"; status.Location = new Point(19, 17); status.Size = new Size(405, 28); status.Font = new Font("Microsoft YaHei UI", 13F, FontStyle.Bold); status.ForeColor = Green; panel.Controls.Add(status);
-            account.Text = "正在检测本机 Codex 登录"; account.Location = new Point(20, 55); account.Size = new Size(405, 29); account.ForeColor = Color.FromArgb(133, 151, 117); panel.Controls.Add(account);
-            detail.Text = "启动后，回到游戏网页点击「连接 Codex」。"; detail.Location = new Point(27, 225); detail.Size = new Size(435, 37); detail.ForeColor = Color.FromArgb(114, 135, 96); Controls.Add(detail);
+            account.Text = "正在检测 Codex、dsh 与 WorkBuddy"; account.Location = new Point(20, 55); account.Size = new Size(405, 29); account.ForeColor = Color.FromArgb(133, 151, 117); panel.Controls.Add(account);
+            detail.Text = "启动后，回到游戏网页点击「连接本机」。"; detail.Location = new Point(27, 225); detail.Size = new Size(435, 37); detail.ForeColor = Color.FromArgb(114, 135, 96); Controls.Add(detail);
             version.Text = "当前版本 v" + UpdateChecker.CurrentVersionText; version.Location = new Point(28, 284); version.Size = new Size(305, 40); version.ForeColor = Color.FromArgb(114, 135, 96); Controls.Add(version);
             update.Text = "检查更新"; update.Location = new Point(348, 280); update.Size = new Size(117, 36); update.FlatStyle = FlatStyle.Flat; update.ForeColor = Green; update.Click += delegate { if (updateAvailable) OpenUpdateDownload(); else CheckForUpdates(); }; Controls.Add(update);
             AddLabel("本机端口  127.0.0.1:" + port, 28, 358, 195, 21, 8F, Color.FromArgb(155, 169, 141));
@@ -273,9 +273,9 @@ namespace AgentArcade {
         private void HandleOutput(string line) {
             if (line.Trim().Length > 0 && !line.StartsWith("AGENT_ARCADE_STATUS:")) lastLine = line.Trim();
             OnUI(delegate {
-                if (line == "AGENT_ARCADE_STATUS:ready") { status.Text = "●  已就绪，等待网页连接"; tray.Text = "同桌 · 等待网页连接"; detail.Text = "回到网页连接 Codex。最小化或关闭窗口会留在托盘。"; }
+                if (line == "AGENT_ARCADE_STATUS:ready") { status.Text = "●  已就绪，等待网页连接"; tray.Text = "同桌 · 等待网页连接"; detail.Text = "回到网页连接本机。最小化或关闭窗口会留在托盘。"; }
                 else if (line == "AGENT_ARCADE_STATUS:connected") { status.Text = "●  游戏网页已连接"; tray.Text = "同桌 · 游戏网页已连接"; detail.Text = "托盘中继续运行。选择「退出连接器」会停止所有玩家并释放端口。"; }
-                else if (line.Trim().StartsWith("Codex：")) account.Text = line.Trim();
+                else if (line.Trim().StartsWith("Harness：")) account.Text = line.Trim();
             });
         }
         private void OnUI(Action action) { if (IsDisposed || !IsHandleCreated) return; try { BeginInvoke(action); } catch (InvalidOperationException) { } }

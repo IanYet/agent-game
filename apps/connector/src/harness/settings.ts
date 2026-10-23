@@ -1,9 +1,10 @@
 import type { AgentSettings, ModelInfo } from '@agent-game/protocol';
 import type { HarnessContext } from '../types';
+import { gameName } from '@agent-game/core';
 
 export function validateSettings(models: ModelInfo[], settings: AgentSettings): void {
   const model = settings.model ? models.find(m => m.id === settings.model) : models.find(m => m.isDefault) ?? models[0];
-  if (settings.model && !model) throw new Error(`Codex 没有提供所选模型：${settings.model}`);
+  if (settings.model && !model) throw new Error(`此 Harness 没有提供所选模型：${settings.model}`);
   if (settings.reasoningEffort && !model?.supportedReasoningEfforts?.some(e => e.effort === settings.reasoningEffort)) throw new Error(`所选模型不支持思考强度：${settings.reasoningEffort}`);
 }
 
@@ -14,7 +15,7 @@ export function resolveSettings(models: ModelInfo[], settings: AgentSettings): A
 }
 
 export function playerConversationTitle(context: HarnessContext): string {
-  return `同桌 · 斗地主 · ${context.name} · 第 ${context.round ?? 1} 局 · ${(context.roomId ?? '').slice(0, 8)}`;
+  return `同桌 · ${gameName(context.gameId ?? 'doudizhu')} · ${context.name} · 第 ${context.round ?? 1} ${context.gameId === 'holdem' ? '手' : '局'} · ${(context.roomId ?? '').slice(0, 8)}`;
 }
 
 export function selectAcpModel(models: Array<{ modelId: string }>, currentModelId: string | undefined, settings: AgentSettings): string | undefined {

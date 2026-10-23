@@ -1,4 +1,4 @@
-import type { Seat } from '@agent-game/core';
+import type { GameId, Seat } from '@agent-game/core';
 import type { AgentSettings } from '@agent-game/protocol';
 export type { HarnessInfo, ModelInfo, ConnectorInfo } from '@agent-game/protocol';
 export interface AgentSession {
@@ -8,6 +8,9 @@ export interface AgentSession {
 }
 export interface HarnessContext extends AgentSettings {
   roomId?: string;
+  gameId?: GameId;
+  handId?: string;
+  initialState?: string;
   round?: number;
   persistConversation?: boolean;
   seat: Seat;

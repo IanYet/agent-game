@@ -1,6 +1,6 @@
 {
   "name": "agent-arcade",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "A local game table for humans and their agents.",
@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit",
     "package:windows": "node scripts/package-windows.mjs",
     "test:windows": "tsx scripts/test-windows-lifecycle.ts",
-    "check:codex": "tsx scripts/check-codex.ts"
+    "check:codex": "tsx scripts/check-codex.ts",
+    "check:harnesses": "tsx scripts/check-harnesses.ts"
   },
   "dependencies": {
     "@agentclientprotocol/codex-acp": "2.2.2",

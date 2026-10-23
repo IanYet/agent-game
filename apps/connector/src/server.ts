@@ -47,18 +47,20 @@ export function createConnectorServer(bridge: LocalBridge, allowedOrigins: strin
     bridge.toolResult(body.id, body.response); res.json({ ok: true });
   });
   app.post('/api/sessions', async (req, res) => {
-    const request = z.object({ roomId: z.string().uuid(), round: z.number().int().positive().optional(), persistConversation: z.boolean().optional(), seat: z.union([z.literal(0), z.literal(1), z.literal(2)]), kind: z.enum(['codex', 'codex-acp']), name: z.string().min(1).max(32), model: z.string().min(1).max(100).optional(), reasoningEffort: z.string().min(1).max(30).optional() }).parse(req.body);
+    const request = z.object({ roomId: z.string().uuid(), gameId: z.enum(['doudizhu', 'holdem']).optional(), handId: z.string().min(1).max(100).optional(), initialState: z.string().max(60_000).optional(), round: z.number().int().positive().optional(), persistConversation: z.boolean().optional(), seat: z.number().int().min(0).max(8), kind: z.enum(['codex', 'codex-acp', 'dsh', 'workbuddy']), name: z.string().min(1).max(32), model: z.string().min(1).max(500).optional(), reasoningEffort: z.string().min(1).max(100).optional() }).parse(req.body);
+    if ((request.gameId ?? 'doudizhu') === 'doudizhu' && request.seat > 2) throw new Error('斗地主座位只能为 0–2');
+    if (request.gameId === 'holdem' && !request.handId) throw new Error('德州扑克需要本手 handId');
     res.status(201).json(await bridge.createSession(request));
   });
   app.post('/api/sessions/:id/turn', async (req, res) => {
-    const { prompt, revision, settings } = z.object({ prompt: z.string().min(1).max(6000), revision: z.number().int().min(1), settings: z.object({ model: z.string().min(1).max(100).optional(), reasoningEffort: z.string().min(1).max(30).optional() }).optional() }).parse(req.body);
+    const { prompt, revision, settings } = z.object({ prompt: z.string().min(1).max(6000), revision: z.number().int().min(1), settings: z.object({ model: z.string().min(1).max(500).optional(), reasoningEffort: z.string().min(1).max(100).optional() }).optional() }).parse(req.body);
     res.json(await bridge.playTurn(req.params.id as string, prompt, revision, settings));
   });
   app.post('/api/pause', async (_req, res) => { await bridge.pauseTurn(); res.json({ ok: true }); });
   app.delete('/api/sessions', async (_req, res) => { await bridge.stopSessions(); res.json({ ok: true }); });
   app.post('/api/disconnect', async (_req, res) => { await bridge.disconnect(); res.json({ ok: true }); });
   registerMcp(app, bridge);
-  app.get('/', (_req, res) => res.type('text/plain').send('同桌本地连接器正在运行。请在独立的游戏网页点击 Codex 连接。'));
+  app.get('/', (_req, res) => res.type('text/plain').send('同桌本地连接器正在运行。请在独立的游戏网页点击连接本机。'));
   const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => { if (!res.headersSent) res.status(400).json({ error: error instanceof z.ZodError ? '请求参数不符合要求' : String(error.message ?? '连接失败').slice(0, 500) }); };
   app.use(errorHandler);
   const server = createServer(app);

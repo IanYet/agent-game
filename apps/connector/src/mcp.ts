@@ -12,12 +12,12 @@ export function registerMcp(app: Express, bridge: LocalBridge): void {
     if (!player) { res.status(401).json({ error: '无效或已过期的座位凭据' }); return; }
     const server = new McpServer({ name: 'agent_game', version: '0.1.0' }, { instructions: '使用 game_get_state 读取自己的手牌，以最新 revision 和 actionId 执行一次 game_act 后立即结束任务。' });
     const proxy = async (tool: GameTool, args: Record<string, unknown> = {}) => {
-      try { return await bridge.callBrowser({ roomId: player.roomId, seat: player.seat, tool, args }); }
+      try { return await bridge.callBrowser({ roomId: player.roomId, handId: player.handId, seat: player.seat, tool, args }); }
       catch (error: any) { return { content: [{ type: 'text' as const, text: JSON.stringify({ error: error.message }) }], isError: true }; }
     };
-    server.registerTool('game_get_state', { description: '读取自己的手牌、公开牌局、轮次与revision。其他玩家只返回余牌数。预览12个合法行动。', inputSchema: {}, annotations: readOnly }, async () => proxy('game_get_state'));
+    server.registerTool('game_get_state', { description: '读取自己的手牌、公开牌局、筹码、轮次与 revision。德州返回公共牌、底池和下注范围；隐藏对手底牌与牌库。预览12个合法行动。', inputSchema: {}, annotations: readOnly }, async () => proxy('game_get_state'));
     server.registerTool('game_legal_actions', { description: '获取当前座位的合法行动列表，使用 actionId 出牌。', inputSchema: { offset: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(100).default(80) }, annotations: readOnly }, async args => proxy('game_legal_actions', args));
-    server.registerTool('game_act', { description: '用最新 revision 和合法 actionId 执行一次本座位行动。成功后立即结束任务。', inputSchema: { actionId: z.string().min(1).max(300), revision: z.number().int().min(1) }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } }, async args => proxy('game_act', args));
+    server.registerTool('game_act', { description: '用最新 revision 和合法 actionId 执行一次本座位行动。德州可用 actionId=raise + amount 自定义整数加注，amount 为本轮累计下注到的总额（raise-to），须符合 betting 范围。成功后立即结束任务。', inputSchema: { actionId: z.string().min(1).max(300), revision: z.number().int().min(1), amount: z.number().int().positive().max(9_000_000_000).optional() }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } }, async args => proxy('game_act', args));
     server.registerTool('game_rules', { description: '获取当前游戏的规则与计分方法。', inputSchema: {}, annotations: readOnly }, async () => proxy('game_rules'));
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => { void transport.close(); void server.close(); });
