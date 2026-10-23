@@ -80,7 +80,7 @@ Windows 运行时按内容哈希展开到系统临时目录 AgentArcade/runtime-
 
 ## macOS 安装、发现与退出
 
-macOS 13+；M 系列用 arm64，Intel 用 x64。解压 ZIP，将「同桌连接器.app」拖到「应用程序」后双击；顶部菜单栏「同桌」显示启动/等待/连接状态，提供网页、数据文件夹、下载说明和「退出连接器」。已内置 Node；没有 Harness 也能启动，网页会显示未就绪原因。
+macOS 13.5+（[Node 24 官方二进制的最低系统要求](https://nodejs.org/en/blog/migrations/v22-to-v24)）；M 系列用 arm64，Intel 用 x64。解压 ZIP，将「同桌连接器.app」拖到「应用程序」后双击；顶部菜单栏「同桌」显示启动/等待/连接状态，提供网页、数据文件夹、下载说明和「退出连接器」。已内置 Node；没有 Harness 也能启动，网页会显示未就绪原因。
 
 Finder 不继承终端 PATH。桥会以四秒超时读取 zsh login PATH，并补上内置 Node、Homebrew、`~/.local/bin`、npm-global、Volta、asdf、fnm 和 nvm 安装目录。然后查找 Codex/dsh/workbuddy/codebuddy；支持常见 `/Applications` 和 `~/Applications` 的桌面 CLI 位置，特殊布局使用 CODEX_PATH、DSH_PATH、WORKBUDDY_PATH 指向官方 CLI。不能找到或无法验证公开接口时报告未就绪，不自动安装 Harness、不读取或复制认证材料。
 

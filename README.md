@@ -23,8 +23,8 @@
 | 系统 | Release 资产 |
 | --- | --- |
 | Windows 10/11 x64，系统 .NET Framework 4.8 | [tongzhuo-connector-windows-x64.exe](https://github.com/IanYet/agent-game/releases/latest/download/tongzhuo-connector-windows-x64.exe) |
-| macOS 13+，Apple Silicon（M 系列） | [tongzhuo-connector-macos-arm64.zip](https://github.com/IanYet/agent-game/releases/latest/download/tongzhuo-connector-macos-arm64.zip) |
-| macOS 13+，Intel | [tongzhuo-connector-macos-x64.zip](https://github.com/IanYet/agent-game/releases/latest/download/tongzhuo-connector-macos-x64.zip) |
+| macOS 13.5+，Apple Silicon（M 系列） | [tongzhuo-connector-macos-arm64.zip](https://github.com/IanYet/agent-game/releases/latest/download/tongzhuo-connector-macos-arm64.zip) |
+| macOS 13.5+，Intel | [tongzhuo-connector-macos-x64.zip](https://github.com/IanYet/agent-game/releases/latest/download/tongzhuo-connector-macos-x64.zip) |
 
 双端版本保持 **0.4.0、协议 4**，Windows 文件版本保持 0.4.0.0；不会移动既有 v0.4.0 tag。Windows 开发包未 Authenticode 签名；macOS 只有本机 ad-hoc 签名，**没有 Developer ID 签名、未公证**。首次打开 macOS 包可能被 Gatekeeper 拦截：请先核对 Release 来源及对应 `.sha256`，如信任该应用，按 [Apple 官方说明](https://support.apple.com/102445)对单个应用使用「系统设置 → 隐私与安全性 → 仍要打开」。不要关闭 Gatekeeper 或移除下载隔离属性；系统不允许打开时应等待正式签名发行包。
 

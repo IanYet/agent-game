@@ -1,5 +1,34 @@
 # 协议 4 开发验证记录
 
+## 2026-10-24：跨平台连接器与发布补包
+
+此轮双端保持连接器 **0.4.0、协议 4**，Windows 文件版本保持 0.4.0.0；macOS Info.plist 从同一 version.json 生成。新增 macOS arm64/x64 `.app`（自带 Node、原生菜单栏、退出入口、Guardian）、macOS Application Support 路径、GUI PATH/Harness 发现；Windows 窗口改为自动布局、完整换行和一次 DPI 缩放。两端应用、Windows 窗口/托盘、macOS 菜单栏使用同一 SVG 源图标。
+
+本地 Windows 已通过：107 项单元/集成测试、类型检查、网页构建、生产桥跨三种游戏不重建验证、5 项发布器失败/回滚测试、最终 EXE 无账户生命周期检查。界面以一致的 96-DPI 基准，分别放大几何和字体到 100%/150%/200%，渲染启动/已就绪/已连接/长错误和更新提示；检查文本首选高度、列边界及按钮在窗口内。高 DPI 桌面另有实际显示渲染检查；这不代替其他显示器/系统字体的人工验收。
+
+首次 [GitHub 原生矩阵运行](https://github.com/IanYet/agent-game/actions/runs/39986533838)中，macos-15（arm64）与 macos-15-intel（x64）均通过完整构建、打包、代码签名结构检查以及最终 ZIP 的自动运行检查：
+
+- 解压到带空格的路径，核对内置 Node 的真实 Mach-O 架构和应用版本。
+- 在生产桥中建立公开 ACP fixture 会话及忽略 SIGTERM 的孙进程。
+- 重复启动不影响原实例；只向启动器发 SIGKILL 后整组退出，监听端口可立即复用。
+- SIGTERM、正常 timed Quit 均清理子进程和端口，再次启动成功。
+- runner 上执行 AppKit 正常入口并自动退出；最小 Finder PATH、无 Node 安装入口和无可用 Harness 时仍可启动桥。
+
+首次 Windows CI 在大尺寸界面渲染时被 runner 的虚拟屏幕边界限制，发布作业按预期跳过。渲染测试已允许截图窗口按内容扩展，保留所有内容/边界断言；实际应用在小屏仍可滚动。随后还修正最低系统为 macOS 13.5，匹配 [Node 24 官方要求](https://nodejs.org/en/blog/migrations/v22-to-v24)。最终发布运行与资产哈希在完成后记录于本节。
+
+### 真实 Mac 仍需完成的验收
+
+当前开发机是 Windows，没有 Mac 真机或 Developer ID/公证凭据。以上 runner 自动运行结果不表示下列项目已完成：
+
+1. 分别在 Apple Silicon / Intel 真机上从浏览器下载 Release，保留系统下载隔离，验证解压、拖入 Applications、Finder 双击和应用图标。
+2. 核对当前 ad-hoc 包的真实 Gatekeeper 提示，并按 Apple 单应用「仍要打开」流程验证；禁止关闭 Gatekeeper 或删除隔离属性。系统不提供该入口时应等待正式签名包。
+3. 目视检查菜单栏深色/浅色外观、图标、状态、网页/数据/版本入口和「退出连接器」；测试强制退出后网页即时断开及 3211 端口释放。
+4. 在真实 Codex/dsh/WorkBuddy 安装布局中验证 Finder PATH、官方 CLI 发现、原生账户登录、模型目录以及各自真实推理/对弈，逐一记录权益与认证限制。CI fixture 不证明真实账户可用，WorkBuddy 的独立修复仍另行验收。
+5. 检查 Safari/Chrome 对公开 HTTPS 网页访问 loopback 的权限提示、建立/断开/重连；检查最低支持 macOS 13.5 及常见显示缩放。
+6. 获得证书后另行完成 Developer ID 签名、hardened runtime/entitlements 评估、notarytool 公证、staple 和全新下载验收。当前包不得标记为已完成这些步骤。
+
+以下内容保留 2026-10-23 协议基线的历史结果；旧包哈希不表示本次补包哈希。
+
 日期：2026-10-23。此记录区分协议 fixture、真实账户推理和最终 EXE。
 
 本轮完成：105 项自动测试、类型检查与完整源码构建通过。浏览器验证了两款模块牌桌、德州 2–9 人配置、独立原生模型目录和刷新后暂停恢复。

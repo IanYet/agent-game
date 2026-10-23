@@ -19,7 +19,9 @@ for (const size of [16, 32, 128, 256, 512]) {
   await copyFile(join(icons.directory, `icon-${size * 2}.png`), join(iconset, `icon_${size}x${size}@2x.png`));
 }
 execFileSync('/usr/bin/iconutil', ['-c', 'icns', iconset, '-o', join(resources, 'Connector.icns')], { stdio: 'inherit' });
-const minimum = '13.0';
+// Node 24's official prebuilt binaries require macOS 13.5. Do not advertise
+// an older OS merely because the tiny launcher could compile for it.
+const minimum = '13.5';
 const target = `${arch === 'x64' ? 'x86_64' : 'arm64'}-apple-macosx${minimum}`;
 const run = (program, args) => execFileSync(program, args, { stdio: 'inherit' });
 run('xcrun', ['clang', '-O2', '-Wall', '-Wextra', '-Werror', '-target', target, 'apps/connector/macos/Guardian.c', '-o', join(bin, 'ConnectorGuardian')]);
@@ -43,7 +45,7 @@ await writeFile(join(contents, 'Info.plist'), `<?xml version="1.0" encoding="UTF
 </dict></plist>\n`);
 await writeFile(join(staging, '请先阅读.txt'), `同桌 · macOS 本地连接器 v${version} (${arch})
 
-macOS 13 或更新版本。Apple Silicon 使用 arm64；Intel 使用 x64。
+macOS 13.5 或更新版本。Apple Silicon 使用 arm64；Intel 使用 x64。
 解压后将「同桌连接器.app」拖到「应用程序」，双击打开，无需安装 Node.js。
 顶部菜单栏「同桌」显示运行状态，回到游戏网页点击「连接本机」。
 从菜单栏选择「退出连接器」会停止本次连接器和 Harness 子进程，释放端口。

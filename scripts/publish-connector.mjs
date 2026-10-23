@@ -53,7 +53,7 @@ export async function publish({ repository, token, directory, sourceCommit, runI
     const all = [];
     for (let page = 1; ; page++) { const batch = await request(`${base}/releases/${release.id}/assets?per_page=100&page=${page}`); all.push(...batch); if (batch.length < 100) return all; }
   };
-  const before = await listAssets(), staged = [], backups = [], promoted = [];
+  const before = await listAssets(), staged = [], backups = [];
   const suffix = `.staging-${runId}-${sourceCommit.slice(0, 12)}`;
   try {
     // Upload and verify EVERY temporary asset before changing any stable name.
@@ -67,7 +67,6 @@ export async function publish({ repository, token, directory, sourceCommit, runI
       const file = files[i], existing = before.find(asset => asset.name === file.name);
       if (existing) { await request(`${base}/releases/assets/${existing.id}`, { method: 'PATCH', body: { name: `${existing.name}.previous-${runId}` } }); backups.push(existing); }
       await request(`${base}/releases/assets/${staged[i].id}`, { method: 'PATCH', body: { name: file.name, label: `${tag} · ${sourceCommit.slice(0, 12)}` } });
-      promoted.push(staged[i]);
     }
     const after = await listAssets();
     for (const file of files) if (!after.some(asset => asset.name === file.name && asset.digest === `sha256:${file.sha256}`)) throw new Error(`Release asset not verified: ${file.name}`);
