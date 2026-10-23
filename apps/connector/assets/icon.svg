@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>同桌连接器：围桌入座</title>
+  <rect x="0" y="0" width="256" height="256" rx="56" fill="#285747"/>
+  <rect x="49" y="65" width="158" height="126" rx="42" fill="#b9cfab"/>
+  <rect x="56" y="72" width="144" height="112" rx="35" fill="#356d55"/>
+  <circle cx="128" cy="37" r="13" fill="#f4efd9"/>
+  <circle cx="219" cy="128" r="13" fill="#f4efd9"/>
+  <circle cx="128" cy="219" r="13" fill="#f4efd9"/>
+  <circle cx="37" cy="128" r="13" fill="#f4efd9"/>
+  <rect x="96" y="88" width="49" height="76" rx="7" fill="#b9cfab" transform="rotate(-14 128 128)"/>
+  <rect x="113" y="91" width="49" height="76" rx="7" fill="#fff6dd" transform="rotate(10 138 129)"/>
+  <rect x="130" y="119" width="16" height="16" rx="2" fill="#285747" transform="rotate(55 138 127)"/>
+</svg>

@@ -1,30 +1,94 @@
-name: Build Windows connector
+name: Build and release connectors
 
-# Game publication does not run this workflow. Build a connector baseline deliberately.
+# Deliberate manual baseline builds; publishing games never rebuilds a connector.
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: connector-release-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
-  connector:
-    runs-on: windows-latest
-    timeout-minutes: 20
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            arch: x64
+          - os: macos-15
+            platform: macos
+            arch: arm64
+          - os: macos-15-intel
+            platform: macos
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '24.19.0'
           cache: npm
       - run: npm ci
       - run: npm test
       - run: npm run typecheck
+      - run: npm run test:release
+      - run: npm run build:web
       - run: npm run build:connector
       - run: npm run test:dynamic-connector
-      - run: npm run package:windows
-      - uses: actions/upload-artifact@v4
+      - name: Render Windows layout and check text at multiple scales
+        if: runner.os == 'Windows'
+        run: npm run test:windows-ui
+      - name: Package native connector with embedded Node
+        run: npm run package:${{ matrix.platform }}
+        env:
+          PACKAGE_ARCH: ${{ matrix.arch }}
+      - name: Execute final package, verify shutdown and port reuse
+        run: npm run test:package
+      - name: Stage verified packages and evidence for the publisher
+        uses: actions/upload-artifact@v4
         with:
-          name: windows-connector-x64
-          path: release/同桌连接器.exe
+          name: connector-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            release/tongzhuo-connector-${{ matrix.platform }}-${{ matrix.arch }}.*
+            .cache/validation/package-*.json
+            .cache/validation/dynamic-connector-proof.json
           if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 14
+      - name: Save Windows UI previews
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: connector-windows-ui
+          path: .cache/validation/windows-ui/*.png
+          include-hidden-files: true
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.19.0'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: connector-*
+          path: release-input
+      - name: Collect exactly the three verified platform packages
+        run: |
+          mkdir release-assets
+          find release-input -type f \( -name 'tongzhuo-connector-*' -o -name 'package-*.json' \) -exec cp '{}' release-assets/ \;
+      - name: Publish and verify Release assets without moving existing tags
+        run: node scripts/publish-connector.mjs release-assets
+        env:
+          GH_TOKEN: ${{ github.token }}

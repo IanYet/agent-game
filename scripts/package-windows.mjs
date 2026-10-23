@@ -1,52 +1,33 @@
-import { mkdir, cp, writeFile, copyFile, readFile, readdir } from 'node:fs/promises';
+import { mkdir, writeFile, copyFile, readFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { preparePayload, packageMetadata } from './package-shared.mjs';
+import { connectorIcons } from './connector-icons.mjs';
 
 if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Run this packaging script with Windows x64 Node.js 22 or newer.');
-if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('The portable runtime must be Node.js 22 or newer.');
 const destination = resolve('release', `portable-${Date.now()}`);
-await mkdir(join(destination, 'runtime'), { recursive: true });
-await mkdir(join(destination, 'dist', 'connector'), { recursive: true });
-await copyFile(process.execPath, join(destination, 'runtime', 'node.exe'));
-await cp(resolve('dist/connector'), join(destination, 'dist', 'connector'), { recursive: true });
-await copyFile('connector.config.json', join(destination, 'connector.config.json'));
-const packageInfo = JSON.parse(await readFile('apps/connector/version.json', 'utf8'));
-await writeFile(join(destination, 'package.json'), JSON.stringify({ name: 'agent-arcade-connector', version: packageInfo.version, private: true }) + '\n');
+await preparePayload(destination, 'node.exe');
 await writeFile(join(destination, '使用说明.txt'), '\uFEFF同桌 · Windows 本地连接器\r\n\r\n1. 在浏览器打开游戏网页。\r\n2. 双击「同桌连接器.exe」，无需安装或解压，也无需 Node.js。\r\n3. 回到网页，点击「连接本机」。允许浏览器访问本地网络。\r\n4. 在窗口或托盘菜单选择「退出连接器」会结束其所有子进程，并释放本机监听端口。\r\n\r\n本机需要已安装并登录所选 Harness。Codex 使用 ChatGPT 订阅登录；dsh 与 WorkBuddy 使用各自的已有登录与模型配置。未就绪原因可在网页本地连接页面查看。\r\nDSH_PATH、DSH_PROFILE 与 WORKBUDDY_PATH 可指定 CLI 入口/配置。支持公开 ACP 和 HTTP MCP 的版本才会就绪。\r\n运行时自动展开到系统临时目录，不修改注册表。\r\n', 'utf8');
-await cp('THIRD_PARTY_NOTICES.md', join(destination, 'THIRD_PARTY_NOTICES.md'));
-await mkdir(join(destination, 'licenses'), { recursive: true });
-const runtimeLicensePath = resolve('.cache', `node-LICENSE-v${process.versions.node}.txt`);
-try { await copyFile(runtimeLicensePath, join(destination, 'licenses', 'Node.js-LICENSE.txt')); }
-catch {
-  const license = await fetch(`https://raw.githubusercontent.com/nodejs/node/v${process.versions.node}/LICENSE`);
-  if (!license.ok) throw new Error('Could not obtain the bundled Node.js license.');
-  await writeFile(join(destination, 'licenses', 'Node.js-LICENSE.txt'), await license.text());
-}
-for (const entry of await readdir('node_modules', { withFileTypes: true })) {
-  if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
-  const packages = entry.name.startsWith('@') ? (await readdir(join('node_modules', entry.name))).map(name => join(entry.name, name)) : [entry.name];
-  for (const name of packages) {
-    const directory = join('node_modules', name);
-    for (const file of await readdir(directory).catch(() => [])) {
-      if (/^(licen[sc]e|notice)(\..*)?$/i.test(file)) await copyFile(join(directory, file), join(destination, 'licenses', `${name.replaceAll(/[\\/]/g, '__')}-${file}`)).catch(() => {});
-    }
-  }
-}
 // Paths passed as literal PowerShell arguments; the staging folder is newly created.
 const quote = value => "'" + value.replaceAll("'", "''") + "'";
 const temporaryArchive = `${destination}.zip`;
 execFileSync('pwsh.exe', ['-NoProfile', '-NonInteractive', '-Command', `[System.IO.Compression.ZipFile]::CreateFromDirectory(${quote(destination)}, ${quote(temporaryArchive)}, [System.IO.Compression.CompressionLevel]::Optimal, $false)`], { stdio: 'inherit', windowsHide: true });
 const executable = resolve('release/同桌连接器.exe');
 const compiler = join(process.env.WINDIR ?? 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
+const { ico } = await connectorIcons();
 execFileSync(compiler, [
   '/nologo', '/optimize+', '/target:winexe', '/platform:x64',
   `/out:${executable}`, `/win32manifest:${resolve('apps/connector/windows/app.manifest')}`,
+  `/win32icon:${ico}`, `/resource:${ico},AgentArcade.Icon`,
   '/reference:System.dll', '/reference:System.Core.dll', '/reference:System.Drawing.dll', '/reference:System.Windows.Forms.dll',
   '/reference:System.Net.Http.dll', '/reference:System.Web.Extensions.dll',
   '/reference:System.IO.Compression.dll', '/reference:System.IO.Compression.FileSystem.dll',
   `/resource:${temporaryArchive},AgentArcade.Payload`, resolve('apps/connector/windows/Launcher.cs'),
 ], { stdio: 'inherit', windowsHide: true });
+const asset = resolve('release/tongzhuo-connector-windows-x64.exe');
+await copyFile(executable, asset);
+await packageMetadata(asset, 'win32', 'x64', { type: 'unsigned', authenticode: false });
 await mkdir('apps/web/public/downloads', { recursive: true });
 await mkdir('dist/client/downloads', { recursive: true });
 // Split static assets below common CDN per-file limits. The browser assembles a

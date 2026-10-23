@@ -22,3 +22,6 @@
 @media(max-width:1200px){.poker-seats{grid-template-columns:repeat(2,minmax(0,1fr))}.roster-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.poker-felt{margin:18px}.poker-seats{padding:0 18px 18px}}
 @media(max-width:1000px){.lobby-grid{grid-template-columns:1fr}.poker-seats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:720px){.roster-grid{grid-template-columns:1fr}.poker-seats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 12px 12px}.poker-seat{padding:9px}.poker-seat.active{padding:8px}.poker-player-heading{flex-wrap:wrap;gap:5px}.poker-felt{margin:14px 12px;border-radius:55px;padding:20px 10px;min-height:240px}.community-cards{gap:3px}.community-cards .playing-card{width:38px;height:57px}.poker-seat-body{flex-wrap:wrap}.poker-balance{text-align:left}.poker-balance strong{font-size:18px}.poker-controls{padding:15px}.poker-options{gap:8px;padding:10px}.poker-options input{font-size:11px;padding:7px}.poker-result{padding:18px}.poker-results>div{font-size:10px;grid-template-columns:1fr 1fr 36px}}
+
+.connector-downloads { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
+.connector-downloads .button { white-space: normal; text-align: left; }
