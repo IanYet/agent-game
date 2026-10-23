@@ -34,11 +34,11 @@ internal static class WindowsLayout {
                     Field<Label>(form, "status").Text = scenario == "ready" || scenario == "default" ? "●  已就绪，等待网页连接" : scenario == "connected" ? "●  游戏网页已连接" : "连接器启动失败";
                     Field<Label>(form, "account").Text = "Harness：Codex · ACP、Codex · App Server、dsh · DeepSeek Harness、WorkBuddy";
                     Field<Label>(form, "detail").Text = scenario == "error" ? "连接器启动失败：无法启动所选 Harness。请检查是否已安装并登录；可在游戏网页查看完整检测信息，确认配置后退出连接器并重新启动。" : "回到网页连接本机。最小化或关闭窗口会留在托盘，选择「退出连接器」会停止所有玩家并释放本机端口。";
-                    Field<Label>(form, "version").Text = "当前 v0.4.0 · 发现 v100.200.300，请下载更新后退出当前连接器";
+                    Field<Label>(form, "version").Text = "当前 v" + UpdateChecker.CurrentVersionText + " · 发现 v100.200.300，请下载更新后退出当前连接器";
                     Field<Button>(form, "update").Text = "下载更新";
                     if (scenario == "default") {
                         Field<Label>(form, "account").Text = "Harness：Codex · ACP、dsh、WorkBuddy";
-                        Field<Label>(form, "version").Text = "当前版本 v0.4.0";
+                        Field<Label>(form, "version").Text = "当前版本 v" + UpdateChecker.CurrentVersionText;
                         Field<Button>(form, "update").Text = "检查更新";
                     }
                     Application.DoEvents(); form.PerformLayout(); Application.DoEvents();

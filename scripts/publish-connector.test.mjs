@@ -1,12 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { assets, publish } from './publish-connector.mjs';
 
 const commit = 'a'.repeat(40);
+const version = JSON.parse(await readFile(new URL('../apps/connector/version.json', import.meta.url), 'utf8')).version;
+const tag = `v${version}`;
 async function packages() {
   const directory = await mkdtemp(join(tmpdir(), 'connector-release-test-'));
   for (const asset of assets) {
@@ -14,20 +16,20 @@ async function packages() {
     const platform = asset.includes('windows') ? 'win32' : 'darwin', arch = asset.includes('arm64') ? 'arm64' : 'x64';
     await writeFile(join(directory, asset), bytes);
     await writeFile(join(directory, `${asset}.sha256`), `${sha256}  ${asset}\n`);
-    await writeFile(join(directory, `${asset}.build.json`), JSON.stringify({ asset, sha256, version: '0.4.0', protocolVersion: 4, sourceCommit: commit, size: bytes.length, platform, arch }));
-    await writeFile(join(directory, `package-${platform}-${arch}.json`), JSON.stringify({ asset, sha256, version: '0.4.0', sourceCommit: commit, inference: false, checks: ['force', 'normal', 'restart'] }));
+    await writeFile(join(directory, `${asset}.build.json`), JSON.stringify({ asset, sha256, version, protocolVersion: 4, sourceCommit: commit, size: bytes.length, platform, arch }));
+    await writeFile(join(directory, `package-${platform}-${arch}.json`), JSON.stringify({ asset, sha256, version, sourceCommit: commit, inference: false, checks: ['force', 'normal', 'restart'] }));
   }
   return directory;
 }
 function github({ failPromote = false, wrongDigest = false } = {}) {
   const state = { calls: [], assets: [{ id: 10, name: assets[0], digest: 'sha256:old', size: 3 }, { id: 11, name: 'unrelated.txt' }, { id: 12, name: 'SHA256SUMS.txt', digest: 'sha256:legacy' }], body: 'Existing release notes must stay intact', tag: 'b'.repeat(40), next: 20 };
   const response = (body, status = 200) => new Response(status === 204 ? null : JSON.stringify(structuredClone(body)), { status, headers: { 'Content-Type': 'application/json' } });
-  const release = () => ({ id: 1, name: 'Original v0.4.0', body: state.body, tag_name: 'v0.4.0', html_url: 'https://github.com/test/repo/releases/tag/v0.4.0', upload_url: 'https://uploads.test/assets{?name,label}', draft: false, prerelease: false });
+  const release = () => ({ id: 1, name: `Original ${tag}`, body: state.body, tag_name: tag, html_url: `https://github.com/test/repo/releases/tag/${tag}`, upload_url: 'https://uploads.test/assets{?name,label}', draft: false, prerelease: false });
   const fetcher = async (url, options) => {
     const u = new URL(url), method = options.method ?? 'GET', body = options.body;
     state.calls.push({ method, path: u.pathname });
     if (method === 'GET' && u.pathname.includes('/git/ref/')) return response({ object: { sha: state.tag } });
-    if (method === 'GET' && (u.pathname.endsWith('/releases/tags/v0.4.0') || u.pathname.endsWith('/releases/1'))) return response(release());
+    if (method === 'GET' && (u.pathname.endsWith(`/releases/tags/${tag}`) || u.pathname.endsWith('/releases/1'))) return response(release());
     if (method === 'GET' && u.pathname.endsWith('/releases/1/assets')) return response(state.assets);
     if (method === 'POST' && u.hostname === 'uploads.test') {
       const asset = { id: state.next++, name: u.searchParams.get('name'), size: body.length, digest: wrongDigest ? 'sha256:wrong' : `sha256:${createHash('sha256').update(body).digest('hex')}` };
@@ -84,7 +86,7 @@ test('a platform version differing from version.json prevents publishing', async
   await exercise({}, async (run, state, directory) => {
     const asset = assets[1], path = join(directory, `${asset}.build.json`);
     const bytes = Buffer.from(asset), sha256 = createHash('sha256').update(bytes).digest('hex');
-    await writeFile(path, JSON.stringify({ asset, sha256, version: '0.4.1', protocolVersion: 4, sourceCommit: commit, size: bytes.length, platform: 'darwin', arch: 'arm64' }));
+    await writeFile(path, JSON.stringify({ asset, sha256, version: '99.0.0', protocolVersion: 4, sourceCommit: commit, size: bytes.length, platform: 'darwin', arch: 'arm64' }));
     await assert.rejects(run, /Invalid package/); assert.equal(state.calls.length, 0);
   });
 });
