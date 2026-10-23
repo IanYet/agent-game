@@ -80,6 +80,21 @@ export async function publish({ repository, token, directory, sourceCommit, runI
     // A new version becomes public only with every download already in place.
     // During uploads, /releases/latest continues to serve the previous version.
     if (publishDraft) await request(`${base}/releases/${release.id}`, { method: 'PATCH', body: { draft: false } });
+    // Verify the PUBLIC download route as well as GitHub's upload digest. This
+    // also catches stale redirects or truncated delivery after asset promotion.
+    const downloads = await Promise.allSettled(files.map(async file => {
+      const asset = after.find(asset => asset.name === file.name);
+      const url = new URL(asset.browser_download_url); url.searchParams.set('verify', runId);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const response = await fetcher(url.href, { headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(120_000) });
+        if (!response.ok && attempt < 2 && [404, 502, 503].includes(response.status)) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue; }
+        if (!response.ok) throw new Error(`Public download failed: ${file.name} (${response.status})`);
+        const bytes = Buffer.from(await response.arrayBuffer());
+        if (bytes.length !== file.data.length || createHash('sha256').update(bytes).digest('hex') !== file.sha256) throw new Error(`Public download digest mismatch: ${file.name}`);
+        console.log(`Verified public download: ${file.name} (${bytes.length} bytes)`); return;
+      }
+    }));
+    for (const download of downloads) if (download.status === 'rejected') throw download.reason;
     const tagAfter = await request(`${base}/git/ref/tags/${tag}`);
     if (tagBefore && tagBefore.object.sha !== tagAfter.object.sha) throw new Error('Tag changed externally while publishing.');
     if (!tagBefore && tagAfter.object.sha !== sourceCommit) throw new Error('New tag does not point to the verified source commit.');

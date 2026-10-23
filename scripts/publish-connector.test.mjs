@@ -21,15 +21,20 @@ async function packages() {
   }
   return directory;
 }
-function github({ failPromote = false, wrongDigest = false, newRelease = false } = {}) {
+function github({ failPromote = false, wrongDigest = false, newRelease = false, wrongPublicDownload = false } = {}) {
   const state = { calls: [], assets: [{ id: 10, name: assets[0], digest: 'sha256:old', size: 3 }, { id: 11, name: 'unrelated.txt' }, { id: 12, name: 'SHA256SUMS.txt', digest: 'sha256:legacy' }], body: 'Existing release notes must stay intact', tag: 'b'.repeat(40), next: 20 };
   state.name = `Original ${tag}`; state.created = !newRelease; state.draft = false; state.target = commit;
   if (newRelease) { state.assets = []; state.tag = null; }
   const response = (body, status = 200) => new Response(status === 204 ? null : JSON.stringify(structuredClone(body)), { status, headers: { 'Content-Type': 'application/json' } });
+  const bytesById = new Map();
   const release = () => ({ id: 1, name: state.name, body: state.body, tag_name: tag, target_commitish: state.target, html_url: `https://github.com/test/repo/releases/tag/${tag}`, upload_url: 'https://uploads.test/assets{?name,label}', draft: state.draft, prerelease: false });
   const fetcher = async (url, options) => {
     const u = new URL(url), method = options.method ?? 'GET', body = options.body;
     state.calls.push({ method, path: u.pathname });
+    if (method === 'GET' && u.hostname === 'downloads.test') {
+      const asset = state.assets.find(a => a.name === decodeURIComponent(u.pathname.split('/').at(-1)));
+      return new Response(wrongPublicDownload ? Buffer.from('corrupted public bytes') : bytesById.get(asset.id));
+    }
     if (method === 'GET' && u.pathname.includes('/git/ref/')) return state.tag ? response({ object: { sha: state.tag } }) : response({}, 404);
     if (method === 'GET' && (u.pathname.endsWith(`/releases/tags/${tag}`) || u.pathname.endsWith('/releases/1'))) return state.created ? response(release()) : response({}, 404);
     if (method === 'POST' && u.pathname.endsWith('/releases')) {
@@ -38,9 +43,10 @@ function github({ failPromote = false, wrongDigest = false, newRelease = false }
     if (method === 'PATCH' && u.pathname.endsWith('/releases/1')) {
       const data = JSON.parse(body); assert.deepEqual(Object.keys(data), ['draft']); state.draft = data.draft; if (!state.draft) state.tag = state.target; return response(release());
     }
-    if (method === 'GET' && u.pathname.endsWith('/releases/1/assets')) return response(state.assets);
+    if (method === 'GET' && u.pathname.endsWith('/releases/1/assets')) return response(state.assets.map(a => ({...a, browser_download_url:`https://downloads.test/${a.name}`})));
     if (method === 'POST' && u.hostname === 'uploads.test') {
       const asset = { id: state.next++, name: u.searchParams.get('name'), size: body.length, digest: wrongDigest ? 'sha256:wrong' : `sha256:${createHash('sha256').update(body).digest('hex')}` };
+      bytesById.set(asset.id, body);
       state.assets.push(asset); return response(asset, 201);
     }
     const id = Number(u.pathname.split('/').at(-1)), asset = state.assets.find(a => a.id === id);
@@ -108,5 +114,12 @@ test('creates a new Release at the verified source without rewriting other tags'
 test('a failed new-version upload stays in draft so latest downloads keep working', async () => {
   await exercise({ newRelease: true, wrongDigest: true }, async (run, state) => {
     await assert.rejects(run, /digest mismatch/); assert.equal(state.draft, true); assert.equal(state.tag, null); assert.equal(state.assets.length, 0);
+  });
+});
+test('public download corruption rolls back to the previous stable assets', async () => {
+  await exercise({ wrongPublicDownload: true }, async (run, state) => {
+    await assert.rejects(run, /Public download digest mismatch/);
+    assert.deepEqual(state.assets.map(a => a.name), [assets[0], 'unrelated.txt', 'SHA256SUMS.txt']);
+    assert.equal(state.assets[0].id, 10);
   });
 });
