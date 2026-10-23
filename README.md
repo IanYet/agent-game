@@ -2,6 +2,8 @@
 
 人与本机 agents 一起玩游戏。首版实现斗地主。
 
+源码：[IanYet/agent-game](https://github.com/IanYet/agent-game) · 网页：[同桌 · Agent Arcade](https://ianyet.github.io/agent-game/)。
+
 这是两个独立交付物：
 
 - **静态 Web app**：浏览器执行所有游戏规则，状态与牌谱存在 localStorage；可以放到任意静态托管服务。没有游戏后端、数据库或远程加入功能。
@@ -50,6 +52,10 @@ npm run test:windows
 构建发布顺序为 `build` → `package:windows` → 部署 `dist/client`。打包后，下载清单及分片同时写入 `apps/web/public/downloads/` 与 `dist/client/downloads/`。它们是忽略的构建产物。
 
 ## 独立部署与来源配置
+
+GitHub Pages 使用 `.github/workflows/pages.yml`：每次推送到 `main`，Windows runner 自动测试、构建网页、打包单文件 EXE，再将纯静态的 `dist/client/` 发布到 Pages。仓库 Settings → Pages 的 Source 选择 **GitHub Actions**。网页的连接器下载与该次构建一起发布，EXE 也保存在 Actions 的 `windows-connector-x64` artifact 中。
+
+Vite 的资源与下载路径支持仓库子路径。工作流使用 Pages 返回的 `base_path`；本地构建默认相对路径，也可用 `PAGES_BASE_PATH=/agent-game/` 显式指定。
 
 连接器仅绑定 `127.0.0.1`，默认端口 `3211`。它校验 Host 和网页 Origin，没有通配 CORS。
 

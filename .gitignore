@@ -9,3 +9,4 @@ outputs/
 coverage/
 test-results/
 apps/web/public/downloads/
+.openai/

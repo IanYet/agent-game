@@ -9,7 +9,8 @@ if (process.platform !== 'win32') throw new Error('Windows-only lifecycle check.
 const port = 3331;
 const endpoint = `http://127.0.0.1:${port}`;
 const executable = resolve('release/同桌连接器.exe');
-const browserFetch: typeof fetch = (url, options) => fetch(url, { ...options, headers: { ...Object.fromEntries(new Headers(options?.headers).entries()), Origin: 'http://127.0.0.1:5173' } });
+const browserOrigin = process.env.LIFECYCLE_WEB_ORIGIN ?? 'http://127.0.0.1:5173';
+const browserFetch: typeof fetch = (url, options) => fetch(url, { ...options, headers: { ...Object.fromEntries(new Headers(options?.headers).entries()), Origin: browserOrigin } });
 const children: ChildProcess[] = [];
 async function waitFor(check: () => Promise<boolean>, timeout = 20_000) {
   const start = Date.now(); while (!await check()) { if (Date.now() - start > timeout) throw new Error('Lifecycle condition timed out'); await new Promise(resolve => setTimeout(resolve, 100)); }

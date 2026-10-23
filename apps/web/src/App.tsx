@@ -169,13 +169,13 @@ function ConnectorDownload({ onError }: { onError: (message: string) => void }) 
   const download = async () => {
     setProgress(0);
     try {
-      const manifestResponse = await fetch('/downloads/manifest.json');
-      if (!manifestResponse.ok) throw new Error('便携包尚未生成，请先运行 package:windows。');
+      const manifestResponse = await fetch(`${import.meta.env.BASE_URL}downloads/manifest.json`);
+      if (!manifestResponse.ok) throw new Error('连接器下载暂不可用，请稍后重试。');
       const manifest: { fileName: string; size: number; sha256: string; parts: string[] } = await manifestResponse.json();
       const chunks: ArrayBuffer[] = []; let total = 0;
       for (const part of manifest.parts) {
         if (!/^connector-\d+\.part$/.test(part)) throw new Error('下载清单不符合要求');
-        const result = await fetch(`/downloads/${part}`); if (!result.ok) throw new Error('连接器下载失败，请重试');
+        const result = await fetch(`${import.meta.env.BASE_URL}downloads/${part}`); if (!result.ok) throw new Error('连接器下载失败，请重试');
         const chunk = await result.arrayBuffer(); chunks.push(chunk); total += chunk.byteLength; setProgress(Math.round(total / manifest.size * 100));
       }
       const file = new Blob(chunks, { type: 'application/vnd.microsoft.portable-executable' });
