@@ -35,6 +35,8 @@ jobs:
         env:
           PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
           VITE_CONNECTOR_DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/latest/download/tongzhuo-connector-windows-x64.exe
+          VITE_CONNECTOR_MACOS_ARM64_DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/latest/download/tongzhuo-connector-macos-arm64.zip
+          VITE_CONNECTOR_MACOS_X64_DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/latest/download/tongzhuo-connector-macos-x64.zip
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist/client
