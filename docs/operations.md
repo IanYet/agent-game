@@ -54,7 +54,7 @@ gh run view <run-id> --repo IanYet/agent-game
 
 本次按用户要求保持双端 **0.4.0、协议 4**，Windows AssemblyVersion/AssemblyFileVersion 仍为 0.4.0.0。macOS Info.plist、包内元数据和 Release tag 均从 `apps/connector/version.json` 读取；打包时检查 Windows 两个版本属性一致。既有 v0.4.0 tag、Release 标题和正文保留；不同于 tag 指向提交的补包来源以资产 `.build.json` 为准。没有对应 Release 时才创建新 Release，绝不移动已有 tag。
 
-稳定资产：`tongzhuo-connector-windows-x64.exe`、`tongzhuo-connector-macos-arm64.zip`、`tongzhuo-connector-macos-x64.zip`。各有 `.sha256` 和 `.build.json`；另有 `package-win32-x64.json`、`package-darwin-arm64.json`、`package-darwin-x64.json` 记录对应自动运行检查。发布器先核对三个包的源提交、版本、大小、SHA-256 和运行证据，再上传临时命名资产并核对 GitHub digest；所有上传成功后才换成稳定名称，失败时尽力回滚本次变更。它不写共享 SHA256SUMS 或 Release 正文，不会覆盖另一架构的说明和校验和。Actions artifact 用于作业交接/诊断，最终下载来自 [GitHub Release](https://github.com/IanYet/agent-game/releases/latest)。
+稳定资产：`tongzhuo-connector-windows-x64.exe`、`tongzhuo-connector-macos-arm64.zip`、`tongzhuo-connector-macos-x64.zip`。各有 `.sha256` 和 `.build.json`；另有 `package-win32-x64.json`、`package-darwin-arm64.json`、`package-darwin-x64.json` 记录对应自动运行检查。发布器先核对三个包的源提交、版本、大小、SHA-256 和运行证据，再上传临时命名资产并核对 GitHub digest；所有上传成功后才换成稳定名称，失败时尽力回滚本次变更。唯一发布器还会从三份已验证成品统一生成 SHA256SUMS.txt，替换既有 Windows 总校验文件，避免补包后遗留旧哈希；构建矩阵不写共享清单。Release 正文保留，各架构的说明和独立校验和分别上传。Actions artifact 用于作业交接/诊断，最终下载来自 [GitHub Release](https://github.com/IanYet/agent-game/releases/latest)。
 
 下载对应 `.sha256` 后，可在 macOS 用 `shasum -a 256 -c tongzhuo-connector-macos-arm64.zip.sha256`（Intel 改 x64）；Windows 可用 `Get-FileHash .\tongzhuo-connector-windows-x64.exe -Algorithm SHA256` 与 sidecar 对比。同版本补包不触发 Windows 的「发现新版本」提示，应比较 build.json 的 sourceCommit 和哈希。
 

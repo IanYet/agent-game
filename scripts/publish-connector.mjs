@@ -27,6 +27,10 @@ export async function validatePackages(directory, sourceCommit) {
       const data = await readFile(join(directory, name)); files.push({ name, data, sha256: createHash('sha256').update(data).digest('hex') });
     }
   }
+  // Keep the legacy checksum URL valid when replacing the existing Windows
+  // binary. A single publisher owns this aggregate; builders own only sidecars.
+  const sums = Buffer.from(files.filter(file => assets.includes(file.name)).map(file => `${file.sha256}  ${file.name}\n`).join(''));
+  files.push({ name: 'SHA256SUMS.txt', data: sums, sha256: createHash('sha256').update(sums).digest('hex') });
   return { version, files };
 }
 
@@ -66,7 +70,8 @@ export async function publish({ repository, token, directory, sourceCommit, runI
     for (let i = 0; i < files.length; i++) {
       const file = files[i], existing = before.find(asset => asset.name === file.name);
       if (existing) { await request(`${base}/releases/assets/${existing.id}`, { method: 'PATCH', body: { name: `${existing.name}.previous-${runId}` } }); backups.push(existing); }
-      await request(`${base}/releases/assets/${staged[i].id}`, { method: 'PATCH', body: { name: file.name, label: `${tag} · ${sourceCommit.slice(0, 12)}` } });
+      const signing = assets.includes(file.name) ? (file.name.includes('macos') ? ' · ad-hoc / not notarized' : ' · unsigned') : '';
+      await request(`${base}/releases/assets/${staged[i].id}`, { method: 'PATCH', body: { name: file.name, label: `${tag} · ${sourceCommit.slice(0, 12)}${signing}` } });
     }
     const after = await listAssets();
     for (const file of files) if (!after.some(asset => asset.name === file.name && asset.digest === `sha256:${file.sha256}`)) throw new Error(`Release asset not verified: ${file.name}`);

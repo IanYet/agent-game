@@ -21,7 +21,11 @@ internal static class WindowsLayout {
         Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
         Directory.CreateDirectory(args[0]);
         foreach (float scale in new float[] {1F, 1.5F, 2F}) {
+            using (var host = new Panel { Size = new Size(4096, 4096) })
             using (var form = new ConnectorWindow("", 3211, true)) {
+                // A child form renders the actual native controls/chrome without
+                // Windows clamping its size to the runner's 1024x768 desktop.
+                form.TopLevel = false; host.Controls.Add(form); host.CreateControl();
                 form.Show(); Application.DoEvents();
                 var fonts = new Dictionary<Control, Font>(); Fonts(form, fonts);
                 form.Scale(new SizeF(scale, scale));

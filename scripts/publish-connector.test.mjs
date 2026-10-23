@@ -53,7 +53,8 @@ async function exercise(options, check) {
 test('replaces only verified assets, preserving tag, Release body, and unrelated assets', async () => {
   await exercise({}, async (run, state) => {
     await run(); assert.equal(state.tag, 'b'.repeat(40)); assert.equal(state.body, 'Existing release notes must stay intact');
-    assert.equal(state.assets.length, 13); assert.ok(state.assets.some(a => a.name === 'unrelated.txt'));
+    assert.equal(state.assets.length, 14); assert.ok(state.assets.some(a => a.name === 'unrelated.txt'));
+    assert.ok(state.assets.some(a => a.name === 'SHA256SUMS.txt'));
     for (const asset of assets) assert.ok(state.assets.some(a => a.name === asset));
     assert.ok(state.calls.filter(c => c.method !== 'GET').every(c => !c.path.includes('/git/') && c.path !== '/repos/test/repo/releases/1'));
   });
