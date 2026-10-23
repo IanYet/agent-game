@@ -64,7 +64,8 @@ export async function publish({ repository, token, directory, sourceCommit, runI
       if (asset.size !== file.data.length || asset.digest !== `sha256:${file.sha256}`) throw new Error(`Uploaded digest mismatch: ${file.name}`);
     }
     for (let i = 0; i < files.length; i++) {
-      const file = files[i], existing = before.find(asset => asset.name === file.name);
+      // GitHub treats asset names as case-insensitive, including renames.
+      const file = files[i], existing = before.find(asset => asset.name.toLowerCase() === file.name.toLowerCase());
       if (existing) { await request(`${base}/releases/assets/${existing.id}`, { method: 'PATCH', body: { name: `${existing.name}.previous-${runId}` } }); backups.push(existing); }
       const packageInfo = connectorPackages.find(asset => [asset.name, `${asset.name}.sha256`, `${asset.name}.build.json`].includes(file.name));
       const detail = file.name.endsWith('.sha256') ? ' · SHA-256 校验和' : file.name.endsWith('.build.json') ? ' · 构建信息' : '';
