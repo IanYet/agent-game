@@ -90,8 +90,12 @@ describe('游戏无关运行时与动态 MCP 合约',()=>{
   expect(f.game.getSnapshot().error).toBeNull();
  });
  it('模块超时也串行提交；暂停期间不派发，恢复后处理已到期决策',async()=>{
-  const f=await fixture();await f.game.create(f.roster(2,true),{config:{durationMs:150}});
-  await until(()=>f.prompts.length===1);await f.game.pause();await new Promise(r=>setTimeout(r,180));
+  let deadline=Date.now()+60_000;
+  const module:GameModule={...auctionModule,decisions:run=>auctionModule.decisions(run).map(d=>({...d,deadline}))};
+  const f=await fixture(module);await f.game.create(f.roster(2,true));
+  await until(()=>f.prompts.length===1);await f.game.pause();
+  // Advance the module deadline only after native startup; startup speed is not under test.
+  deadline=Date.now()-1;await new Promise(r=>setTimeout(r,20));
   expect(f.game.getSnapshot().room!.finished).toBe(false);await f.game.resume();await until(()=>f.game.getSnapshot().room!.finished);
  });
  it('schema 固定在会话内；后续轮次声明变化时撤销该会话并重新注册',async()=>{
