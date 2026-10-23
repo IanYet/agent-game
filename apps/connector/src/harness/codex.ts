@@ -1,9 +1,9 @@
+import {CONNECTOR_VERSION} from '../version';
 import { JsonRpcProcess, abortError } from './rpc';
 import { executableCommand } from './discovery';
-import { gameInstructions } from './instructions';
+import { sessionInstructions } from './instructions';
 import { playerConversationTitle } from './settings';
 import type { AgentSession, HarnessAdapter, HarnessContext, ModelInfo } from '../types';
-import { APP_VERSION } from '@agent-game/protocol';
 
 export function subscriptionEnvironment(): NodeJS.ProcessEnv {
   const env = { ...process.env };
@@ -58,13 +58,13 @@ export class CodexAdapter implements HarnessAdapter {
       if (method === 'thread/tokenUsage/updated') context.onUsage(params.tokenUsage?.total?.totalTokens ?? 0);
     });
     try {
-      await rpc.call('initialize', { clientInfo: { name: 'agent_arcade', title: '同桌 Agent Arcade', version: APP_VERSION } });
+      await rpc.call('initialize', { clientInfo: { name: 'agent_arcade', title: '同桌 Agent Arcade', version: CONNECTOR_VERSION } });
       rpc.notify('initialized');
       const account = await rpc.call('account/read', { refreshToken: false });
       if (!account.account || account.account.type !== 'chatgpt') throw new Error('请先运行 codex login，使用 ChatGPT 订阅登录 Codex');
       const result = await rpc.call('thread/start', {
         cwd: context.cwd, ...(context.model ? { model: context.model } : {}),
-        sandbox: 'read-only', approvalPolicy: 'never', developerInstructions: gameInstructions(context),
+        sandbox: 'read-only', approvalPolicy: 'never', developerInstructions: sessionInstructions(context),
         config: gameConfig(context.mcpUrl, this.disabledServers), ephemeral: !context.persistConversation,
       }, 90_000);
       const sessionId: string = result.thread.id;
@@ -101,7 +101,7 @@ export async function inspectCodex(path: string): Promise<{ models: ModelInfo[];
   const command = await executableCommand(path, ['app-server', '--listen', 'stdio://']);
   const rpc = new JsonRpcProcess({ ...command, env: subscriptionEnvironment() });
   try {
-    await rpc.call('initialize', { clientInfo: { name: 'agent_arcade', version: APP_VERSION } }); rpc.notify('initialized');
+    await rpc.call('initialize', { clientInfo: { name: 'agent_arcade', version: CONNECTOR_VERSION } }); rpc.notify('initialized');
     const result = await rpc.call('model/list', { limit: 100 });
     const account = await rpc.call('account/read', { refreshToken: false });
     const configuration = await rpc.call('config/read', { includeLayers: false });

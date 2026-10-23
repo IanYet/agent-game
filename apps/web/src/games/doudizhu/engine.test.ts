@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, classify, createDeck, createGame, enumeratePlays, getLegalActions, viewGame, beats, RuleError } from './index';
-import type { Card, PlayerConfig, Seat } from './types';
+import {createDeck,RuleError} from '@agent-game/core';
+import {applyAction,createGame,getLegalActions,viewGame} from './engine';
+import {classify,enumeratePlays,beats} from './combinations';
+import type { Card, PlayerConfig, Seat } from '@agent-game/core';
 
-const players: PlayerConfig[] = [{ name: '你', kind: 'human' }, { name: 'Atlas', kind: 'codex-acp' }, { name: 'Nova', kind: 'codex-acp' }];
+const players: PlayerConfig[] = [{ name: '你', kind: 'human' }, { name: 'Atlas', kind: 'agent' }, { name: 'Nova', kind: 'agent' }];
 const deck = createDeck();
 function cards(ranks: number[]): Card[] {
   const used = new Set<string>();
@@ -47,7 +49,7 @@ describe('牌局、权限与计分', () => {
     expect(new Set(all.map(c => c.id)).size).toBe(54);
     expect(state.players.map(p => p.hand.length)).toEqual([17, 17, 17]);
     expect(() => createGame('bad', [...players.slice(0, 2), { name: 'B', kind: 'human' }])).toThrow(RuleError);
-    expect(() => createGame('agents', players.map(p => ({ ...p, kind: 'codex-acp' })))).not.toThrow();
+    expect(() => createGame('agents', players.map(p => ({ ...p, kind: 'agent' })))).not.toThrow();
   });
   it('玩家视图只披露自己手牌；观战不能查看任何手牌或叫分时的底牌', () => {
     const state = createGame('test', players);

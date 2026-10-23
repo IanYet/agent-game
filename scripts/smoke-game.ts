@@ -1,3 +1,4 @@
+import {CONNECTOR_VERSION} from '../apps/connector/src/version';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { discoverHarnesses } from '../apps/connector/src/harness/discovery';
@@ -8,7 +9,7 @@ import { LocalBridge } from '../apps/connector/src/bridge';
 import { createConnectorServer } from '../apps/connector/src/server';
 import { ConnectorClient } from '../apps/web/src/connector';
 import { GameController } from '../apps/web/src/controller';
-import { APP_VERSION, PROTOCOL_VERSION, type ConnectorInfo, type HarnessId, type ModelInfo } from '../packages/protocol/src';
+import { CONNECTOR_CAPABILITIES, PROTOCOL_VERSION, type ConnectorInfo, type HarnessId, type ModelInfo } from '../packages/protocol/src';
 import type { HarnessAdapter } from '../apps/connector/src/types';
 
 // Explicit real-harness smoke check. Normal npm test never makes inference requests.
@@ -45,7 +46,7 @@ const players = Array.from({ length: kinds.length === 1 ? 3 : kinds.length }, (_
 });
 if (!holdem && players.length !== 3) throw new Error('Dou Dizhu requires exactly three seats.');
 const port = Number(process.env.SMOKE_PORT ?? 3321);
-const info: ConnectorInfo = { version: APP_VERSION, protocolVersion: PROTOCOL_VERSION, platform: process.platform, port, harnesses: discovery.harnesses, models: codexInspection?.models ?? [], auth: codexInspection?.auth ?? 'unknown' };
+const info: ConnectorInfo = { version: CONNECTOR_VERSION, protocolVersion: PROTOCOL_VERSION, capabilities:[...CONNECTOR_CAPABILITIES], platform: process.platform, port, harnesses: discovery.harnesses, models: codexInspection?.models ?? [], auth: codexInspection?.auth ?? 'unknown' };
 const bridge = new LocalBridge(info, adapters, resolve('.cache', `smoke-${randomUUID()}`));
 const service = createConnectorServer(bridge, ['http://127.0.0.1:4173']); await service.listen();
 const browserFetch: typeof fetch = (url, options) => fetch(url, { ...options, headers: { ...Object.fromEntries(new Headers(options?.headers).entries()), Origin: 'http://127.0.0.1:4173' } });
@@ -69,7 +70,7 @@ try {
   const deadline = Date.now() + 480_000;
   const complete = () => {
     const current = game.getSnapshot().game;
-    return !!current && (current.phase === 'finished' || current.revision >= targetRevision) && (holdem || targetRevision < 7 || current.events.some(e => e.type === 'play'));
+    return !!current && (current.phase === 'finished' || current.revision >= targetRevision) && (holdem || targetRevision < 7 || current.events.some((e:any) => e.type === 'play'));
   };
   while (!complete() && !game.getSnapshot().error && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 250));
   const snapshot = game.getSnapshot();

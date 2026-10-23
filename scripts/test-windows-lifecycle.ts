@@ -41,7 +41,7 @@ function start(args: string[]) {
 }
 async function idlePlayer() {
   const client = new ConnectorClient(endpoint, browserFetch); await client.connect();
-  const { sessionId } = await client.createSession({ roomId: randomUUID(), seat: 0, kind: 'codex-acp', name: '生命周期测试' });
+  const { sessionId } = await client.createSession({ scopeId:randomUUID(),playerId:'lifecycle-player',kind:'codex-acp',name:'生命周期测试',displayTitle:'生命周期测试',instructions:'Do not run inference.',tools:[{name:'lifecycle_probe',description:'Read lifecycle probe',inputSchema:{type:'object'}}] });
   assert.ok(sessionId); return client;
 }
 try {

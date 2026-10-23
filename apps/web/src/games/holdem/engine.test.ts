@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { applyHoldemAction as act, assertHoldemChips, compareRanks, createHoldem, createPokerDeck, evaluateHoldem, getHoldemLegalActions, holdemBetting, nextHoldemHand, viewHoldem, type HoldemState } from './holdem';
-import type { Card, PlayerConfig } from './types';
+import { applyHoldemAction as act, assertHoldemChips, compareRanks, createHoldem, createPokerDeck, evaluateHoldem, getHoldemLegalActions, holdemBetting, nextHoldemHand, viewHoldem, type HoldemState } from './engine';
+import type { Card, PlayerConfig } from '@agent-game/core';
 
-const players = (n: number): PlayerConfig[] => Array.from({ length: n }, (_, i) => ({ name: `P${i}`, kind: ['codex-acp', 'dsh', 'workbuddy'][i % 3] as PlayerConfig['kind'] }));
+const players = (n: number): PlayerConfig[] => Array.from({ length: n }, (_, i) => ({ name: `P${i}`, kind: 'agent' }));
 const cards = (ids: string[]) => ids.map(id => ({ id, suit: id[0] as Card['suit'], rank: Number(id.slice(1)) }));
 function seeded(seed: number) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 2 ** 32; }; }
 function runOut(state: HoldemState) {
@@ -127,14 +127,14 @@ describe('牌桌与一手牌的独立生命周期', () => {
   it('长期买入后超过首桌总额的筹码仍可继承，同时拒绝不安全的总额',()=>{
     let s=createHoldem('large',players(2),{chips:[10_000_000_000,1000]});
     s=act(s,s.turn,{type:'fold'});
-    const next=nextHoldemHand(s,[...s.players,{name:'新买入',kind:'dsh'}]);
+    const next=nextHoldemHand(s,[...s.players,{name:'新买入',kind:'agent'}]);
     expect(next.players[0].startingChips).toBe(s.players[0].chips); expect(next.totalChips).toBe(10_000_002_000); assertHoldemChips(next);
     expect(()=>createHoldem('overflow',players(2),{chips:[Number.MAX_SAFE_INTEGER,1000]})).toThrow('筹码守恒');
   });
   it('下手换 Agent 保留身份筹码，新增买入、离桌兑现、庄家移动并重建 handId', () => {
     let first=runOut(createHoldem('table',players(3),{random:seeded(4)}));
-    const keep=first.players.slice(0,2).map(p=>({...p,kind:'workbuddy' as const,name:'新 Agent'}));
-    const next=nextHoldemHand(first,[...keep,{name:'新玩家',kind:'dsh'}],{random:seeded(5)});
+    const keep=first.players.slice(0,2).map(p=>({...p,kind:'agent' as const,name:'新 Agent'}));
+    const next=nextHoldemHand(first,[...keep,{name:'新玩家',kind:'agent'}],{random:seeded(5)});
     expect(next.id).toBe(first.id); expect(next.handId).not.toBe(first.handId); expect(next.round).toBe(2);
     expect(next.players.slice(0,2).map(p=>p.startingChips)).toEqual(first.players.slice(0,2).map(p=>p.chips));
     expect(next.players[2].startingChips).toBe(1000); expect(next.dealer).toBe(1);

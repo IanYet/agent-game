@@ -1,6 +1,5 @@
 import type { AgentSettings, ModelInfo } from '@agent-game/protocol';
 import type { HarnessContext } from '../types';
-import { gameName } from '@agent-game/core';
 
 export function validateSettings(models: ModelInfo[], settings: AgentSettings): void {
   const model = settings.model ? models.find(m => m.id === settings.model) : models.find(m => m.isDefault) ?? models[0];
@@ -15,7 +14,7 @@ export function resolveSettings(models: ModelInfo[], settings: AgentSettings): A
 }
 
 export function playerConversationTitle(context: HarnessContext): string {
-  return `同桌 · ${gameName(context.gameId ?? 'doudizhu')} · ${context.name} · 第 ${context.round ?? 1} ${context.gameId === 'holdem' ? '手' : '局'} · ${(context.roomId ?? '').slice(0, 8)}`;
+  return context.displayTitle;
 }
 
 export function selectAcpModel(models: Array<{ modelId: string }>, currentModelId: string | undefined, settings: AgentSettings): string | undefined {

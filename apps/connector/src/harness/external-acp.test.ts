@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { acpPromptFailure, DSH_GAME_GUARD, ExternalAcpAdapter, modelsFromAcp } from './external-acp';
+import { acpPromptFailure, dshGameGuard, ExternalAcpAdapter, modelsFromAcp } from './external-acp';
 import { executableCandidates, executableCommand } from './discovery';
 import type { HarnessContext } from '../types';
 import { JsonRpcProcess } from './rpc';
@@ -25,7 +25,7 @@ if(dsh) {
   const patch=JSON.parse(readFileSync(args[args.indexOf('--patch')+1],'utf8'));
   const guard=patch.find(p=>p.insert)?.insert[0];
   let check; const plugin=await import(pathToFileURL(guard.name).href); plugin.apply({tools:{guard:f=>{check=f;}}});
-  if(check({name:'mcp__agent_game__game_get_state'})!==undefined || !check({name:'bash'})) throw new Error('guard failed');
+  if(!check({name:'bash'})) throw new Error('guard failed');
   appendFileSync(log,JSON.stringify({patch})+'\n');
 }
 const ids=dsh?['["other","x"]','["deepseek-official","main"]']:['other-model','workbuddy-main'];
@@ -46,7 +46,7 @@ lines.on('line',async line=>{
 async function fixture(kind: 'dsh'|'workbuddy', lite=false, delayed=false) {
   const root=await mkdtemp(join(tmpdir(),'agent-arcade-test-')); roots.push(root);
   const path=join(root,lite?'codebuddy-lite-wb.mjs':`${kind}-${delayed?'delayed-':''}fixture.mjs`); await writeFile(path,fixtureSource);
-  const context: HarnessContext={cwd:root,roomId:'table',gameId:'holdem',handId:'hand1',seat:7,name:'Agent',mcpUrl:'http://127.0.0.1:1234/mcp/table/capability',persistConversation:false,initialState:JSON.stringify({chips:997,startingChips:1000}),onActivity:()=>{},onUsage:()=>{}};
+  const context: HarnessContext={cwd:root,scopeId:'table',playerId:'agent-12',kind,name:'Agent',displayTitle:'宇宙拍卖 · Agent',instructions:'Initial resource budget: 997. Use the registered tools.',tools:[{name:'auction_offer',description:'Make an offer',inputSchema:{type:'object'},requiresDecision:true}],mcpUrl:'http://127.0.0.1:1234/mcp/table/capability',persistConversation:false,onActivity:()=>{},onUsage:()=>{}};
   const adapter=new ExternalAcpAdapter(kind,path); return {root,path,context,adapter,log:async()=> (await readFile(path+'.log','utf8')).trim().split('\n').map(line=>JSON.parse(line))};
 }
 describe('独立 Harness 的公开 ACP 适配',()=>{
@@ -103,12 +103,12 @@ describe('独立 Harness 的公开 ACP 适配',()=>{
       expect(gateway).toEqual({host:'127.0.0.1',port:'0',auth:'password',passwordLength:64,tunnel:'0'});
     }
   });
-  it('dsh 工具守卫只放行四个当前座位 MCP 工具，拒绝文件、终端、其他 MCP 和子 Agent',async()=>{
-    const root=await mkdtemp(join(tmpdir(),'agent-arcade-test-')); roots.push(root); const file=join(root,'guard.mjs'); await writeFile(file,DSH_GAME_GUARD);
-    const plugin = new Function(DSH_GAME_GUARD.replaceAll('export ', '') + '\nreturn {apply};')();
+  it('dsh 工具守卫只放行当前会话动态声明的 MCP 工具，拒绝文件、终端、其他 MCP 和子 Agent',async()=>{
+    const root=await mkdtemp(join(tmpdir(),'agent-arcade-test-')); roots.push(root); const file=join(root,'guard.mjs'); const source=dshGameGuard(['auction.offer','accept-gift']); await writeFile(file,source);
+    const plugin = new Function(source.replaceAll('export ', '') + '\nreturn {apply};')();
     let guard!: (e:{name:string})=>string|undefined;
     plugin.apply({tools:{guard:(f:typeof guard)=>{guard=f;}}});
-    for(const name of ['game_get_state','game_legal_actions','game_act','game_rules'])expect(guard({name:`mcp__agent_game__${name}`})).toBeUndefined();
+    for(const name of ['auction.offer','accept-gift'])expect(guard({name:`mcp__agent_game__${name}`})).toBeUndefined();
     for(const name of ['bash','pwsh','read_file','subagent','mcp__other__game_act','mcp__agent_game__other'])expect(guard({name})).toBeTruthy();
   });
   it('解析标准分组模型目录，不借用 Codex 模型或臆造强度',()=>{

@@ -1,6 +1,6 @@
-import { shuffle } from './cards';
-import { RuleError } from './doudizhu';
-import { PLAYER_KINDS, type Card, type PlayerConfig, type Seat } from './types';
+import {shuffle,RuleError,type Card,type PlayerConfig,type Seat} from '@agent-game/core';
+
+
 
 export const HOLDEM_RULES = `无限注德州扑克，2–9 人，52 张牌，无大小王。每人两张底牌，依次翻出 3 张翻牌、1 张转牌、1 张河牌，每次发公共牌前烧一张牌。以任意 5 张组成最佳牌型（可不用底牌）：同花顺 > 四条 > 葫芦 > 同花 > 顺子 > 三条 > 两对 > 一对 > 高牌。A 可作顺子的最大牌或 A2345 的最小牌；花色不分大小。
 庄家按钮每手顺时针移动。多人桌按钮左侧为小盲、再左为大盲，翻牌前大盲左侧先行动；翻牌后按钮左侧先行动。单挑时按钮下小盲、翻牌前先行动，大盲翻牌后先行动。变更阵容时先将大盲轮转到上一大盲之后的存续座位，再按新人数确定按钮，避免单挑转换时连下两次大盲。盲注不足则全下，翻牌前最低跟注基准仍为大盲；只剩一位可下注玩家时只需跟足对手实际投入。
@@ -82,7 +82,7 @@ export function validateHoldemOptions(options: HoldemOptions): void {
 }
 export function createHoldem(id: string, configs: HoldemPlayerConfig[], settings: Partial<HoldemOptions> & { random?: () => number; handId?: string; round?: number; dealer?: Seat; chips?: number[]; ledger?: HoldemLedgerEntry[] } = {}): HoldemState {
   if (configs.length < 2 || configs.length > 9) throw new RuleError('德州扑克需要 2–9 名玩家');
-  if (configs.some(p => !PLAYER_KINDS.includes(p.kind))) throw new RuleError('不支持的玩家类型');
+  if (configs.some(p => !['human','agent'].includes(p.kind))) throw new RuleError('无效的控制方式');
   if (configs.filter(p => p.kind === 'human').length > 1) throw new RuleError('一张牌桌最多只能有 1 名真人玩家');
   if (configs.some(p => !p.name.trim() || p.name.length > 32)) throw new RuleError('玩家名称需要 1–32 个字符');
   const options = { initialChips: settings.initialChips ?? 1000, smallBlind: settings.smallBlind ?? 5, bigBlind: settings.bigBlind ?? 10 };

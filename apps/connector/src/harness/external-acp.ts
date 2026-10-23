@@ -1,11 +1,12 @@
+import {CONNECTOR_VERSION} from '../version';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-import { APP_VERSION, type AgentSettings, type ModelInfo } from '@agent-game/protocol';
+import { type AgentSettings, type ModelInfo } from '@agent-game/protocol';
 import type { AgentSession, HarnessAdapter, HarnessContext } from '../types';
 import { executableCommand, inspectCommand } from './discovery';
-import { gameInstructions } from './instructions';
+import { sessionInstructions } from './instructions';
 import { JsonRpcProcess, abortError, type ProcessCommand } from './rpc';
 
 export interface AcpChoice { value: string; name?: string; description?: string; options?: AcpChoice[] }
@@ -27,11 +28,11 @@ export function acpPromptFailure(response: any): string {
 }
 
 /** The guard is loaded by dsh in its own process; its authentication and model providers stay native. */
-export const DSH_GAME_GUARD = `export const name = 'agent-arcade-game-guard';
+export const dshGameGuard = (names: string[]) => `export const name = 'agent-arcade-game-guard';
 export const inject = ['tools'];
 export function apply(ctx) {
   if (typeof ctx.tools.guard !== 'function') throw new Error('This dsh version has no tools.guard; update dsh.');
-  const allowed = new Set(['game_get_state','game_legal_actions','game_act','game_rules'].map(n => 'mcp__agent_game__' + n));
+  const allowed = new Set(${JSON.stringify(names.map(n => 'mcp__agent_game__' + n))});
   ctx.tools.guard(execution => allowed.has(execution.name) ? undefined : 'Only this seat\\'s agent_game MCP tools are allowed.');
 }
 `;
@@ -41,9 +42,9 @@ export class ExternalAcpAdapter implements HarnessAdapter {
   private async command(context: HarnessContext): Promise<ProcessCommand> {
     if (this.id === 'dsh') {
       const guard = join(context.cwd, 'game-guard.mjs'), patch = join(context.cwd, 'game.patch.yml');
-      await writeFile(guard, DSH_GAME_GUARD, 'utf8');
+      await writeFile(guard, dshGameGuard(context.tools.map(t=>t.name)), 'utf8');
       const patches: unknown[] = [
-        { id: 'system-prompt', config: { personaPrefix: gameInstructions(context) } },
+        { id: 'system-prompt', config: { personaPrefix: sessionInstructions(context) } },
         { id: 'session-title-llm', disabled: true },
         { id: 'hmr', disabled: true },
         { id: 'session-telemetry-otel', disabled: true },
@@ -65,7 +66,7 @@ export class ExternalAcpAdapter implements HarnessAdapter {
     // password, supplied via env so it neither appears in args nor changes login/settings.
     const base = await executableCommand(this.path);
     const lite = /(?:^|[\\/])codebuddy-lite-wb\.mjs$/i.test(this.path) || base.env?.CODEBUDDY_FORCE_LITE_WB_BUNDLE === '1';
-    const command = { ...base, args: [...base.args, ...(lite ? ['--serve'] : []), '--acp', '--tools', '', '--allowedTools', ['game_get_state','game_legal_actions','game_act','game_rules'].map(name => `mcp__agent_game__${name}`).join(','), '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--settings', JSON.stringify({ disableAllHooks: true, enableAllProjectMcpServers: false }), ...(!context.persistConversation ? ['--no-session-persistence'] : [])] };
+    const command = { ...base, args: [...base.args, ...(lite ? ['--serve'] : []), '--acp', '--tools', '', '--allowedTools', context.tools.map(t => `mcp__agent_game__${t.name}`).join(','), '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--settings', JSON.stringify({ disableAllHooks: true, enableAllProjectMcpServers: false }), ...(!context.persistConversation ? ['--no-session-persistence'] : [])] };
     return { ...command, env: { ...process.env, ...command.env,
       CODEBUDDY_CODE_DISABLE_AUTO_MEMORY: '1', CODEBUDDY_DISABLE_BACKGROUND_TASKS: '1',
       CODEBUDDY_CHANNEL_AUTO_CONNECT: '0', CODEBUDDY_WECOM_AUTO_CONNECT: '0', CODEBUDDY_WECHAT_AUTO_CONNECT: '0',
@@ -78,7 +79,8 @@ export class ExternalAcpAdapter implements HarnessAdapter {
     rpc.onRequest = async (method, params) => {
       if (method === 'session/request_permission') {
         const title = String(params.toolCall?.title ?? ''), kind = params.toolCall?.kind;
-        const game = /\bagent_game\b|mcp__agent_game__/.test(title) && /(?:\b|__)game_(?:get_state|legal_actions|act|rules)\b/.test(title) && (!kind || kind === 'other');
+        const words = title.split(/[^A-Za-z0-9_.-]+/);
+        const game = (!kind || kind === 'other') && context.tools.some(t => words.includes(`mcp__agent_game__${t.name}`) || (words.includes('agent_game') && words.includes(t.name)));
         const allow = game && params.options?.find((o: any) => o.kind === 'allow_once');
         return { outcome: allow ? { outcome: 'selected', optionId: allow.optionId } : { outcome: 'cancelled' } };
       }
@@ -92,7 +94,7 @@ export class ExternalAcpAdapter implements HarnessAdapter {
       if (u?.sessionUpdate === 'usage_update') context.onUsage(u.used ?? u.totalTokens ?? 0);
     });
     try {
-      const init = await rpc.call('initialize', { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: 'agent_arcade', version: APP_VERSION } }, 20_000);
+      const init = await rpc.call('initialize', { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: 'agent_arcade', version: CONNECTOR_VERSION } }, 20_000);
       if (init.protocolVersion !== 1 || !init.agentCapabilities?.mcpCapabilities?.http) throw new Error(`${this.id} 当前版本未提供 ACP v1 的 HTTP MCP，请升级此 Harness`);
       const identity = String(init.agentInfo?.name ?? '');
       if (this.id === 'dsh' && !/deepseek|\bdsh\b/i.test(identity)) throw new Error('DSH_PATH 指向的服务不是 DeepSeek Harness');
@@ -128,7 +130,7 @@ export class ExternalAcpAdapter implements HarnessAdapter {
     const cwd = await mkdtemp(join(tmpdir(), 'agent-arcade-probe-'));
     let rpc: JsonRpcProcess | undefined;
     try {
-      const opened = await this.open({ cwd, seat: 0, name: '接口检测', mcpUrl: '', persistConversation: false, onActivity: () => {}, onUsage: () => {} }, false); rpc = opened.rpc;
+      const opened = await this.open({ cwd, scopeId:'interface-probe', playerId:'probe', kind:this.id, name:'接口检测', displayTitle:'接口检测', instructions:'仅检测原生模型目录，不调用推理。', tools:[{name:'interface_probe',description:'Interface probe',inputSchema:{type:'object',additionalProperties:false}}], mcpUrl: '', persistConversation: false, onActivity: () => {}, onUsage: () => {} }, false); rpc = opened.rpc;
       const { result, init } = opened;
       let options: AcpConfigOption[] = result.configOptions ?? [];
       const models = modelsFromAcp(options, result.models);
@@ -173,7 +175,7 @@ export class ExternalAcpAdapter implements HarnessAdapter {
           const abort = () => rpc.notify('session/cancel', { sessionId }); signal.addEventListener('abort', abort, { once: true });
           try {
             resetText();
-            const response = await rpc.call('session/prompt', { sessionId, prompt: [{ type: 'text', text: prompted ? prompt : `${gameInstructions(context)}\n\n${prompt}` }] }, 180_000);
+            const response = await rpc.call('session/prompt', { sessionId, prompt: [{ type: 'text', text: prompted ? prompt : `${sessionInstructions(context)}\n\n${prompt}` }] }, 180_000);
             prompted = true;
             if (signal.aborted) throw abortError();
             if (response.stopReason && !['end_turn', 'stop_sequence'].includes(response.stopReason)) {

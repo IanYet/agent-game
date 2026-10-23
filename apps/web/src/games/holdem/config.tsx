@@ -1,0 +1,2 @@
+import type {HoldemOptions} from './engine';
+export function ConfigFields({value,onChange}:{value:HoldemOptions;onChange:(value:HoldemOptions)=>void}){return <div className="poker-options">{([['initialChips','初始筹码'],['smallBlind','小盲'],['bigBlind','大盲']] as const).map(([key,label])=><label key={key}>{label}<input type="number" min="1" max="1000000000" step="1" aria-label={label} value={value[key]} onChange={e=>onChange({...value,[key]:Number(e.target.value)})}/></label>)}</div>;}

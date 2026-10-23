@@ -1,0 +1,2 @@
+import {Dot} from '../../UiBits';
+export const Cover=()=>(<div className="game-cover"><div className="cover-grid" /><span className="cover-label"><Dot />NOW PLAYING</span><span className="cover-big">斗<span>地主</span><i>♠</i></span><div className="cover-cards" aria-hidden="true"><div>3<span>♠</span></div><div>3<span>♥</span></div><div>3<span>♣</span></div></div><span className="cover-edition">CLASSIC NO. 001</span></div>);

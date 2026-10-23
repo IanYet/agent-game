@@ -16,6 +16,6 @@ describe('玩家模型与思考强度', () => {
   });
   it('校验默认模型支持的强度，标题包含玩家、牌局和轮次', () => {
     expect(() => validateSettings([{ id: 'b', name: 'B', isDefault: true, supportedReasoningEfforts: [{ effort: 'medium', description: '' }] }], { reasoningEffort: 'high' })).toThrow('不支持');
-    expect(playerConversationTitle({ name: 'Atlas', seat: 1, roomId: '12345678-rest', round: 2, cwd: '', mcpUrl: '', onActivity() {}, onUsage() {} })).toBe('同桌 · 斗地主 · Atlas · 第 2 局 · 12345678');
+    expect(playerConversationTitle({ name:'Atlas',scopeId:'run',playerId:'atlas',kind:'codex',instructions:'Web supplied',displayTitle:'同桌 · 宇宙拍卖 · Atlas',tools:[], cwd: '', mcpUrl: '', onActivity() {}, onUsage() {} })).toBe('同桌 · 宇宙拍卖 · Atlas');
   });
 });

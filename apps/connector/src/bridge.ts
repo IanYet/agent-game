@@ -2,112 +2,104 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { EventEmitter } from 'node:events';
-import { modelsForHarness, type AgentSettings, type BrowserToolRequest, type ConnectorEvent, type GameTool, type SessionRequest, type ToolResponse } from '@agent-game/protocol';
+import { modelsForHarness, type AgentSettings, type BrowserToolRequest, type ConnectorEvent, type SessionRequest, type ToolResponse } from '@agent-game/protocol';
+import { ToolRegistry } from '../../../packages/protocol/src/validation';
 import type { AgentSession, ConnectorInfo, HarnessAdapter } from './types';
-import { gameInstructions } from './harness/instructions';
+import { sessionInstructions } from './harness/instructions';
 import { resolveSettings } from './harness/settings';
 
-interface PlayerSession { session: AgentSession; request: SessionRequest; mcpToken: string; cwd: string }
-interface ActiveTurn { sessionId: string; controller: AbortController; revision: number; acted: boolean; done?: Promise<void> }
+interface Capability { request: SessionRequest; registry: ToolRegistry; sessionId?: string }
+interface PlayerSession { session: AgentSession; capability: Capability; token: string; cwd: string }
+interface ActiveDecision { decisionId: string; controller: AbortController; done: Promise<void> }
 export class LocalBridge extends EventEmitter {
   private owner: { token: string; origin: string; attached: boolean } | null = null;
   private sessions = new Map<string, PlayerSession>();
-  private capabilities = new Map<string, SessionRequest>();
-  private pending = new Map<string, { resolve: (response: ToolResponse) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
-  private active: ActiveTurn | null = null;
+  private capabilities = new Map<string, Capability>();
+  private pending = new Map<string, { capability: Capability; resolve: (response: ToolResponse) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  private active = new Map<string, ActiveDecision>();
   private generation = 0;
-  private creating = false;
+  private creating = new Set<string>();
   private attachTimeout: ReturnType<typeof setTimeout> | null = null;
   constructor(readonly info: ConnectorInfo, private adapters: Map<string, HarnessAdapter>, private dataDirectory: string) { super(); }
   connect(origin: string): string {
     if (this.owner) throw new Error('连接器已被另一个网页占用，请关闭那张网页后重试');
     const token = randomBytes(32).toString('hex'); this.owner = { token, origin, attached: false };
-    this.attachTimeout = setTimeout(() => { if (!this.owner?.attached) void this.disconnect(); }, 15_000);
-    return token;
+    this.attachTimeout = setTimeout(() => { if (!this.owner?.attached) void this.disconnect(); }, 15_000); return token;
   }
   authorized(token: string, origin: string): boolean {
     return !!this.owner && this.owner.origin === origin && token.length === this.owner.token.length && timingSafeEqual(Buffer.from(token), Buffer.from(this.owner.token));
   }
   attach(): void {
     if (!this.owner || this.owner.attached) throw new Error('游戏页面已连接');
-    this.owner.attached = true;
-    this.emit('connected');
+    this.owner.attached = true; this.emit('connected');
     if (this.attachTimeout) clearTimeout(this.attachTimeout); this.attachTimeout = null;
   }
   emitEvent(event: ConnectorEvent): void { if (this.owner?.attached) this.emit('event', event); }
-  mcpSeat(roomId: string, token: string): SessionRequest | null {
-    const seat = this.capabilities.get(token);
-    return seat?.roomId === roomId ? seat : null;
+  mcpPlayer(scopeId: string, token: string): Capability | null {
+    const capability = this.capabilities.get(token); return capability?.request.scopeId === scopeId ? capability : null;
   }
-  async callBrowser(request: Omit<BrowserToolRequest, 'id'>): Promise<ToolResponse> {
+  async dispatchTool(scopeId: string, token: string, tool: string, args: Record<string, unknown>): Promise<ToolResponse> {
     if (!this.owner?.attached) throw new Error('游戏网页已断开');
-    const authorizedTurn = request.tool === 'game_act' ? this.active : null;
-    if (request.tool === 'game_act') {
-      const session = this.active && this.sessions.get(this.active.sessionId);
-      if (!this.active || !session || session.request.seat !== request.seat || session.request.roomId !== request.roomId || session.request.handId !== request.handId || this.active.acted || request.args.revision !== this.active.revision) throw new Error('当前没有此座位的行动授权，或本轮已行动');
-    }
+    const capability = this.mcpPlayer(scopeId, token); if (!capability) throw new Error('玩家凭据已过期');
+    const definition = capability.registry.definition(tool); capability.registry.validateInput(tool, args);
+    const decision = capability.sessionId ? this.active.get(capability.sessionId) : undefined;
+    if (definition.requiresDecision && (!decision || decision.controller.signal.aborted)) throw new Error('当前没有此玩家的有效决策授权');
     const id = randomUUID();
-    const response = await new Promise<ToolResponse>((resolve, reject) => {
+    const request: BrowserToolRequest = { id, scopeId, playerId: capability.request.playerId, ...(decision ? { decisionId: decision.decisionId } : {}), tool, args };
+    const result = await new Promise<ToolResponse>((resolve, reject) => {
       const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('游戏网页没有响应，请保持网页打开')); }, 20_000);
-      this.pending.set(id, { resolve, reject, timer });
-      this.emitEvent({ type: 'tool', request: { ...request, id } });
+      this.pending.set(id, { capability, resolve, reject, timer }); this.emitEvent({ type: 'tool', request });
     });
-    if (!response.isError && authorizedTurn && this.active === authorizedTurn) authorizedTurn.acted = true;
-    return response;
+    capability.registry.validateOutput(tool, result); return result;
   }
   toolResult(id: string, response: ToolResponse): void {
-    const pending = this.pending.get(id);
-    if (!pending) throw new Error('游戏工具请求已过期');
+    const pending = this.pending.get(id); if (!pending) throw new Error('工具请求已过期');
     this.pending.delete(id); clearTimeout(pending.timer); pending.resolve(response);
   }
   async createSession(request: SessionRequest): Promise<{ sessionId: string }> {
     if (!this.owner?.attached) throw new Error('请先连接游戏网页');
-    if (this.creating) throw new Error('正在创建玩家，请稍候');
-    if ([...this.sessions.values()].some(s => s.request.seat === request.seat)) throw new Error('该座位已经有一个玩家会话');
-    const adapter = this.adapters.get(request.kind);
-    if (!adapter) throw new Error('所选 harness 不可用');
-    request = { ...request, ...resolveSettings(modelsForHarness(this.info, request.kind), request) };
-    this.creating = true;
-    const generation = this.generation;
-    const mcpToken = randomBytes(24).toString('hex'); this.capabilities.set(mcpToken, request);
+    const key = JSON.stringify([request.scopeId, request.playerId]);
+    if (this.creating.has(key) || [...this.sessions.values()].some(s => s.capability.request.scopeId === request.scopeId && s.capability.request.playerId === request.playerId)) throw new Error('该玩家已有会话或正在创建');
+    const adapter = this.adapters.get(request.kind); if (!adapter) throw new Error('所选 Harness 不可用');
+    request = structuredClone({ ...request, ...resolveSettings(modelsForHarness(this.info, request.kind), request) });
+    const registry = new ToolRegistry(request.tools), capability: Capability = { request, registry };
+    this.creating.add(key); const generation = this.generation;
+    const token = randomBytes(24).toString('hex'); this.capabilities.set(token, capability);
     const cwd = join(this.dataDirectory, 'sessions', randomUUID());
     try {
-      await mkdir(cwd, { recursive: true }); await writeFile(join(cwd, 'AGENTS.md'), gameInstructions(request), 'utf8');
-      const session = await adapter.createSession({
-        ...request, cwd, mcpUrl: `http://127.0.0.1:${this.info.port}/mcp/${request.roomId}/${mcpToken}`,
-        onActivity: (text, tool) => this.emitEvent({ type: 'activity', seat: request.seat, text, tool }),
-        onUsage: tokens => this.emitEvent({ type: 'usage', seat: request.seat, tokens }),
+      await mkdir(cwd, { recursive: true }); await writeFile(join(cwd, 'AGENTS.md'), sessionInstructions(request), 'utf8');
+      const session = await adapter.createSession({ ...request, cwd, mcpUrl: `http://127.0.0.1:${this.info.port}/mcp/${encodeURIComponent(request.scopeId)}/${token}`,
+        onActivity: (text, tool) => { if(this.capabilities.get(token)===capability)this.emitEvent({ type: 'activity', playerId: request.playerId, text, tool }); },
+        onUsage: tokens => { if(this.capabilities.get(token)===capability)this.emitEvent({ type: 'usage', playerId: request.playerId, tokens }); },
       });
       if (generation !== this.generation || !this.owner?.attached) { await session.close(); throw new Error('连接已结束'); }
-      this.sessions.set(session.sessionId, { session, request, mcpToken, cwd });
-      return { sessionId: session.sessionId };
-    } catch (error) { this.capabilities.delete(mcpToken); if (!request.persistConversation) await this.removeTemporaryWorkspace(cwd); throw error; }
-    finally { this.creating = false; }
+      if (this.sessions.has(session.sessionId)) { await session.close(); throw new Error('Harness 返回重复的会话 ID'); }
+      capability.sessionId = session.sessionId; this.sessions.set(session.sessionId, { session, capability, token, cwd }); return { sessionId: session.sessionId };
+    } catch (error) { this.capabilities.delete(token); if (!request.persistConversation) await this.removeTemporaryWorkspace(cwd); throw error; }
+    finally { this.creating.delete(key); }
   }
-  async playTurn(sessionId: string, prompt: string, revision: number, settings?: AgentSettings): Promise<{ acted: boolean }> {
-    const player = this.sessions.get(sessionId);
-    if (!player) throw new Error('找不到玩家会话，请重新连接');
-    if (this.active) throw new Error('已有玩家正在行动');
-    const requested = settings ?? player.request;
-    const resolved = resolveSettings(modelsForHarness(this.info, player.request.kind), requested);
-    const active: ActiveTurn = { sessionId, controller: new AbortController(), revision, acted: false };
-    this.active = active;
-    active.done = player.session.playTurn(prompt, active.controller.signal, resolved);
-    try { await active.done; return { acted: active.acted }; }
-    finally { if (this.active === active) this.active = null; }
+  async playTurn(sessionId: string, prompt: string, decisionId: string, settings?: AgentSettings): Promise<{ completed: boolean }> {
+    const player = this.sessions.get(sessionId); if (!player) throw new Error('找不到玩家会话，请重新连接');
+    if (this.active.has(sessionId)) throw new Error('此玩家已有正在处理的决策');
+    const resolved = resolveSettings(modelsForHarness(this.info, player.capability.request.kind), settings ?? player.capability.request);
+    const controller = new AbortController();
+    const active: ActiveDecision = { decisionId, controller, done: Promise.resolve() }; this.active.set(sessionId, active);
+    active.done = player.session.playTurn(prompt, controller.signal, resolved);
+    try { await active.done; return { completed: true }; }
+    finally { if (this.active.get(sessionId) === active) this.active.delete(sessionId); }
   }
   async pauseTurn(): Promise<void> {
-    const active = this.active;
-    if (!active) return;
-    active.controller.abort();
-    await active.done?.catch(() => {});
+    const active = [...this.active.values()]; for (const task of active) task.controller.abort();
+    await Promise.allSettled(active.map(task => task.done));
   }
-  async stopSessions(): Promise<void> {
-    this.generation++; this.active?.controller.abort(); this.active = null;
-    this.capabilities.clear();
-    for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(new Error('会话已结束')); } this.pending.clear();
-    const sessions = [...this.sessions.values()]; this.sessions.clear();
-    await Promise.allSettled(sessions.map(async s => { try { await s.session.close(); } finally { if (!s.request.persistConversation) await this.removeTemporaryWorkspace(s.cwd); } }));
+  async stopSessions(ids?: string[]): Promise<void> {
+    if (!ids) this.generation++;
+    const selected = [...this.sessions.entries()].filter(([id]) => !ids || ids.includes(id));
+    for (const [id, s] of selected) { this.active.get(id)?.controller.abort(); this.active.delete(id); this.capabilities.delete(s.token); this.sessions.delete(id); }
+    if (!ids) this.capabilities.clear();
+    const revoked = new Set(selected.map(([,s])=>s.capability));
+    for (const [id,pending] of this.pending) if (!ids || revoked.has(pending.capability)) { clearTimeout(pending.timer); pending.reject(new Error('会话已结束')); this.pending.delete(id); }
+    await Promise.allSettled(selected.map(async ([, s]) => { try { await s.session.close(); } finally { if (!s.capability.request.persistConversation) await this.removeTemporaryWorkspace(s.cwd); } }));
   }
   private async removeTemporaryWorkspace(cwd: string) {
     const root = resolve(this.dataDirectory, 'sessions'), target = resolve(cwd);
@@ -115,10 +107,7 @@ export class LocalBridge extends EventEmitter {
   }
   async disconnect(expectedOwnerToken?: string): Promise<void> {
     if (expectedOwnerToken && this.owner?.token !== expectedOwnerToken) return;
-    this.owner = null;
-    if (this.attachTimeout) clearTimeout(this.attachTimeout); this.attachTimeout = null;
+    this.owner = null; if (this.attachTimeout) clearTimeout(this.attachTimeout); this.attachTimeout = null;
     this.emit('disconnect'); await this.stopSessions();
   }
 }
-
-export const GAME_TOOLS: GameTool[] = ['game_get_state', 'game_legal_actions', 'game_act', 'game_rules'];

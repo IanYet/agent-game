@@ -1,5 +1,6 @@
-import { groupCards } from './cards';
-import type { Card, Combination, CombinationKind } from './types';
+import { groupCards } from '@agent-game/core';
+import type {Card} from '@agent-game/core';
+import type {Combination,CombinationKind} from './types';
 
 const labels: Record<CombinationKind, string> = {
   single: '单张', pair: '对子', triple: '三张', triple_single: '三带一', triple_pair: '三带二',

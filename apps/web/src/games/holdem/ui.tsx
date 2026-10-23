@@ -1,19 +1,21 @@
+import type {HoldemView} from './engine';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Pause, Play, Plus, Settings2, ShieldCheck, Sparkles, User } from 'lucide-react';
-import { cardLabel, rankLabel, SUIT_LABELS, type Card, type HoldemView } from '@agent-game/core';
-import { modelsForHarness, type AppSnapshot } from '@agent-game/protocol';
-import type { GameController } from './controller';
-import { AgentModelFields, effortLabel, kindName } from './AgentModelFields';
-import { Modal } from './Modal';
-import { NextHandModal } from './TableSetup';
+import { cardLabel, rankLabel, SUIT_LABELS, type Card } from '@agent-game/core';
+import {modelsForHarness} from '@agent-game/protocol';
+import type {AppSnapshot,ControlledView} from '../../runtime/types';
+import type { GameController } from '../../controller';
+import { AgentModelFields, effortLabel, kindName } from '../../AgentModelFields';
+import { Modal } from '../../Modal';
+import { NextRunModal } from '../../TableSetup';
 
 const phases = { preflop: '翻牌前', flop: '翻牌', turn: '转牌', river: '河牌', finished: '本手已结算' };
 function PokerCard({ card }: { card?: Card }) { return <div aria-label={card ? cardLabel(card) : '隐藏底牌'} className={`playing-card mini ${!card ? 'card-back' : ''} ${card && ['H','D'].includes(card.suit) ? 'red' : ''}`}>{card ? <><span className="card-corner"><b>{rankLabel(card.rank)}</b><i>{SUIT_LABELS[card.suit]}</i></span><span className="card-pip">{SUIT_LABELS[card.suit]}</span></> : <span className="card-back-pattern">✦</span>}</div>; }
 export function HoldemTable({ state, controller, busy, onRules, onSetup, onBack, onError, run }: { state: AppSnapshot; controller: GameController; busy: boolean; onRules: () => void; onSetup: () => void; onBack: () => void; onError: (message: string) => void; run: (action: () => Promise<void>) => Promise<void> }) {
-  const game = state.game as HoldemView;
+  const game = state.game as ControlledView<HoldemView>;
   const [next, setNext] = useState(false), [settings, setSettings] = useState(false), [raise, setRaise] = useState('');
   const [players, setPlayers] = useState(game.players.map(p => ({ ...p })));
-  const modelName = (p: HoldemView['players'][number]) => modelsForHarness(state.connector, p.kind).find(m => m.id === p.model)?.name ?? p.model;
+  const modelName = (p: ControlledView<HoldemView>['players'][number]) => modelsForHarness(state.connector, p.kind).find(m => m.id === p.model)?.name ?? p.model;
   const ownTurn = !state.paused && game.viewer === game.turn && game.phase !== 'finished', betting = game.betting;
   useEffect(() => { setRaise(betting ? String(Math.min(betting.minRaiseTo, betting.maxRaiseTo)) : ''); }, [game.revision, game.handId]);
   const act = (action: Parameters<GameController['humanAction']>[0]) => { try { controller.humanAction(action); } catch (e: any) { onError(e.message); } };
@@ -28,7 +30,7 @@ export function HoldemTable({ state, controller, busy, onRules, onSetup, onBack,
       {!ownTurn && game.phase!=='finished' && <p className="poker-waiting">{state.paused ? '点击继续恢复这手牌，会话保持不变。' : game.viewer===null ? '观战时隐藏所有底牌，摊牌时展示未弃牌玩家。' : '等待其他玩家行动。'}</p>}
       {game.phase==='finished' && <div className="poker-result"><h3>本手结算</h3><div className="poker-results">{game.players.map((p,i)=><div key={p.playerId}><strong>{p.name}</strong><span>{p.startingChips} → {p.chips}</span><b className={(game.result?.deltas[i]??0)>0 ? 'positive' : ''}>{(game.result?.deltas[i]??0)>0 ? '+' : ''}{game.result?.deltas[i]}</b></div>)}</div>{game.result?.pots.map((pot,i)=><p key={i}>{i===0 ? '主池' : `边池 ${i}`} {pot.amount} · {pot.awards.map(a=>`${game.players[a.seat].name} +${a.amount}`).join('，')}</p>)}<button className="button primary" onClick={()=>setNext(true)}>调整玩家，开始下一手 <Play size={15} /></button><small>筹码留在这张牌桌；下一手为每位 Agent 创建全新会话。</small></div>}
     </section><aside className="table-rail"><section className="event-card"><div className="event-heading"><h3>牌桌动态</h3><span>第 {game.round} 手</span></div><div className="event-list">{[...game.events].reverse().map(e=><div className="game-event" key={e.seq}><span className="event-time">{new Date(e.time).toLocaleTimeString('zh-CN',{hour12:false})}</span><p>{e.seat!==undefined && <b>{game.players[e.seat].name} </b>}{e.text}</p>{e.cards && <span>{e.cards.map(cardLabel).join(' ')}</span>}</div>)}</div></section><section className="poker-ledger"><h3>本桌买入 / 离桌</h3><p>累计买入 {game.ledger.filter(e=>e.type==='buy-in').reduce((s,e)=>s+e.amount,0)} · 离桌兑现 {game.ledger.filter(e=>e.type==='cash-out').reduce((s,e)=>s+e.amount,0)}</p>{[...game.ledger].reverse().slice(0,12).map((e,i)=><div key={i}><span>{e.name}</span><small>第 {e.round} 手 · {e.type==='buy-in' ? '买入' : '离桌'}</small><b>{e.amount}</b></div>)}</section></aside></div>
-    {next && <NextHandModal state={state} game={game} onClose={()=>setNext(false)} onConnect={()=>void run(()=>controller.connect())} onStart={async roster=>{await controller.nextRound(roster);setNext(false);}} />}
+    {next && <NextRunModal state={state} controller={controller} onClose={()=>setNext(false)} onConnect={()=>void run(()=>controller.connect())} onStart={async roster=>{await controller.nextRound(roster);setNext(false);}} />}
     {settings && <Modal title="本手玩家设置" subtitle="暂停期间可修改模型与思考强度，沿用当前会话。阵容与 Harness 在下一手前调整。" onClose={()=>setSettings(false)} wide><div className="player-settings-list">{players.filter(p=>p.kind!=='human').map(p=><section className="player-settings-card" key={p.playerId}><strong>{p.name}</strong><small> · {kindName[p.kind]}</small><AgentModelFields label={p.name} models={modelsForHarness(state.connector,p.kind)} settings={p} onChange={value=>setPlayers(all=>all.map(v=>v.playerId===p.playerId ? {...v,...value} : v))} /><div className="conversation-info"><small>{state.persistConversations ? '已开启本机历史保留' : '临时会话'}</small><code>{state.seats[p.seat]?.conversationId ?? state.seats[p.seat]?.sessionId ?? '等待创建会话'}</code></div></section>)}</div><div className="modal-footer"><small>保存后点击继续游戏。</small><button className="button primary" onClick={()=>{try{controller.configurePlayers(players);setSettings(false);}catch(e:any){onError(e.message);}}}>保存设置</button></div></Modal>}
   </>;
 }

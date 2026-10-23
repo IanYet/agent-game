@@ -1,5 +1,6 @@
 import { CONNECTOR_PORT, PROTOCOL_VERSION, type AgentSettings, type BrowserToolRequest, type ConnectorEvent, type ConnectorInfo, type SessionRequest, type ToolResponse } from '@agent-game/protocol';
 import { connectorCompatibilityProblem } from './compatibility';
+import { connectorRequirements } from './version';
 
 export class ConnectorVersionError extends Error {
   constructor(message: string, readonly connector: ConnectorInfo) { super(message); this.name = 'ConnectorVersionError'; }
@@ -10,7 +11,7 @@ export class ConnectorClient {
   private stream: AbortController | null = null;
   private generation = 0;
   onEvent: (event: ConnectorEvent) => void = () => {};
-  onTool: (request: BrowserToolRequest) => ToolResponse = () => ({ content: [], isError: true });
+  onTool: (request: BrowserToolRequest) => ToolResponse | Promise<ToolResponse> = () => ({ content: [], isError: true });
   onDisconnect: () => void = () => {};
   constructor(readonly endpoint = `http://127.0.0.1:${CONNECTOR_PORT}`, private fetcher: typeof fetch = (...args) => fetch(...args)) {}
   private async request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
@@ -26,7 +27,7 @@ export class ConnectorClient {
     const info = await this.request<ConnectorInfo>('/health');
     const problem = connectorCompatibilityProblem(info);
     if (problem) throw new ConnectorVersionError(problem, info);
-    const result = await this.request<{ token: string; info: ConnectorInfo }>('/api/connect', 'POST', { protocolVersion: PROTOCOL_VERSION });
+    const result = await this.request<{ token: string; info: ConnectorInfo }>('/api/connect', 'POST', { protocolVersion: PROTOCOL_VERSION, requiredCapabilities: connectorRequirements.capabilities });
     this.token = result.token;
     const stream = new AbortController(); this.stream = stream; const generation = ++this.generation;
     await new Promise<void>((resolve, reject) => {
@@ -46,8 +47,7 @@ export class ConnectorClient {
             const event = JSON.parse(data) as ConnectorEvent;
             if (event.type === 'ready') { ready = true; clearTimeout(timer); resolve(); }
             if (event.type === 'tool') {
-              const response = this.onTool(event.request);
-              void this.request('/api/tool-results', 'POST', { id: event.request.id, response }).catch(() => {});
+              void Promise.resolve(this.onTool(event.request)).then(response => this.request('/api/tool-results', 'POST', { id: event.request.id, response })).catch(() => {});
             } else this.onEvent(event);
           }
         }
@@ -60,9 +60,9 @@ export class ConnectorClient {
     return result.info;
   }
   createSession(request: SessionRequest): Promise<{ sessionId: string }> { return this.request('/api/sessions', 'POST', request); }
-  playTurn(sessionId: string, prompt: string, revision: number, settings?: AgentSettings): Promise<{ acted: boolean }> { return this.request(`/api/sessions/${encodeURIComponent(sessionId)}/turn`, 'POST', { prompt, revision, settings }); }
+  playTurn(sessionId: string, prompt: string, decisionId: string, settings?: AgentSettings): Promise<{ completed: boolean }> { return this.request(`/api/sessions/${encodeURIComponent(sessionId)}/turn`, 'POST', { prompt, decisionId, settings }); }
   async pauseTurn(): Promise<void> { if (this.token) await this.request('/api/pause', 'POST'); }
-  async stopSessions(): Promise<void> { if (this.token) await this.request('/api/sessions', 'DELETE'); }
+  async stopSessions(ids?: string[]): Promise<void> { if (this.token) await this.request('/api/sessions', 'DELETE', ids ? { ids } : undefined); }
   async disconnect(): Promise<void> {
     this.generation++;
     if (this.token) await this.request('/api/disconnect', 'POST').catch(() => {});

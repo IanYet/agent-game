@@ -23,7 +23,7 @@ vi.mock('./rpc', () => ({
 import { CodexAdapter } from './codex';
 
 describe('Codex 原生玩家会话', () => {
-  const context = { seat: 1 as const, name: 'Atlas', roomId: 'room-1234', round: 1, model: 'a', reasoningEffort: 'low', cwd: '', mcpUrl: 'http://127.0.0.1/mcp/test', onActivity() {}, onUsage() {} };
+  const context = { scopeId:'run',playerId:'atlas',kind:'codex' as const,name:'Atlas',instructions:'Play through the registered tools.',displayTitle:'同桌 · Atlas',tools:[{name:'observe',description:'Observe',inputSchema:{type:'object' as const}}], model: 'a', reasoningEffort: 'low', cwd: '', mcpUrl: 'http://127.0.0.1/mcp/test', onActivity() {}, onUsage() {} };
   it('默认临时；只有明确开启才持久保存并设置玩家名称', async () => {
     state.calls = [];
     const first = await new CodexAdapter('test').createSession(context);

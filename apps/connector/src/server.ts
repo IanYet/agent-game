@@ -1,7 +1,8 @@
 import express, { type ErrorRequestHandler } from 'express';
 import { createServer } from 'node:http';
 import { z } from 'zod';
-import { PROTOCOL_VERSION, type ConnectorEvent } from '@agent-game/protocol';
+import { PROTOCOL_VERSION, type ConnectorEvent, type SessionRequest } from '@agent-game/protocol';
+import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { LocalBridge } from './bridge';
 import { registerMcp } from './mcp';
 
@@ -20,11 +21,12 @@ export function createConnectorServer(bridge: LocalBridge, allowedOrigins: strin
     if (req.method === 'OPTIONS') { res.sendStatus(204); return; }
     next();
   });
-  app.use(express.json({ limit: '128kb' }));
+  app.use(express.json({ limit: '2mb' }));
   app.get('/health', (_req, res) => res.json({ name: 'Agent Arcade Connector', ...bridge.info }));
   app.post('/api/connect', (req, res) => {
     if (!req.headers.origin || !origins.has(req.headers.origin)) { res.status(403).json({ error: '请从受信任的游戏网页点击连接' }); return; }
-    z.object({ protocolVersion: z.literal(PROTOCOL_VERSION) }).parse(req.body);
+    const requirements = z.object({ protocolVersion: z.literal(PROTOCOL_VERSION), requiredCapabilities: z.array(z.string()).default([]) }).parse(req.body);
+    if (requirements.requiredCapabilities.some(capability => !bridge.info.capabilities.includes(capability))) throw new Error('连接器缺少网页所需能力，请下载最新连接器');
     const token = bridge.connect(req.headers.origin); res.json({ token, info: bridge.info });
   });
   app.use('/api', (req, res, next) => {
@@ -43,21 +45,19 @@ export function createConnectorServer(bridge: LocalBridge, allowedOrigins: strin
     res.on('close', () => { clearInterval(heartbeat); bridge.off('event', send); bridge.off('disconnect', disconnect); void bridge.disconnect(ownerToken); });
   });
   app.post('/api/tool-results', (req, res) => {
-    const body = z.object({ id: z.string().uuid(), response: z.object({ content: z.array(z.object({ type: z.literal('text'), text: z.string().max(100_000) })).max(5), isError: z.boolean().optional() }) }).parse(req.body);
-    bridge.toolResult(body.id, body.response); res.json({ ok: true });
+    const body = z.object({ id: z.string().uuid(), response: z.unknown() }).parse(req.body);
+    bridge.toolResult(body.id, CallToolResultSchema.parse(body.response)); res.json({ ok: true });
   });
   app.post('/api/sessions', async (req, res) => {
-    const request = z.object({ roomId: z.string().uuid(), gameId: z.enum(['doudizhu', 'holdem']).optional(), handId: z.string().min(1).max(100).optional(), initialState: z.string().max(60_000).optional(), round: z.number().int().positive().optional(), persistConversation: z.boolean().optional(), seat: z.number().int().min(0).max(8), kind: z.enum(['codex', 'codex-acp', 'dsh', 'workbuddy']), name: z.string().min(1).max(32), model: z.string().min(1).max(500).optional(), reasoningEffort: z.string().min(1).max(100).optional() }).parse(req.body);
-    if ((request.gameId ?? 'doudizhu') === 'doudizhu' && request.seat > 2) throw new Error('斗地主座位只能为 0–2');
-    if (request.gameId === 'holdem' && !request.handId) throw new Error('德州扑克需要本手 handId');
-    res.status(201).json(await bridge.createSession(request));
+    const request = z.object({ scopeId: z.string().min(1).max(200), playerId: z.string().min(1).max(200), persistConversation: z.boolean().optional(), kind: z.enum(['codex', 'codex-acp', 'dsh', 'workbuddy']), name: z.string().min(1).max(100), displayTitle: z.string().min(1).max(300), instructions: z.string().max(200_000), tools: z.array(z.object({ name:z.string(), description:z.string(), inputSchema:z.record(z.unknown()) }).passthrough()).min(1).max(128), model: z.string().min(1).max(500).optional(), reasoningEffort: z.string().min(1).max(100).optional() }).parse(req.body);
+    res.status(201).json(await bridge.createSession(request as unknown as SessionRequest));
   });
   app.post('/api/sessions/:id/turn', async (req, res) => {
-    const { prompt, revision, settings } = z.object({ prompt: z.string().min(1).max(6000), revision: z.number().int().min(1), settings: z.object({ model: z.string().min(1).max(500).optional(), reasoningEffort: z.string().min(1).max(100).optional() }).optional() }).parse(req.body);
-    res.json(await bridge.playTurn(req.params.id as string, prompt, revision, settings));
+    const { prompt, decisionId, settings } = z.object({ prompt: z.string().min(1).max(200_000), decisionId: z.string().min(1).max(300), settings: z.object({ model: z.string().min(1).max(500).optional(), reasoningEffort: z.string().min(1).max(100).optional() }).optional() }).parse(req.body);
+    res.json(await bridge.playTurn(req.params.id as string, prompt, decisionId, settings));
   });
   app.post('/api/pause', async (_req, res) => { await bridge.pauseTurn(); res.json({ ok: true }); });
-  app.delete('/api/sessions', async (_req, res) => { await bridge.stopSessions(); res.json({ ok: true }); });
+  app.delete('/api/sessions', async (req, res) => { const {ids}=z.object({ids:z.array(z.string()).optional()}).parse(req.body ?? {}); await bridge.stopSessions(ids); res.json({ ok: true }); });
   app.post('/api/disconnect', async (_req, res) => { await bridge.disconnect(); res.json({ ok: true }); });
   registerMcp(app, bridge);
   app.get('/', (_req, res) => res.type('text/plain').send('同桌本地连接器正在运行。请在独立的游戏网页点击连接本机。'));
