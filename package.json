@@ -1,6 +1,6 @@
 {
   "name": "agent-arcade",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "type": "module",
   "description": "A local game table for humans and their agents.",
@@ -23,6 +23,7 @@
     "test:windows-ui": "node scripts/test-windows-layout.mjs",
     "test:release": "node --test scripts/publish-connector.test.mjs",
     "test:windows": "tsx scripts/test-windows-lifecycle.ts",
+    "test:packaged-acp": "tsx scripts/verify-packaged-acp.ts",
     "check:codex": "tsx scripts/check-codex.ts",
     "check:harnesses": "tsx scripts/check-harnesses.ts",
     "build:web": "tsc --noEmit && vite build",

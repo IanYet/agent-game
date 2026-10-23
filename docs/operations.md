@@ -23,6 +23,7 @@ npm run dev
 | `npm run test:windows-ui` | 渲染窗口在 100%/150%/200% 模拟缩放下的长中文状态、错误和更新提示；不启动连接器 |
 | `npm run test:release` | 发布前校验、资产隔离、Release/tag 保留、上传失败及回滚测试 |
 | `npm run test:windows` | 对最终 EXE 做真实原生会话、进程树、退出和端口复用检查 |
+| `npm run test:packaged-acp` | 对最终 EXE 做真实 ACP 四人德州、暂停继续及筹码守恒验证；显式消耗已登录账户额度 |
 
 生成包位于 `release/同桌连接器.exe`。打包脚本同时生成静态分片和 SHA-256 下载清单到 `apps/web/public/downloads/`、`dist/client/downloads/`；浏览器下载时自动拼接为单个 EXE 并校验，不需要用户合并文件。它们是被忽略的构建产物。
 
@@ -46,13 +47,15 @@ gh run list --repo IanYet/agent-game --workflow connector.yml
 gh run view <run-id> --repo IanYet/agent-game
 ```
 
+v0.4.1 修复 Codex ACP 出牌审批及网页的已结算任务收尾。网页最低版本要求连接器至少为 0.4.1；本次跨平台补包合入这份已实机验证的修复，沿用 0.4.1。原始实机证据与本次构建记录分别见验证文档。
+
 此工作流不接受 push/tag 触发。矩阵使用 `windows-latest`（x64）、`macos-15`（arm64）、`macos-15-intel`（x64）；后两个标签已核对 [GitHub 官方 runner 列表](https://github.com/actions/runner-images)。CI 固定 Node 24.19.0，将本机相同架构运行时放入最终包。
 
 每个 runner 依次执行自动测试、类型检查、发布器测试、网页与连接器构建、生产桥跨游戏验证、原生打包、最终包生命周期检查。Windows 额外渲染界面；macOS 检查 app/Node 架构、Info.plist、ad-hoc 签名完整性，并从解压到带空格目录的成品启动。fixture 显式通过 DSH_PATH 注入，包含拒绝 SIGTERM 的孙进程；强制退出只杀启动器本身，从而验证原生所有权。fixture 不进入发行包，也不调用模型。
 
 全部构建通过后才运行唯一的 `publish` 作业。只有该作业有 `contents: write`；构建和 Pages 作业不持有 Release 写权限。仓库范围 concurrency 将手动运行排队，双架构不会同时修改 Release。打包或验证失败时发布作业被跳过。
 
-本次按用户要求保持双端 **0.4.0、协议 4**，Windows AssemblyVersion/AssemblyFileVersion 仍为 0.4.0.0。macOS Info.plist、包内元数据和 Release tag 均从 `apps/connector/version.json` 读取；打包时检查 Windows 两个版本属性一致。既有 v0.4.0 tag、Release 标题和正文保留；不同于 tag 指向提交的补包来源以资产 `.build.json` 为准。没有对应 Release 时才创建新 Release，绝不移动已有 tag。
+本次以已发布的 ACP 修复为基线，双端统一保持 **0.4.1、协议 4**，Windows AssemblyVersion/AssemblyFileVersion 为 0.4.1.0，不额外增加版本号。macOS Info.plist、包内元数据和 Release tag 均从 `apps/connector/version.json` 读取；打包时检查 Windows 两个版本属性一致。既有 v0.4.0 / v0.4.1 tag 不变，本次目标 Release 的标题和正文保留；不同于 tag 指向提交的补包来源以资产 `.build.json` 为准。没有对应 Release 时才创建新 Release，绝不移动已有 tag。
 
 稳定资产：`tongzhuo-connector-windows-x64.exe`、`tongzhuo-connector-macos-arm64.zip`、`tongzhuo-connector-macos-x64.zip`。各有 `.sha256` 和 `.build.json`；另有 `package-win32-x64.json`、`package-darwin-arm64.json`、`package-darwin-x64.json` 记录对应自动运行检查。发布器先核对三个包的源提交、版本、大小、SHA-256 和运行证据，再上传临时命名资产并核对 GitHub digest；所有上传成功后才换成稳定名称，失败时尽力回滚本次变更。唯一发布器还会从三份已验证成品统一生成 SHA256SUMS.txt，替换既有 Windows 总校验文件，避免补包后遗留旧哈希；构建矩阵不写共享清单。Release 正文保留，各架构的说明和独立校验和分别上传。Actions artifact 用于作业交接/诊断，最终下载来自 [GitHub Release](https://github.com/IanYet/agent-game/releases/latest)。
 

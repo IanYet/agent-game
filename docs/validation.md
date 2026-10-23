@@ -2,9 +2,9 @@
 
 ## 2026-10-24：跨平台连接器与发布补包
 
-此轮双端保持连接器 **0.4.0、协议 4**，Windows 文件版本保持 0.4.0.0；macOS Info.plist 从同一 version.json 生成。新增 macOS arm64/x64 `.app`（自带 Node、原生菜单栏、退出入口、Guardian）、macOS Application Support 路径、GUI PATH/Harness 发现；Windows 窗口改为自动布局、完整换行和一次 DPI 缩放。两端应用、Windows 窗口/托盘、macOS 菜单栏使用同一 SVG 源图标。
+此轮合入 main 的 ACP 审批与网页收尾修复，双端统一保持连接器 **0.4.1、协议 4**，Windows 文件版本为 0.4.1.0；macOS Info.plist 从同一 version.json 生成。新增 macOS arm64/x64 `.app`（自带 Node、原生菜单栏、退出入口、Guardian）、macOS Application Support 路径、GUI PATH/Harness 发现；Windows 窗口改为自动布局、完整换行和一次 DPI 缩放。两端应用、Windows 窗口/托盘、macOS 菜单栏使用同一 SVG 源图标。
 
-本地 Windows 已通过：107 项单元/集成测试、类型检查、网页构建、生产桥跨三种游戏不重建验证、5 项发布器失败/回滚测试、最终 EXE 无账户生命周期检查。界面以一致的 96-DPI 基准，分别放大几何和字体到 100%/150%/200%，渲染启动/已就绪/已连接/长错误和更新提示；检查文本首选高度、列边界及按钮在窗口内。高 DPI 桌面另有实际显示渲染检查；这不代替其他显示器/系统字体的人工验收。
+合并 0.4.1 前的本地 Windows 已通过：107 项单元/集成测试、类型检查、网页构建、生产桥跨三种游戏不重建验证、6 项发布器失败/回滚测试、最终 EXE 无账户生命周期检查。界面以一致的 96-DPI 基准，分别放大几何和字体到 100%/150%/200%，渲染启动/已就绪/已连接/长错误和更新提示；检查文本首选高度、列边界及按钮在窗口内。高 DPI 桌面另有实际显示渲染检查；这不代替其他显示器/系统字体的人工验收。
 
 首次 [GitHub 原生矩阵运行](https://github.com/IanYet/agent-game/actions/runs/39986533838)中，macos-15（arm64）与 macos-15-intel（x64）均通过完整构建、打包、代码签名结构检查以及最终 ZIP 的自动运行检查：
 
@@ -27,7 +27,26 @@
 5. 检查 Safari/Chrome 对公开 HTTPS 网页访问 loopback 的权限提示、建立/断开/重连；检查最低支持 macOS 13.5 及常见显示缩放。
 6. 获得证书后另行完成 Developer ID 签名、hardened runtime/entitlements 评估、notarytool 公证、staple 和全新下载验收。当前包不得标记为已完成这些步骤。
 
-以下内容保留 2026-10-23 协议基线的历史结果；旧包哈希不表示本次补包哈希。
+下面先保留 Windows 0.4.1 授权修复首发包的实机验证，再保留 0.4.0 基线记录；历史包哈希不表示本次跨平台补包哈希。
+
+## 0.4.1 实机补丁验证（2026-10-24）
+
+修复 Codex ACP 的只读预设触发工具审批后，连接器无条件取消合法出牌的问题。现在按当前原生会话、活动任务、MCP 通知中的服务器/已注册工具与 call ID 关联，仅选择一次性授权；暂停、结束、工具完成及参数变化会撤销关联。另修复真人结算立即关闭会话时，把尚未返回的 Agent 任务错误上报到已结束牌局的竞态。
+
+本版验证：
+
+- 118 项自动测试、类型检查和网页/连接器构建通过。新增审批回归覆盖没有标题的原生请求、动态工具名、未知工具、其他 MCP、跨会话、重复授权、永久授权选项及暂停后旧 call ID；收尾竞态用延迟返回的原生任务 fixture 复现后修复。
+- **最终 Windows EXE 的真实账户推理**：一位测试驱动的真人位 + Atlas/Nova/Echo 三个独立 Codex ACP 会话，模型均为 `gpt-6.1-sol`、`low`，盲注 5/10，完成整手德州至 revision 11、摊牌结束。三位 Agent 均完成行动；总筹码 4000，结算后守恒。不是模拟模型或 ACP fixture。
+- 在真实推理中暂停，然后恢复同样的三个原生会话，后续出牌及结算成功。复现命令 `npm run test:packaged-acp` 会显式使用真实账户额度，读取已经构建好的 `release/同桌连接器.exe`，不重建或替换它。
+- Chrome 原始报错牌桌连接同一个最终 EXE 后，Echo 正常提交弃牌，轮到真人；未再出现原错误，浏览器控制台无警告/错误。
+- 最终 EXE 正常退出、仅强制结束启动器、全部 7 个所属子进程回收、端口释放和立即重启通过。
+- 同一个生产连接器 bundle 依次完成斗地主、德州及 12 人同时竞价，期间进程和 bundle 哈希保持不变。
+
+最终 EXE SHA-256：`d0caa249f8a138719ecc3a518f747288840c4a15cb26a3d3ace4f3ea3b240e43`。
+
+本机证据：`.cache/validation/packaged-acp-proof.json`、`packaged-acp-v0.4.1.log`、`windows-lifecycle-v0.4.1.log`、`browser-v0.4.1.png` 与 `dynamic-connector-proof.json`；不提交临时会话或凭据。网页最低连接器版本提升到 0.4.1，桥接协议仍为 4。
+
+以下保留 0.4.0 基线的历史验证记录。
 
 日期：2026-10-23。此记录区分协议 fixture、真实账户推理和最终 EXE。
 
