@@ -3,7 +3,7 @@ import {DOUDIZHU_RULES} from './rules';
 import type {DoudizhuState,GameAction} from './types';
 import {toolResult} from '@agent-game/protocol';
 import type {GameModule,StoredRun} from '../../runtime/types';
-import {enginePlayers,seatFor,decorateView,emptySchema,readOnly,decisionKey,checkRevision} from '../shared';
+import {enginePlayers,seatFor,decorateView,emptySchema,readOnly,decisionKey,checkRevision,agentObservation} from '../shared';
 const descriptors=[
  {name:'game_get_state',description:'读取自己的手牌与公开状态，隐藏其他玩家手牌。',inputSchema:emptySchema,annotations:readOnly},
  {name:'game_legal_actions',description:'分页获取当前玩家的合法叫分、出牌或不出，返回 actionId。',inputSchema:{type:'object' as const,properties:{offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:100}},additionalProperties:false},annotations:readOnly},
@@ -19,12 +19,12 @@ export const doudizhuModule:GameModule<DoudizhuState>={
  finished:s=>s.phase==='finished',observe,
  decisions:run=>run.state.phase==='finished'?[]:[{decisionId:decisionKey(run,run.state.revision,run.state.turn),actorId:run.roster[run.state.turn].playerId,allowedTools:['game_act']}],
  tools:()=>descriptors,
- initializePrompt:(run,actor)=>`你是斗地主玩家 ${run.roster[seatFor(run,actor)].name}。\n${DOUDIZHU_RULES}\n只通过游戏工具游玩；此会话仅用于本局。\n初始观察：${JSON.stringify(observe(run,actor))}`,
- decisionPrompt:(run,d)=>`斗地主第 ${run.index} 局，决策 ${d.decisionId}。读取自己的状态，执行一次合法行动，然后结束任务。当前观察：${JSON.stringify(observe(run,d.actorId))}`,
+ initializePrompt:(run,actor)=>`你是斗地主玩家 ${run.roster[seatFor(run,actor)].name}。\n${DOUDIZHU_RULES}\n只通过游戏工具游玩；此会话仅用于本局。\n初始观察：${JSON.stringify(agentObservation(observe(run,actor)))}`,
+ decisionPrompt:(run,d)=>`斗地主第 ${run.index} 局，决策 ${d.decisionId}。读取自己的状态，执行一次合法行动，然后结束任务。当前观察：${JSON.stringify(agentObservation(observe(run,d.actorId)))}`,
  handleTool:(run,request)=>{
    const seat=seatFor(run,request.playerId),state=run.state;
    if(request.tool==='game_rules')return{result:toolResult({rules:DOUDIZHU_RULES})};
-   if(request.tool==='game_get_state')return{result:toolResult(observe(run,request.playerId))};
+   if(request.tool==='game_get_state')return{result:toolResult(agentObservation(observe(run,request.playerId)))};
    const legal=getLegalActions(state,seat);
    if(request.tool==='game_legal_actions'){const offset=Number(request.args.offset??0),limit=Number(request.args.limit??80);return{result:toolResult({revision:state.revision,total:legal.length,offset,actions:legal.slice(offset,offset+limit)})};}
    if(request.tool!=='game_act')throw new Error('斗地主没有注册该工具');

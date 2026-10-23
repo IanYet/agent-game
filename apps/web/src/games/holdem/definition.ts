@@ -1,7 +1,7 @@
 import {applyHoldemAction,createHoldem,nextHoldemHand,viewHoldem,getHoldemLegalActions,holdemBetting,assertHoldemChips,HOLDEM_RULES,DEFAULT_HOLDEM_OPTIONS,type HoldemState,type HoldemAction} from './engine';
 import {toolResult} from '@agent-game/protocol';
 import type {GameModule,StoredRun} from '../../runtime/types';
-import {enginePlayers,seatFor,decorateView,emptySchema,readOnly,decisionKey,checkRevision} from '../shared';
+import {enginePlayers,seatFor,decorateView,emptySchema,readOnly,agentObservation,decisionKey,checkRevision} from '../shared';
 const descriptors=[
  {name:'game_get_state',description:'读取自己的底牌、公共牌、筹码、底池、轮次和当前下注范围；隐藏对手底牌、牌库和烧牌。',inputSchema:emptySchema,annotations:readOnly},
  {name:'game_legal_actions',description:'获取合法行动及 betting 下注范围。',inputSchema:{type:'object' as const,properties:{offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:100}},additionalProperties:false},annotations:readOnly},
@@ -17,12 +17,12 @@ export const holdemModule:GameModule<HoldemState>={
  finished:s=>s.phase==='finished',observe,
  decisions:run=>run.state.phase==='finished'?[]:[{decisionId:decisionKey(run,run.state.revision,run.state.turn),actorId:run.roster[run.state.turn].playerId,allowedTools:['game_act']}],
  tools:()=>descriptors,
- initializePrompt:(run,actor)=>`你是德州扑克玩家 ${run.roster[seatFor(run,actor)].name}。\n${HOLDEM_RULES}\n本手独立会话。amount 表示本轮下注到的总额，不是额外增加量。初始观察：${JSON.stringify(observe(run,actor))}`,
- decisionPrompt:(run,d)=>`德州扑克第 ${run.index} 手，决策 ${d.decisionId}。读取自己的状态，执行一次合法行动，然后结束任务。当前观察：${JSON.stringify(observe(run,d.actorId))}`,
+ initializePrompt:(run,actor)=>`你是德州扑克玩家 ${run.roster[seatFor(run,actor)].name}。\n${HOLDEM_RULES}\n本手独立会话。amount 表示本轮下注到的总额，不是额外增加量。初始观察：${JSON.stringify(agentObservation(observe(run,actor)))}`,
+ decisionPrompt:(run,d)=>`德州扑克第 ${run.index} 手，决策 ${d.decisionId}。读取自己的状态，执行一次合法行动，然后结束任务。当前观察：${JSON.stringify(agentObservation(observe(run,d.actorId)))}`,
  handleTool:(run,request)=>{
    const seat=seatFor(run,request.playerId),state=run.state;
    if(request.tool==='game_rules')return{result:toolResult({rules:HOLDEM_RULES})};
-   if(request.tool==='game_get_state')return{result:toolResult(observe(run,request.playerId))};
+   if(request.tool==='game_get_state')return{result:toolResult(agentObservation(observe(run,request.playerId)))};
    const legal=getHoldemLegalActions(state,seat);
    if(request.tool==='game_legal_actions'){const offset=Number(request.args.offset??0),limit=Number(request.args.limit??80);return{result:toolResult({revision:state.revision,total:legal.length,offset,actions:legal.slice(offset,offset+limit),betting:holdemBetting(state,seat)})};}
    if(request.tool!=='game_act')throw new Error('德州没有注册该工具');
