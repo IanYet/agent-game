@@ -38,29 +38,32 @@ function suitShape(index:number){
   s.closePath();return s;
 }
 
-// Merge adjacent triangles into convex pieces. Hearts and clubs keep their
-// notches instead of colliding against an invisible bounding sphere.
-function convexPieces(points:Vector2[]){
-  const polygons=ShapeUtils.triangulateShape(points,[]);
-  const convex=(p:number[])=>p.every((v,i)=>{
-    const a=points[v],b=points[p[(i+1)%p.length]],c=points[p[(i+2)%p.length]];
-    return (b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x)>=-1e-7;
+function convexHull(points:Vector2[]){
+  const sorted=points.slice().sort((a,b)=>a.x-b.x||a.y-b.y);
+  const cross=(a:Vector2,b:Vector2,c:Vector2)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+  const half=(vertices:Vector2[])=>{
+    const result:Vector2[]=[];
+    for(const p of vertices){while(result.length>1&&cross(result.at(-2)!,result.at(-1)!,p)<=1e-7)result.pop();result.push(p);}
+    result.pop();return result;
+  };
+  return [...half(sorted),...half(sorted.slice().reverse())];
+}
+
+// Describe each lobe and stem with a few convex pieces, preserving the notches.
+function collisionProfiles(shape:Shape,index:number){
+  const outline=shape.getPoints(4);outline.pop();
+  const polygon=(points:number[][])=>points.map(([x,y])=>new Vector2(x,y));
+  const stem=polygon([[-.11,-.34],[-.38,-.87],[.38,-.87],[.11,-.34]]);
+  if(index===0)return [
+    convexHull([...outline.filter(p=>p.x<=0&&p.y>=-.61),new Vector2(0,-.34)]),
+    convexHull([...outline.filter(p=>p.x>=0&&p.y>=-.61),new Vector2(0,-.34)]),stem,
+  ];
+  if(index===1)return [-1,1].map(side=>convexHull(outline.filter(p=>p.x*side>=0)));
+  if(index===2)return [convexHull(outline)];
+  const lobe=(x:number,y:number,rx:number,ry:number)=>Array.from({length:12},(_,i)=>{
+    const angle=i*Math.PI/6;return new Vector2(x+Math.cos(angle)*rx,y+Math.sin(angle)*ry);
   });
-  let changed=true;
-  while(changed){
-    changed=false;
-    outer:for(let a=0;a<polygons.length;a++)for(let b=a+1;b<polygons.length;b++){
-      const first=polygons[a],second=polygons[b];
-      for(let i=0;i<first.length;i++)for(let j=0;j<second.length;j++){
-        if(first[i]!==second[(j+1)%second.length]||first[(i+1)%first.length]!==second[j])continue;
-        const merged=first.map((_,k)=>first[(i+1+k)%first.length]);
-        for(let k=1;k<second.length-1;k++)merged.push(second[(j+1+k)%second.length]);
-        if(!convex(merged))continue;
-        polygons[a]=merged;polygons.splice(b,1);changed=true;break outer;
-      }
-    }
-  }
-  return polygons.map(p=>p.map(i=>points[i]));
+  return [lobe(0,.49,.42,.43),lobe(-.49,-.15,.4,.43),lobe(.49,-.15,.4,.43),stem];
 }
 
 function prism(points:Vector2[],scale:number){
@@ -93,7 +96,7 @@ export class TableModels{
     this.chipMaterial=this.material({vertexColors:true,roughness:.32,metalness:.22,clearcoat:.6});
     if(theme==='holdem')chipColors.forEach((hex,index)=>{
       const profile=[[0,-.15],[.66,-.15],[.724,-.135],[.75,-.105],[.75,.105],[.724,.135],[.66,.15],[0,.15]];
-      const geometry=new LatheGeometry(profile.map(([x,y])=>new Vector2(x,y)),96);
+      const geometry=new LatheGeometry(profile.map(([x,y])=>new Vector2(x,y)),64);
       const position=geometry.getAttribute('position'),colors:number[]=[],base=new Color(hex),stripe=new Color('#e3dac4');
       for(let i=0;i<position.count;i++){
         const angle=Math.atan2(position.getX(i),position.getZ(i))+Math.PI;
@@ -106,13 +109,14 @@ export class TableModels{
       this.faces.push(this.material({map:face,roughness:.42,metalness:.12,clearcoat:.45}));
     });
     else this.outlines.forEach((shape,index)=>{
-      const geometry=new ExtrudeGeometry(shape,{depth:.28,bevelEnabled:true,bevelThickness:.065,bevelSize:.065,bevelSegments:3,steps:1,curveSegments:12});
+      const geometry=new ExtrudeGeometry(shape,{depth:.28,bevelEnabled:true,bevelThickness:.065,bevelSize:.065,bevelSegments:3,steps:1,curveSegments:10});
       geometry.computeBoundingBox();const center=geometry.boundingBox!.getCenter(new Vector3());
       geometry.translate(-center.x,-center.y,-center.z);
       this.suits.push(geometry);this.geometries.push(geometry);
-      const points=shape.getPoints(5);points.pop();
-      if(ShapeUtils.isClockWise(points))points.reverse();
-      this.pieces.push(convexPieces(points.map(p=>p.sub(new Vector2(center.x,center.y)).multiplyScalar(1.045))));
+      this.pieces.push(collisionProfiles(shape,index).map(points=>{
+        if(ShapeUtils.isClockWise(points))points.reverse();
+        return points.map(p=>p.clone().sub(new Vector2(center.x,center.y)).multiplyScalar(1.045));
+      }));
       this.suitMaterials.push(this.material({color:suitColors[index],roughness:.27,metalness:.28,clearcoat:.75,clearcoatRoughness:.2}));
     });
   }

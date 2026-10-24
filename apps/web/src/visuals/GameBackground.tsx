@@ -5,17 +5,22 @@ import type {TablePhysics} from './table-physics';
 
 export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme}){
   const effects=useEffectsPreference();
-  const canvas=useRef<HTMLCanvasElement>(null),runtime=useRef({enabled,reduced:effects.reduced});
+  const surface=useRef<HTMLDivElement>(null),runtime=useRef({enabled,reduced:effects.reduced});
   runtime.current={enabled,reduced:effects.reduced};
   useEffect(()=>{
-    const target=canvas.current;if(!target)return;
-    let alive=true,scene:TablePhysics|undefined,frame=0,last=0,lost=false;
-    const stop=()=>{cancelAnimationFrame(frame);frame=0;last=0;scene?.clearPointer();};
+    const host=surface.current;if(!host)return;
+    const target=document.createElement('canvas');target.className='table-object-canvas';host.append(target);
+    let alive=true,scene:TablePhysics|undefined,frame=0,last=0,phase=0,lost=false,frames=0,measured=performance.now();
+    const stop=()=>{cancelAnimationFrame(frame);frame=0;last=0;phase=0;frames=0;measured=performance.now();scene?.clearPointer();};
     const schedule=()=>{if(alive&&!frame&&!lost&&!document.hidden&&runtime.current.enabled&&!runtime.current.reduced)frame=requestAnimationFrame(tick);};
     const tick=(now:number)=>{
       frame=0;if(!scene||!alive||lost||document.hidden||!runtime.current.enabled||runtime.current.reduced)return;
-      if(now-last>=1000/30){scene.step(last?(now-last)/1000:1/30);last=now;}
-      schedule();
+      const interval=1000/60,due=now-phase;
+      if(phase&&due<interval-.25){schedule();return;}
+      scene.step(last?(now-last)/1000:1/60);last=now;frames++;
+      phase=phase?phase+Math.max(1,Math.floor((due+.25)/interval))*interval:now;
+      if(import.meta.env.DEV&&now-measured>=1000){target.dataset.fps=(frames*1000/(now-measured)).toFixed(1);frames=0;measured=now;}
+      if(scene.moving)schedule();
     };
     const wake=()=>{stop();schedule();};
     const resize=()=>{scene?.resize();wake();};
@@ -26,6 +31,7 @@ export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme
         scene?.clearPointer();return;
       }
       scene?.movePointer(event.clientX,event.clientY);
+      schedule();
     };
     const leave=()=>scene?.clearPointer();
     const lose=(event:Event)=>{event.preventDefault();lost=true;stop();delete target.dataset.gpuReady;};
@@ -49,12 +55,12 @@ export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme
     return()=>{
       alive=false;stop();observer.disconnect();events.forEach(([el,name,handler])=>el.removeEventListener(name,handler));
       scene?.source.removeEventListener('webglcontextlost',lose);scene?.source.removeEventListener('webglcontextrestored',restore);
-      scene?.dispose();delete target.dataset.gpuReady;
+      scene?.dispose();target.remove();
     };
   },[theme]);
   useEffect(()=>{window.dispatchEvent(new Event('tongzhuo:table-motion'));},[enabled,effects.reduced]);
   return <div className="game-background" data-table-theme={theme} aria-hidden="true">
     <div className="table-object-fallback">{Array.from({length:12},(_,i)=><span key={i}>{['♠','♥','♦','♣'][i%4]}</span>)}</div>
-    <canvas ref={canvas} className="table-object-canvas"/>
+    <div ref={surface} className="table-object-surface"/>
   </div>;
 }
