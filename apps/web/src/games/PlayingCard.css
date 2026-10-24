@@ -1,0 +1,25 @@
+:root{--playing-card-large-width:60px;--playing-card-large-height:88px;--playing-card-small-width:32px;--playing-card-small-height:46px}
+:where(.playing-card-group){position:relative;padding-top:26px}
+.card-hand{display:flex;align-items:flex-start;justify-content:center;width:100%;padding:34px 0 4px;min-height:calc(var(--playing-card-large-height) + 38px)}
+.card-hand>.playing-card+.playing-card{margin-left:min(-24px,calc((100% - var(--hand-count)*var(--playing-card-large-width))/max(1,var(--hand-count) - 1)))}
+.card-hand>button.selected{transform:translateY(-32px)}
+.playing-card{--card-corner-size:16px;--card-pip-size:30px;display:block;position:relative;flex:0 0 auto;width:var(--playing-card-large-width);height:var(--playing-card-large-height);padding:0;border:1px solid #d9ded8;border-radius:6px;background:#fffef8;box-shadow:0 3px 7px #0003;color:#1d2734;text-align:left;user-select:none;outline-offset:3px;transform:translateY(calc(-1 * var(--card-lift,0px)));transition:transform .22s cubic-bezier(.2,.75,.25,1),border-color .15s,box-shadow .15s}
+.playing-card.red{color:#b25254}
+.playing-card.mini{--card-corner-size:10px;--card-pip-size:17px;width:var(--playing-card-small-width);height:var(--playing-card-small-height);border-radius:3px}
+.card-corner{position:absolute;top:5px;left:6px;display:flex;flex-direction:column;align-items:center;font:var(--card-corner-size)/1.1 Arial,sans-serif}
+.card-corner b{font-weight:600}.card-corner i{font-style:normal;font-size:.75em;margin-top:1px}
+.card-pip{position:absolute;top:50%;left:50%;transform:translate(-50%,-35%);font:var(--card-pip-size)/1 Arial,"Segoe UI Symbol",sans-serif}
+.mini .card-corner{top:3px;left:3px}.mini .card-pip{left:61%;top:56%}
+.card-corner.card-joker-corner{top:6px;left:4px;font-size:9px;line-height:1;letter-spacing:.4px;writing-mode:vertical-rl;text-orientation:upright}
+.mini .card-joker-corner{top:3px;left:2px;font-size:6px;letter-spacing:0}
+.card-pip.card-joker{top:51%;left:63%;transform:translate(-50%,-50%);font-family:"Segoe UI Symbol",serif}
+.playing-card.card-marked{border-color:#d6b779}.card-marker{position:absolute;top:4px;right:4px;padding:2px;border-radius:2px;background:#554330;color:#fff1d4;font:8px/1 'Noto Sans SC',sans-serif;font-style:normal}
+.mini .card-marker{top:2px;right:2px;padding:1px;font-size:6px}
+.playing-card.selected{border:2px solid #c7a992;box-shadow:0 0 0 2px #e7b7a233}.playing-card:disabled{opacity:1;cursor:default}
+.playing-card-group .playing-card:disabled{pointer-events:none}
+.playing-card.card-back{background:#283244;border:2px solid #b5bdce;box-shadow:0 3px 6px #0002}
+.card-back::after{content:'';position:absolute;inset:2px;border:1px solid #7e8ca366;border-radius:1px;background:repeating-linear-gradient(45deg,transparent,transparent 3px,#c3d0ee0d 3px,#c3d0ee0d 4px)}
+.card-back-pattern{position:absolute;inset:0;display:grid;place-items:center;color:#9caac3;font:16px Arial,sans-serif}
+@media(min-width:1600px){:root{--playing-card-large-width:65px;--playing-card-large-height:96px}}
+@media(max-width:1100px){:root{--playing-card-large-width:52px;--playing-card-large-height:78px;--playing-card-small-width:28px;--playing-card-small-height:42px}.playing-card.large{--card-corner-size:14px;--card-pip-size:26px}.playing-card.mini{--card-corner-size:9px;--card-pip-size:15px}}
+@media(max-height:800px){:root{--playing-card-large-width:49px;--playing-card-large-height:68px;--playing-card-small-width:28px;--playing-card-small-height:42px}.playing-card.large{--card-corner-size:14px;--card-pip-size:26px}}

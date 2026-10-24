@@ -14,7 +14,7 @@ const observe=(run:StoredRun<ChessState>,actor:string|null)=>viewChess(run.state
 // Keep every public event and legal action available; only avoid duplicating the full state in prompts.
 function promptView(run:StoredRun<ChessState>,actor:string){const v=observe(run,actor);return {revision:v.revision,you:actor,color:v.players[v.viewer!].color,turn:v.turn,players:v.players,fen:v.fen,board:v.board,check:v.check,phase:v.phase,drawOffer:v.drawOffer,claimable:v.claimable,halfmoveClock:v.halfmoveClock,repetitions:v.repetitions,events:v.events,legalActions:v.legalActions};}
 export const definition:GameModule<ChessState>={
-  id:'chess',version:'1.0.0',stateVersion:1,name:'国际象棋',description:'黑白之间，步步为营。交换先后，在同一张桌上继续较量。',tagline:'标准对弈',presentation:{english:'CHESS',symbol:'♙',tone:'cool'},
+  id:'chess',version:'1.0.0',stateVersion:1,name:'国际象棋',description:'黑白之间，步步为营。交换先后，在同一张桌上继续较量。',tagline:'标准对弈',presentation:{english:'CHESS',symbol:'♟\uFE0E',tone:'cool'},
   minPlayers:2,maxPlayers:2,defaultPlayers:2,defaultConfig:DEFAULT_CHESS_OPTIONS,runNoun:'局',validateConfig:validateChessOptions,
   rules:()=>CHESS_RULES,lifecycle:{sessionScope:'run',eagerAgents:false},
   activity:run=>({phase:run.state.phase==='finished'?'本局已结束':new Chess(run.state.fen).isCheck()?'将军':'行棋中',detail:`第 ${run.index} 局 · ${COLOR_NAMES[run.state.players[run.state.turn].color]}行棋`}),

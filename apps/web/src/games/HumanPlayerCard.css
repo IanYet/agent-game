@@ -1,0 +1,13 @@
+.human-player-card{padding:17px 22px 13px;flex:none;min-width:0}
+.human-player-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:52px;min-width:0}
+.human-player-identity{flex:1;min-width:0}.human-player-caption{display:block;font:25px/1 Anton,Arial,sans-serif;letter-spacing:-.2px;color:#c8cbd7}
+.human-player-name-row{display:flex;align-items:center;gap:10px;margin-top:5px;min-width:0}.human-player-name-row>strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:20px;font-weight:400;line-height:1.3}.human-player-badges{display:flex;align-items:center;gap:8px;flex:none;font-size:10px;color:#b9c3d5}.human-player-badges .tag{font-size:8px}
+.human-player-metrics{display:flex;align-items:baseline;gap:18px;flex:none}.human-player-metrics>span{display:flex;align-items:baseline;gap:5px;white-space:nowrap}.human-player-metrics b{font:32px/1 Anton,sans-serif;color:#d9dfed}.human-player-metrics small{font-size:9px;color:#a9b4ca}
+.human-player-content{min-width:0}.human-player-actions{min-width:0;margin-top:12px}.human-player-card>.player-table-actions{margin-top:12px;padding-top:12px}
+.human-player-content:has(>.card-hand)+.human-player-actions{margin-top:0}
+.human-player-card .hand{position:relative;min-height:110px;padding:34px 0 4px;justify-content:safe center}
+.human-player-card .action-area{min-height:43px;padding:8px 0 0;justify-content:space-between;flex-wrap:wrap;gap:10px}.human-player-card .action-area .button{min-height:36px;padding:8px 18px;font-size:12px;gap:10px}.human-player-card .bid-actions,.human-player-card .play-actions{margin-left:auto}.human-player-card .waiting-label{min-height:28px;display:flex;align-items:center}
+.human-player-note{margin:8px 0;font-size:10px;line-height:1.7;color:#aeb8ca}
+@media(min-width:1600px){.human-player-card{padding:20px 28px 16px}}
+@media(max-width:1100px){.human-player-card{padding:14px 17px 11px}.human-player-heading{min-height:46px}.human-player-caption{font-size:22px}.human-player-name-row>strong{font-size:18px}.human-player-card .hand{min-height:95px}.human-player-metrics{gap:10px}}
+@media(max-height:800px){.human-player-card{padding-top:12px;padding-bottom:10px}.human-player-caption{font-size:20px}.human-player-name-row{margin-top:4px}.human-player-name-row>strong{font-size:16px}.human-player-card .hand{min-height:87px}.human-player-card .action-area .button{min-height:33px;padding:7px 14px}}

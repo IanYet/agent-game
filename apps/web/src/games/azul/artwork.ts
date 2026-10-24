@@ -19,7 +19,11 @@ export function paintTile(ctx:CanvasRenderingContext2D,index:number,x=0,y=0,size
   ctx.strokeStyle='#ffffff80';ctx.beginPath();ctx.moveTo(16,7);ctx.lineTo(84,7);ctx.stroke();ctx.restore();
 }
 export function paintAzulSymbol(ctx:CanvasRenderingContext2D){
-  ctx.save();ctx.rotate(.08);ctx.shadowColor='#070c2466';ctx.shadowBlur=5;
-  for(let y=0;y<2;y++)for(let x=0;x<2;x++)paintTile(ctx,[0,4,4,0][y*2+x],-77+x*78,-77+y*78,76);
+  ctx.save();ctx.rotate(.08);
+  for(let y=0;y<2;y++)for(let x=0;x<2;x++){
+    ctx.save();ctx.translate(-77+x*78,-77+y*78);ctx.scale(.76,.76);
+    ctx.beginPath();ctx.roundRect(2,2,96,96,12);ctx.fill();ctx.stroke();
+    const motif=new Path2D(motifs[[0,4,4,0][y*2+x]]);ctx.fill(motif,'evenodd');ctx.stroke(motif);ctx.restore();
+  }
   ctx.restore();
 }

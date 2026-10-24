@@ -1,0 +1,9 @@
+aside.table-rail.game-sidebar{position:relative;display:flex;flex-direction:column;gap:12px;align-self:stretch;min-height:0;height:auto;padding:var(--game-rail-offset,0px) 0 0;margin:0;overflow:visible;scrollbar-gutter:auto}
+.game-sidebar>.identity-shell:first-child{flex:0 1 auto;min-height:0;max-height:calc(100% - 132px)}
+.game-sidebar>.identity-shell:first-child>.identity-card{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.game-sidebar>.identity-shell:has(>.game-activity){flex:1 1 0;min-height:120px;max-height:none}
+.game-sidebar .game-activity{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+.game-sidebar .game-activity .event-heading{flex:none}
+.game-sidebar .game-activity .event-list{flex:1;min-height:0;max-height:none;height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.game-activity-empty{font-size:11px;line-height:1.8;color:var(--muted);padding:10px 0}
+@media(max-width:900px){aside.table-rail.game-sidebar{height:clamp(260px,70svh,520px);padding:0}}

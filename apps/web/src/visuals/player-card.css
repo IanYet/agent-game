@@ -5,6 +5,15 @@
 .agent-conversation-button:hover{background:#ffffff0a;box-shadow:0 0 0 1px #e7b7a244}
 .agent-conversation-button:focus-visible{outline:1px solid var(--warm);outline-offset:3px}
 .player-agent-number{position:absolute;right:0;bottom:-1px;font:8px/1.2 Arial,sans-serif;letter-spacing:.5px;color:#8c98af}
+.player-has-footer{display:flex;flex-direction:column}
+.player-card-footer{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:12px;flex:none;height:36px;min-height:36px;max-height:36px;min-width:0;margin:12px 0 0;border-top:1px solid #ffffff18;overflow:hidden}
+.player-card-footer[data-has-action="false"]{grid-template-columns:minmax(0,1fr)}
+.player-card-status,.player-card-action{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:10px/14px 'Noto Sans SC',sans-serif;color:#aeb8ca}
+.player-card-action{color:#ddc6b5;text-align:right}
+.player-table-actions-with-status{display:flex;align-items:center;gap:16px;min-width:0}
+.player-table-status{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:11px/1.6 'Noto Sans SC',sans-serif;color:#aeb8ca}
+.player-table-controls{flex:none;min-width:0}
+.player-table-controls .game-actions{justify-content:flex-end}
 [data-player-state="folded"]>.identity-card{box-shadow:none;border-color:#292d36}
 [data-player-state="folded"] .player-agent-avatar{opacity:.4}
 [data-player-state="thinking"] .player-agent-number,[data-player-state="connecting"] .player-agent-number{color:#e7c3ae}

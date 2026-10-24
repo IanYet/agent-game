@@ -4,6 +4,33 @@ import {cardProjection,compositeFoil,compositePlane} from './foil-card';
 // retained scroll offsets, foreignObject snapshots or private input values are used.
 const SIZE=256;
 const intersects=(a:DOMRect,b:{left:number;top:number;right:number;bottom:number})=>a.right>b.left&&a.left<b.right&&a.bottom>b.top&&a.top<b.bottom;
+const splitLayers=(value:string)=>{
+  let depth=0,start=0;const parts:string[]=[];
+  for(let i=0;i<value.length;i++){if(value[i]==='(')depth++;else if(value[i]===')')depth--;else if(value[i]===','&&depth===0){parts.push(value.slice(start,i).trim());start=i+1;}}
+  parts.push(value.slice(start).trim());return parts;
+};
+function paintBoardGameGradients(ctx:CanvasRenderingContext2D,image:string,rect:DOMRect){
+  for(const layer of splitLayers(image).reverse()){
+    const match=layer.match(/^(linear-gradient|radial-gradient|repeating-linear-gradient)\((.*)\)$/);if(!match)continue;
+    const parts=splitLayers(match[2]),radial=match[1]==='radial-gradient',repeating=match[1]==='repeating-linear-gradient';
+    const direction=parts[0].match(/deg$|\bat\b|^ellipse|^circle/)?parts.shift()!:radial?'at 50% 50%':'180deg';
+    const stops=parts.map((part,index)=>{const stop=part.match(/^(.*\S)\s+([\d.]+)(%|px)$/);return {color:stop?.[1]??part,position:stop?Number(stop[2]):index/(parts.length-1),unit:stop?.[3]??'fraction'};});
+    const addStops=(gradient:CanvasGradient,length:number)=>{for(const stop of stops){const position=stop.unit==='%'?stop.position/100:stop.unit==='px'?stop.position/length:stop.position;gradient.addColorStop(Math.max(0,Math.min(1,position)),stop.color);}};
+    ctx.save();
+    if(radial){
+      const center=direction.match(/at\s+([\d.]+)%\s+([\d.]+)%/),cx=rect.x+rect.width*Number(center?.[1]??50)/100,cy=rect.y+rect.height*Number(center?.[2]??50)/100;
+      const rx=Math.max(cx-rect.left,rect.right-cx)*Math.SQRT2,ry=Math.max(cy-rect.top,rect.bottom-cy)*Math.SQRT2;
+      if(rx&&ry){ctx.translate(cx,cy);ctx.scale(rx,ry);const gradient=ctx.createRadialGradient(0,0,0,0,0,1);addStops(gradient,Math.max(rx,ry));ctx.fillStyle=gradient;ctx.fillRect((rect.x-cx)/rx,(rect.y-cy)/ry,rect.width/rx,rect.height/ry);}
+    }else{
+      const angle=(parseFloat(direction)||0)*Math.PI/180,dx=Math.sin(angle),dy=-Math.cos(angle),length=Math.abs(rect.width*dx)+Math.abs(rect.height*dy),cx=rect.x+rect.width/2,cy=rect.y+rect.height/2;
+      if(repeating){
+        const period=stops.at(-1)?.position??10,extent=rect.width+rect.height;
+        if(period>0){ctx.translate(cx,cy);ctx.rotate(angle-Math.PI/2);for(let offset=-Math.ceil(extent/period)*period;offset<extent;offset+=period){const gradient=ctx.createLinearGradient(offset,0,offset+period,0);addStops(gradient,period);ctx.fillStyle=gradient;ctx.fillRect(offset,-extent,period,extent*2);}}
+      }else{const gradient=ctx.createLinearGradient(cx-dx*length/2,cy-dy*length/2,cx+dx*length/2,cy+dy*length/2);addStops(gradient,length);ctx.fillStyle=gradient;ctx.fillRect(rect.x,rect.y,rect.width,rect.height);}
+    }
+    ctx.restore();
+  }
+}
 export class LensCompositor {
   readonly canvas=document.createElement('canvas');
   sampleMs=0;
@@ -21,7 +48,14 @@ export class LensCompositor {
       if(el===root)return new DOMRect(0,0,root.offsetWidth,root.offsetHeight);
       if(el instanceof HTMLElement){
         let left=root.clientLeft,top=root.clientTop,node:HTMLElement|null=el;
-        while(node&&node!==root){left+=node.offsetLeft;top+=node.offsetTop;node=node.offsetParent as HTMLElement|null;}
+        while(node&&node!==root){
+          left+=node.offsetLeft;top+=node.offsetTop;
+          // offsetTop/Left describe layout and omit the hand's animated lift.
+          // Keep child translations in the foil plane before projecting it.
+          const transform=getComputedStyle(node).transform;
+          if(transform!=='none'){const matrix=new DOMMatrixReadOnly(transform);left+=matrix.m41;top+=matrix.m42;}
+          node=node.offsetParent as HTMLElement|null;
+        }
         for(let parent=el.parentElement;parent&&parent!==root;parent=parent.parentElement){left-=parent.scrollLeft;top-=parent.scrollTop;}
         return new DOMRect(left-root.scrollLeft,top-root.scrollTop,el.offsetWidth,el.offsetHeight);
       }
@@ -52,6 +86,10 @@ export class LensCompositor {
         if(el.matches('.r-accordion-panel')){const a=155*Math.PI/180,dx=Math.sin(a),dy=-Math.cos(a),length=Math.abs(rect.width*dx)+Math.abs(rect.height*dy),x=rect.x+rect.width/2,y=rect.y+rect.height/2,gradient=ctx.createLinearGradient(x-dx*length/2,y-dy*length/2,x+dx*length/2,y+dy*length/2);gradient.addColorStop(0,'#171923');gradient.addColorStop(.7,'#0d1017');gradient.addColorStop(1,'#0d1017');ctx.fillStyle=gradient;}
         ctx.beginPath();ctx.roundRect(rect.x,rect.y,rect.width,rect.height,corners);ctx.fill();
       }
+      const boardAsset=!!el.closest('.board-game-layout')&&el.matches('.azul-factory,.azul-center,.sp-card,.sp-deck,.sp-noble,.ct-building');
+      if(boardAsset&&style.backgroundImage!=='none'){
+        ctx.save();ctx.beginPath();ctx.roundRect(rect.x,rect.y,rect.width,rect.height,corners);ctx.clip();paintBoardGameGradients(ctx,style.backgroundImage,rect);ctx.restore();
+      }
       if(el.matches('.identity-card:not(:has(.identity-material))')){
         // Same foil palette, live highlight position and fine grain as the DOM surface.
         ctx.save();ctx.beginPath();ctx.roundRect(rect.x,rect.y,rect.width,rect.height,corners);ctx.clip();
@@ -75,7 +113,12 @@ export class LensCompositor {
         ctx.restore();
       }
       if(el.matches('.effects-preference .choice-group>button[aria-pressed="true"]')){ctx.fillStyle='#e7b7a288';ctx.fillRect(rect.left+12,rect.bottom-1,Math.max(0,rect.width-24),1);}
-      if(el instanceof HTMLCanvasElement){
+      if(el.closest('.board-game-layout')&&style.outlineStyle!=='none'&&parseFloat(style.outlineWidth)>0){
+        const width=parseFloat(style.outlineWidth),offset=(parseFloat(style.outlineOffset)||0)+width/2;ctx.strokeStyle=style.outlineColor;ctx.lineWidth=width;ctx.beginPath();ctx.roundRect(rect.x-offset,rect.y-offset,rect.width+offset*2,rect.height+offset*2,corners);ctx.stroke();
+      }
+      if(el instanceof HTMLImageElement&&el.matches('.azul-tile')){
+        if(el.complete&&el.naturalWidth){ctx.filter=style.filter==='none'?'none':style.filter;ctx.drawImage(el,rect.x,rect.y,rect.width,rect.height);ctx.filter='none';}
+      }else if(el instanceof HTMLCanvasElement){
         if(el.width&&el.height){
           const sampleStarted=performance.now();
           ctx.filter=style.filter==='none'?'none':style.filter;if(style.mixBlendMode==='screen')ctx.globalCompositeOperation='screen';
@@ -89,7 +132,7 @@ export class LensCompositor {
         }
       }else if(el instanceof SVGSVGElement){
         const view=el.viewBox.baseVal;ctx.translate(rect.x,rect.y);ctx.scale(rect.width/(view.width||24),rect.height/(view.height||24));ctx.translate(-view.x,-view.y);ctx.strokeStyle=style.stroke==='none'?style.color:style.stroke;ctx.lineWidth=Number(el.getAttribute('stroke-width')??2);ctx.lineCap='round';ctx.lineJoin='round';
-        for(const shape of el.children){let path:Path2D|undefined;const n=(name:string)=>Number(shape.getAttribute(name)??0);ctx.save();const transforms=(shape as SVGGraphicsElement).transform?.baseVal;if(transforms)for(let i=0;i<transforms.numberOfItems;i++){const m=transforms.getItem(i).matrix;ctx.transform(m.a,m.b,m.c,m.d,m.e,m.f);}if(shape.tagName==='ellipse'){path=new Path2D();path.ellipse(n('cx'),n('cy'),n('rx'),n('ry'),0,0,Math.PI*2);}else if(shape.tagName==='path')path=new Path2D(shape.getAttribute('d')??'');else if(shape.tagName==='line'){path=new Path2D();path.moveTo(n('x1'),n('y1'));path.lineTo(n('x2'),n('y2'));}else if(shape.tagName==='circle'){path=new Path2D();path.arc(n('cx'),n('cy'),n('r'),0,Math.PI*2);}else if(shape.tagName==='polyline'||shape.tagName==='polygon'){const points=(shape.getAttribute('points')??'').trim().split(/[ ,]+/).map(Number);path=new Path2D();for(let i=0;i<points.length;i+=2)i?path.lineTo(points[i],points[i+1]):path.moveTo(points[i],points[i+1]);if(shape.tagName==='polygon')path.closePath();}else if(shape.tagName==='rect'){path=new Path2D();path.roundRect(n('x'),n('y'),n('width'),n('height'),n('rx'));}if(path)ctx.stroke(path);ctx.restore();}
+        for(const shape of el.children){let path:Path2D|undefined;const n=(name:string)=>Number(shape.getAttribute(name)??0);ctx.save();const transforms=(shape as SVGGraphicsElement).transform?.baseVal;if(transforms)for(let i=0;i<transforms.numberOfItems;i++){const m=transforms.getItem(i).matrix;ctx.transform(m.a,m.b,m.c,m.d,m.e,m.f);}if(shape.tagName==='ellipse'){path=new Path2D();path.ellipse(n('cx'),n('cy'),n('rx'),n('ry'),0,0,Math.PI*2);}else if(shape.tagName==='path')path=new Path2D(shape.getAttribute('d')??'');else if(shape.tagName==='line'){path=new Path2D();path.moveTo(n('x1'),n('y1'));path.lineTo(n('x2'),n('y2'));}else if(shape.tagName==='circle'){path=new Path2D();path.arc(n('cx'),n('cy'),n('r'),0,Math.PI*2);}else if(shape.tagName==='polyline'||shape.tagName==='polygon'){const points=(shape.getAttribute('points')??'').trim().split(/[ ,]+/).map(Number);path=new Path2D();for(let i=0;i<points.length;i+=2)i?path.lineTo(points[i],points[i+1]):path.moveTo(points[i],points[i+1]);if(shape.tagName==='polygon')path.closePath();}else if(shape.tagName==='rect'){path=new Path2D();path.roundRect(n('x'),n('y'),n('width'),n('height'),n('rx'));}if(path){if(el.matches('.sp-gem,.sp-card-scene')){const paint=getComputedStyle(shape);ctx.globalAlpha=opacity*Number(paint.opacity);if(paint.fill!=='none'){ctx.fillStyle=paint.fill;ctx.fill(path,paint.fillRule==='evenodd'?'evenodd':'nonzero');}if(paint.stroke!=='none'){ctx.strokeStyle=paint.stroke;ctx.lineWidth=parseFloat(paint.strokeWidth)||1;ctx.stroke(path);}}else ctx.stroke(path);}ctx.restore();}
       }else{
         const children=Array.from(el.childNodes).sort((a,b)=>{const z=(n:Node)=>n instanceof Element?Number.parseInt(getComputedStyle(n).zIndex)||0:0;return z(a)-z(b);});
         for(const child of children){

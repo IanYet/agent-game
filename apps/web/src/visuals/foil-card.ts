@@ -1,25 +1,16 @@
-import {paintRuby} from '../games/splendor/artwork';
-import {paintAzulSymbol} from '../games/azul/artwork';
+import {paintGameSymbol} from './game-symbol';
+import {paintFoilTexture} from './foil-texture';
 export type FoilLabel={symbol:string;english:string;tone:'warm'|'cool'};
-const symbolPainters:Record<string,(context:CanvasRenderingContext2D)=>void>={'❖':paintAzulSymbol,'💎':paintRuby};
 const WIDTH=218,HEIGHT=294;
 // Canvas reproduces the approved CSS foil layers; the lens uses this very same frame.
 export function paintFoil(canvas:HTMLCanvasElement,label:FoilLabel,x=.5,y=.5,time=0){
   if(canvas.width!==WIDTH*2||canvas.height!==HEIGHT*2){canvas.width=WIDTH*2;canvas.height=HEIGHT*2;}
   const ctx=canvas.getContext('2d')!;ctx.setTransform(2,0,0,2,0,0);ctx.clearRect(0,0,WIDTH,HEIGHT);
-  // CSS conic gradients start at twelve o'clock, Canvas starts at three o'clock.
-  const gradient=ctx.createConicGradient(label.tone==='warm'?0:Math.PI*.5,x*WIDTH,y*HEIGHT);
-  const colors=label.tone==='warm'?['#7e8ba5','#cec3a9','#525b77','#8d747f','#b2bfbb','#787c9f','#bcb7a7','#7e8ba5']:['#6b88a2','#b0acd3','#627d87','#a5c8c5','#857b9e','#b6b9ce','#677d9f','#6b88a2'];
-  colors.forEach((color,i)=>gradient.addColorStop(i/(colors.length-1),color));ctx.fillStyle=gradient;ctx.fillRect(0,0,WIDTH,HEIGHT);
-  ctx.save();ctx.globalCompositeOperation='soft-light';ctx.globalAlpha=.55;ctx.lineWidth=1;
-  for(const [slope,spacing,color] of [[.445,3,'#ffffff33'],[-2.14,5,'#00000022']] as const){ctx.strokeStyle=color;for(let i=-HEIGHT*3;i<WIDTH+HEIGHT*3;i+=spacing){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i-HEIGHT*slope,HEIGHT);ctx.stroke();}}ctx.restore();
-  ctx.save();ctx.translate(WIDTH*.5,HEIGHT*.5);ctx.rotate(-25*Math.PI/180);ctx.lineWidth=1;ctx.globalAlpha=.7;
-  for(const ring of [0,25,50,76]){ctx.strokeStyle=ring===0?'#eff8ff55':'#edf6ff44';ctx.beginPath();ctx.ellipse(0,0,WIDTH*.5+90+ring,HEIGHT*.5+70+ring,0,0,Math.PI*2);ctx.stroke();}ctx.restore();
+  paintFoilTexture(ctx,WIDTH,HEIGHT,x,y,label.tone);
   ctx.save();ctx.globalCompositeOperation='hard-light';ctx.textAlign='center';ctx.textBaseline='middle';ctx.translate(WIDTH*.5,HEIGHT*.5-(label.tone==='cool'?18:8));
   if(label.tone==='cool')ctx.rotate(-16*Math.PI/180);
-  const painter=symbolPainters[label.symbol];
-  if(painter){if(label.symbol==='💎')ctx.globalCompositeOperation='source-over';painter(ctx);}
-  else{ctx.font=label.symbol==='3'?'400 198px Anton':'400 210px Arial, "Segoe UI Symbol", sans-serif';ctx.fillStyle='#090c1744';ctx.strokeStyle='#f0eff1a1';ctx.lineWidth=1;ctx.shadowOffsetX=1;ctx.shadowOffsetY=2;ctx.shadowBlur=1;ctx.shadowColor='#ffffff22';ctx.fillText(label.symbol,0,0);ctx.strokeText(label.symbol,0,0);}ctx.restore();
+  ctx.fillStyle='#090c1744';ctx.strokeStyle='#f0eff1a1';ctx.lineWidth=1;ctx.shadowOffsetX=1;ctx.shadowOffsetY=2;ctx.shadowBlur=1;ctx.shadowColor='#ffffff22';
+  paintGameSymbol(ctx,label.symbol);ctx.restore();
   ctx.fillStyle='#e9edf2dc';ctx.font='8px Arial';ctx.letterSpacing='2.5px';ctx.fillText('HUMAN × AGENT',18,24);ctx.letterSpacing='.6px';
   ctx.fillStyle='#eff1ed';ctx.font='400 22px Anton';ctx.fillText(label.english,18,HEIGHT-37);ctx.font='6px Arial';ctx.letterSpacing='1px';ctx.fillText('ANOTHER MIND. YOUR NEXT MOVE.',18,HEIGHT-18);ctx.letterSpacing='0px';
   // The original 4.8 s diagonal screen-blended sweep, in addition to the cursor reflection.

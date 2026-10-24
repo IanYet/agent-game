@@ -1,10 +1,14 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useState} from 'react';
 import {cardLabel} from '@agent-game/core';
 import type {ControlledView,GameUiProps,StoredRun} from '../../runtime/types';
-import {PlayerCard,PlayerCardAvatar,playerCardState} from '../../visuals/PlayerCard';
+import {playerCardState} from '../../visuals/PlayerCard';
+import {StatusTag} from '../../UiBits';
 import {FoilPanel} from '../../visuals/FoilPanel';
-import {BaoHandDrawer} from './HandDrawer';
-import {BaoPlayingCard} from './PlayingCard';
+import {PokerTable} from '../PokerTable';
+import {AgentPlayerCard} from '../AgentPlayerCard';
+import {HumanPokerPlayerCard} from '../HumanPokerPlayerCard';
+import {GameLayout,PlayerCardGrid,SpectatorTableActions} from '../GameLayout';
+import {baoCardMarker} from './card-marker';
 import {beats,classify,rankName} from './engine';
 import type {BaoAction,BaoRole,BaoState,BaoView} from './types';
 import './style.css';
@@ -16,48 +20,25 @@ export function BaoConfigFields({value,onChange}:{value:any;onChange:(value:any)
 }
 export function BaoTable({state,controller,onError,tableActions}:GameUiProps){
   const game=state.game as ControlledView<BaoView>,[selected,setSelected]=useState<string[]>([]),[hintIndex,setHintIndex]=useState(0);
-  const [drawerSeat,setDrawerSeat]=useState<number|null>(null),[drawerOpen,setDrawerOpen]=useState(false),[drawerOrigin,setDrawerOrigin]=useState<DOMRect|null>(null);
-  const drawerTrigger=useRef<HTMLButtonElement|null>(null);
   const own=game.viewer===null?undefined:game.players[game.viewer],finished=game.phase==='finished';
   const active=(seat:number)=>!finished&&(game.phase==='declare'?!game.ready.includes(seat):game.turn===seat);
   const ownTurn=!!own&&active(own.seat)&&!state.paused;
   const chosen=(own?.hand??[]).filter(c=>selected.includes(c.id)),combination=classify(chosen),canPlay=ownTurn&&game.phase==='playing'&&beats(chosen,game.lastPlay?.cards??null);
   useEffect(()=>{setSelected(old=>old.filter(id=>own?.hand?.some(c=>c.id===id)));setHintIndex(0);},[game.revision,game.id,game.round]);
-  useEffect(()=>{setSelected([]);setDrawerOpen(false);},[game.id,game.round]);
-  useEffect(()=>{
-    if(drawerSeat!==null||!drawerTrigger.current)return;
-    let last=0;const first=requestAnimationFrame(()=>{last=requestAnimationFrame(()=>{drawerTrigger.current?.focus({preventScroll:true});drawerTrigger.current=null;});});
-    return()=>{cancelAnimationFrame(first);cancelAnimationFrame(last);};
-  },[drawerSeat]);
+  useEffect(()=>{setSelected([]);},[game.id,game.round]);
   const act=(a:BaoAction)=>{try{controller.humanAction(a);}catch(e:any){onError(e.message);}};
   const visual=(p:typeof game.players[number])=>playerCardState({active:active(p.seat),paused:state.paused,finished,runtime:state.seats.find(s=>s.playerId===p.playerId)});
-  const status=(p:typeof game.players[number])=>p.rank?rankName(p.rank):finished?'未走完':game.phase==='declare'?(game.ready.includes(p.seat)?'已确认':'等待确认'):active(p.seat)?state.paused?'已暂停':p.kind==='human'?'轮到你了':state.seats.find(s=>s.playerId===p.playerId)?.message??'等待行动':'等待回合';
-  const last=(seat:number)=>{const a=game.lastActions[seat];return a==='pass'?'让过':a?a.label:'—';};
+  const status=(p:typeof game.players[number])=>p.rank?rankName(p.rank):finished?'未走完':state.paused?'已暂停':game.phase==='declare'&&game.ready.includes(p.seat)?'已确认':active(p.seat)?p.kind==='human'?'轮到你了':state.seats.find(s=>s.playerId===p.playerId)?.message??(game.phase==='declare'?'等待确认':'等待行动'):'等待回合';
+  const last=(seat:number)=>{const a=game.lastActions[seat];return a==='pass'?'让过':a?a.label:game.phase==='enthrone'||game.phase==='declare'?game.events.filter(e=>e.seat===seat).at(-1)?.text??'':'';};
   const role=(p:typeof game.players[number])=>p.role?roles[p.role]:'身份未公开';
   const hint=()=>{const choices=game.legalActions.filter(c=>c.action.type==='play');if(!choices.length){onError('没有能逐张压过上家的牌，请让过');return;}setSelected(choices[hintIndex%choices.length].cards!.map(c=>c.id));setHintIndex(i=>i+1);};
   const select=(id:string)=>setSelected(old=>old.includes(id)?old.filter(c=>c!==id):[...old,id]);
-  const openDrawer=(seat:number,button:HTMLButtonElement)=>{drawerTrigger.current=button;button.focus({preventScroll:true});setDrawerOrigin(button.getBoundingClientRect());setDrawerSeat(seat);setDrawerOpen(true);};
-  const drawerPlayer=drawerSeat===null?undefined:game.players[drawerSeat];
-  return <div className="table-layout bao-layout"><section className="game-surface bao-main" data-game-surface="baohuang" aria-label="山东保皇牌桌">
-    <div className="table-toolbar"><span>第 <b>{game.round}</b> 局 · JJ标准固定保 · 底分 {game.baseScore}</span><span>{game.phase==='playing'?`第${game.trick}轮 · `:''}{phases[game.phase]} · 逆时针 1 → 5</span></div>
-    <div className="bao-seats" data-count={own?4:5}>{game.players.filter(p=>p.seat!==game.viewer).map(p=><PlayerCard key={p.playerId} state={visual(p)} className="bao-seat" aria-label={`${p.name}的玩家卡`}>
-      <div className="bao-player-top"><PlayerCardAvatar kind={p.kind} seat={p.seat} showNumber={false}/><div><small>SEAT {String(p.seat+1).padStart(2,'0')}</small><strong title={p.name}>{p.name}</strong></div><b className="bao-count">{p.count}<small>张</small></b></div>
-      <div className={`bao-role ${p.role==='emperor'||p.role==='solo'?'bao-royal':''}`}>{role(p)}</div><p data-player-status>{status(p)}</p>
-      {p.hand&&<button className="bao-view-hand" disabled={!p.hand.length} aria-label={`查看${p.name}的手牌`} aria-haspopup="dialog" onClick={e=>openDrawer(p.seat,e.currentTarget)}>{p.hand.length?`查看手牌 · ${p.hand.length}张 ↗`:'手牌已出完'}</button>}
-      <div className="bao-seat-last">{last(p.seat)}</div>
-    </PlayerCard>)}</div>
-    <div className="bao-arena"><div className="bao-court-mark" aria-hidden="true">♛</div><span className="identity-caption">THE CROWN & THE SECRET.</span>
-      <h2>{finished?(game.result?.winner==='royal'?'保皇派获胜':game.result?.winner==='civilian'?'平民获胜':'和局'):state.paused?'牌局已暂停':game.phase==='enthrone'?`${game.players[game.emperor].name}决定皇位`:game.phase==='declare'?'全体同时确认开局':`${game.players[game.turn!].name}${game.lastPlay?'跟牌':'领牌'}`}</h2>
-      <p className="bao-public-status">👑 {game.players[game.emperor].name} · {game.guardPublic?(game.guard===game.emperor?'独保':`⚔ ${game.players[game.guard!].name}`):'侍卫身份未公开'} · {game.open?'明保 ×2':'暗保 ×1'}</p>
-      {game.lastPlay?<div className="bao-last-play"><small>{game.players[game.lastPlay.seat].name} · {game.lastPlay.label}</small><div>{game.lastPlay.cards.map(c=><BaoPlayingCard key={c.id} card={c}/>)}</div></div>:<p className="bao-arena-help">{game.phase==='enthrone'?'皇牌可向上家传递，不贴牌；五次让位后原持有人登基。':game.phase==='declare'?`已确认 ${game.ready.length} / 5 · 侍卫选择与其他人的准备同时提交，保护暗保身份。`:'领牌可出任意套牌 · 跟牌同张数且逐张严格变大'}</p>}
-      <div className="bao-ranking">{game.order.length?game.order.map((at,i)=><span key={at}><b>{rankName(i+1)}</b> {game.players[at].name}</span>):<span>尚无玩家走完</span>}</div>
-      {finished&&<div className="bao-result"><p>{game.result?.reason} · {game.result?.solo?(game.result.open?'明独保':'暗独保'):game.result?.open?'明保':'暗保'}</p><div>{game.players.map(p=><span key={p.playerId}>{p.name}<b className={(game.result?.deltas[p.seat]??0)>0?'positive':''}>{(game.result?.deltas[p.seat]??0)>0?'+':''}{game.result?.deltas[p.seat]}</b><small>{p.rank?rankName(p.rank):`未走（${game.order.length+1}–5名）`}</small></span>)}</div></div>}
-    </div>
-    {own?<PlayerCard state={visual(own)} primary className="bao-own" data-player-surface data-cursor-lens="off" aria-label="我的保皇手牌与操作">
-      <div className="bao-own-heading"><PlayerCardAvatar kind={own.kind} seat={own.seat}/><strong>{own.name}</strong><span className="bao-role">{role(own)}</span><span>{own.count}张 · 累计 {own.score}</span><small data-player-status>{status(own)}</small></div>
-      <div className="bao-hand-overview"><button className="button outline bao-open-hand" aria-haspopup="dialog" onClick={e=>openDrawer(own.seat,e.currentTarget)}>打开我的手牌 <b>{own.count}</b><span>↗</span></button><div className="bao-selected-preview" aria-label="当前选牌">{chosen.length?<><strong>已选 {chosen.length} 张</strong><span>{chosen.slice(0,10).map(c=><BaoPlayingCard key={c.id} card={c} small/>)}{chosen.length>10&&<b>+{chosen.length-10}</b>}</span></>:<p>手牌按点数整理在牌册中，可随时打开浏览。</p>}</div></div>
-      <div className="bao-controls">{ownTurn&&game.phase!=='playing'?<><p>{game.phase==='declare'&&own.hand?.some(c=>c.mark==='guard')?'你持有侍卫牌。明保会公开身份并翻倍；暗保私下辅佐皇帝。':game.phase==='declare'?'你的准备不会宣布自己是否为侍卫。':'登基后由你首引；让位只交出皇牌。'}</p><div>{game.legalActions.map(a=><button key={a.id} className={`button ${a.id==='open'||a.id==='cede'?'outline':'primary'}`} onClick={()=>act(a.action)}>{a.label}</button>)}</div></>:ownTurn&&game.phase==='playing'?<><p>{selected.length?(combination?`${combination.label}${canPlay?' · 可以出牌':' · 不能压过上一手'}`:'选牌须为同点套牌，可挂大小王'):'打开手牌册选择；提示可循环合法组合'}</p><div><button className="button outline" disabled={!game.lastPlay} onClick={()=>act({type:'pass'})}>让过</button><button className="button outline" onClick={hint}>提示</button><button className="button outline" disabled={!selected.length} onClick={()=>setSelected([])}>清空</button><button className="button primary" disabled={!canPlay} onClick={()=>act({type:'play',cards:selected})}>出牌{selected.length?` (${selected.length})`:''}</button></div></>:<p>{finished?'本局已保存，准备下一局后重新洗牌。':state.paused?'继续后恢复当前回合。':'等待其他玩家行动。'}</p>}</div><div className="player-table-actions">{tableActions}</div>
-    </PlayerCard>:<div className="spectator-table-actions"><p>观战 · 点击 Agent 光球查看对话 · 身份栏按公开信息展示</p>{tableActions}</div>}
-  </section><aside className="table-rail"><FoilPanel className="bao-scores"><h3>本桌积分 <small>累计</small></h3>{game.players.map(p=><div key={p.playerId}><span><b>{p.name}</b><small>{role(p)}</small></span><strong className={p.score>0?'positive':''}>{p.score>0?'+':''}{p.score}</strong></div>)}</FoilPanel><FoilPanel className="event-card"><div className="event-heading"><h3>牌桌动态</h3><span>{game.events.length} 条</span></div><div className="event-list">{game.events.slice(-35).reverse().map(e=><div className="game-event" key={e.seq}><span className="event-time">{e.seq.toString().padStart(2,'0')}</span><p>{e.seat!==undefined&&<b>{game.players[e.seat].name} </b>}{e.text}</p>{e.cards&&<small>{e.cards.map(c=>`${cardLabel(c)}${c.mark==='emperor'?'👑':c.mark==='guard'?'⚔':''}`).join(' ')}</small>}</div>)}</div></FoilPanel></aside>{drawerPlayer&&<BaoHandDrawer name={drawerPlayer.name} seat={drawerPlayer.seat} hand={drawerPlayer.hand??[]} own={drawerPlayer.seat===game.viewer} editable={game.phase==='playing'} open={drawerOpen&&!!drawerPlayer.hand} origin={drawerOrigin} selected={selected} onSelect={select} onClear={()=>setSelected([])} onHint={ownTurn&&game.phase==='playing'?hint:undefined} onClose={()=>setDrawerOpen(false)} onExited={()=>setDrawerSeat(null)}/>}</div>;
-}
-export function BaoReplay({run}:{run:StoredRun<BaoState>}){return <><p>JJ标准固定保 · {run.state.result?.reason} · 底分 {run.state.baseScore}</p><div className="replay-events">{run.state.events.map(e=><div key={e.seq}><span>{String(e.seq).padStart(2,'0')}</span><p>{e.seat!==undefined&&<b>{run.roster[e.seat].name} </b>}{e.text}{e.cards&&<small>{e.cards.map(c=>`${cardLabel(c)}${c.mark==='emperor'?'👑':c.mark==='guard'?'⚔':''}`).join(' ')}</small>}</p></div>)}</div></>;}
+  const publicActions=game.players.map(p=>{const a=game.lastActions[p.seat];return a==='pass'?{label:'让过',pass:true}:a?{label:a.label,cards:a.cards.map(card=>({card,marker:baoCardMarker(card)}))}:game.phase==='declare'&&game.ready.includes(p.seat)?{label:'已确认'}:null;});
+  const publicRoles=`👑 ${game.players[game.emperor].name} · ${game.guardPublic?(game.guard===game.emperor?'独保':`⚔ ${game.players[game.guard!].name}`):'侍卫身份未公开'} · ${game.open?'明保 ×2':'暗保 ×1'}`;
+  const preparation=game.phase==='enthrone'?{title:`${game.players[game.emperor].name}决定皇位`,text:'皇牌可向上家传递，不贴牌；五次让位后原持有人登基。'}:game.phase==='declare'?{title:`全体确认开局 · ${game.ready.length} / 5`,text:'侍卫选择与其他人的准备同时提交，保护暗保身份。'}:undefined;
+  return <GameLayout gameId="baohuang" label="山东保皇牌桌" toolbar={<><span>第 <b>{game.round}</b> 局 · JJ标准固定保 · 底分 {game.baseScore}</span><span>{game.phase==='playing'?`第${game.trick}轮 · `:''}{phases[game.phase]} · 逆时针 1 → 5</span></>} score={<FoilPanel className="bao-scores"><h3>本桌积分 <small>累计</small></h3>{game.players.map(p=><div key={p.playerId}><span><b>{p.name}</b><small>{role(p)}</small></span><strong className={p.score>0?'positive':''}>{p.score>0?'+':''}{p.score}</strong></div>)}</FoilPanel>} events={game.events} eventPlayers={game.players} renderEventDetail={event=>event.cards&&<span className="event-card-labels">{event.cards.map(c=>`${cardLabel(c)}${c.mark==='emperor'?'👑':c.mark==='guard'?'⚔':''}`).join(' ')}</span>}>
+    <PokerTable players={game.players} actions={publicActions} status={finished?'本局已结束':state.paused?'牌局已暂停':game.phase==='declare'?'等待全体确认':`${game.players[game.turn??game.emperor].name}的回合`} caption={publicRoles} notice={preparation} result={game.result?{title:game.result.winner==='royal'?'保皇派获胜':game.result.winner==='civilian'?'平民获胜':'和局',detail:`${game.result.reason} · ${game.result.solo?(game.result.open?'明独保':'暗独保'):game.result.open?'明保':'暗保'}`,scores:game.players.map(p=>({name:p.name,delta:game.result!.deltas[p.seat],detail:p.rank?rankName(p.rank):`未走（${game.order.length+1}–5名）`}))}:undefined}/>
+    <PlayerCardGrid count={own?4:5}>{game.players.filter(p=>p.seat!==game.viewer).map(p=><AgentPlayerCard key={p.playerId} player={p} state={visual(p)} caption={role(p)} status={status(p)} action={last(p.seat)} hand={{count:p.count,cards:p.hand?.map(card=>({card,marker:baoCardMarker(card)}))}}/>)}</PlayerCardGrid>
+    {own?<HumanPokerPlayerCard state={visual(own)} aria-label="我的保皇手牌与操作" player={own} badges={<StatusTag>{role(own)}</StatusTag>} hand={(own.hand??[]).map(card=>({card,marker:baoCardMarker(card),selected:selected.includes(card.id),disabled:!ownTurn||game.phase!=='playing',onClick:()=>select(card.id)}))} status={`${status(own)} · 累计 ${own.score}`} actions={<>{ownTurn&&game.phase!=='playing'?<><div className="selection-label">{game.phase==='declare'&&own.hand?.some(c=>c.mark==='guard')?'你持有侍卫牌。明保会公开身份并翻倍；暗保私下辅佐皇帝。':game.phase==='declare'?'你的准备不会宣布自己是否为侍卫。':'登基后由你首引；让位只交出皇牌。'}</div><div className="play-actions">{game.legalActions.map(a=><button key={a.id} className={`button ${a.id==='open'||a.id==='cede'?'outline':'primary'}`} onClick={()=>act(a.action)}>{a.label}</button>)}</div></>:ownTurn&&game.phase==='playing'?<><div className="selection-label">{selected.length?(combination?`${combination.label}${canPlay?' · 可以出牌':' · 不能压过上一手'}`:'选牌须为同点套牌，可挂大小王'):'点击手牌选择；提示可循环合法组合'}</div><div className="play-actions"><button className="button outline" disabled={!game.lastPlay} onClick={()=>act({type:'pass'})}>让过</button><button className="button outline" onClick={hint}>提示</button><button className="button outline" disabled={!selected.length} onClick={()=>setSelected([])}>清空</button><button className="button primary" disabled={!canPlay} onClick={()=>act({type:'play',cards:selected})}>出牌{selected.length?` (${selected.length})`:''}</button></div></>:<div className="selection-label">{finished?'本局已保存，准备下一局后重新洗牌。':state.paused?'继续后恢复当前回合。':'等待其他玩家行动。'}</div>}</>} tableActions={tableActions}/>:<SpectatorTableActions notice="观战中 · 点击 Agent 光球查看对话 · 身份栏按公开信息展示">{tableActions}</SpectatorTableActions>}
+  </GameLayout>;
+}export function BaoReplay({run}:{run:StoredRun<BaoState>}){return <><p>JJ标准固定保 · {run.state.result?.reason} · 底分 {run.state.baseScore}</p><div className="replay-events">{run.state.events.map(e=><div key={e.seq}><span>{String(e.seq).padStart(2,'0')}</span><p>{e.seat!==undefined&&<b>{run.roster[e.seat].name} </b>}{e.text}{e.cards&&<small>{e.cards.map(c=>`${cardLabel(c)}${c.mark==='emperor'?'👑':c.mark==='guard'?'⚔':''}`).join(' ')}</small>}</p></div>)}</div></>;}

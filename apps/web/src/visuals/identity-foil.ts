@@ -1,13 +1,16 @@
 // The printed foil tilts below a separate, stationary GlareHover-style cover.
+import {paintFoilGlare} from './foil-texture';
+
 function prepare(canvas:HTMLCanvasElement,width:number,height:number){
   const ratio=Math.min(window.devicePixelRatio||1,1.5);
   const w=Math.max(1,Math.round(width*ratio)),h=Math.max(1,Math.round(height*ratio));
   if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
   const ctx=canvas.getContext('2d')!;ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,width,height);return ctx;
 }
-export function paintIdentity(canvas:HTMLCanvasElement,width:number,height:number,x:number,y:number,illumination=1){
+export function paintIdentity(canvas:HTMLCanvasElement,width:number,height:number,x:number,y:number,illumination=1,radialGlare=false){
   const ctx=prepare(canvas,width,height);
   const base=ctx.createLinearGradient(0,0,width,height);base.addColorStop(0,'#2f344a');base.addColorStop(.48,'#10131b');base.addColorStop(1,'#272630');ctx.fillStyle=base;ctx.fillRect(0,0,width,height);
+  if(radialGlare){ctx.save();ctx.globalCompositeOperation='screen';ctx.globalAlpha=.32*Math.min(1,illumination);paintFoilGlare(ctx,width,height,x,y,'silver');ctx.restore();}
   ctx.strokeStyle='#d4d6ea0b';ctx.lineWidth=1;
   for(let i=-height;i<width+height;i+=4){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i-height*.47,height);ctx.stroke();}
   const tint=ctx.createLinearGradient(0,height,width,0);tint.addColorStop(0,'#ba7c7c14');tint.addColorStop(.5,'#9494bb00');tint.addColorStop(1,'#8e9fc714');ctx.fillStyle=tint;ctx.fillRect(0,0,width,height);

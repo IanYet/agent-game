@@ -22,6 +22,9 @@ export function paintGem(ctx:CanvasRenderingContext2D,color:Gem,x:number,y:numbe
   if(color==='gold'){ctx.fillStyle=palette[1];ctx.fillRect(-.2,-.1,.4,.07);ctx.fillRect(-.15,.05,.3,.07);}
   ctx.restore();
 }
-export function paintRuby(ctx:CanvasRenderingContext2D){
-  ctx.save();ctx.rotate(-.16);ctx.shadowColor='#41051988';ctx.shadowOffsetY=9;ctx.shadowBlur=14;paintGem(ctx,'red',0,0,99);ctx.restore();
+export function paintSplendorSymbol(ctx:CanvasRenderingContext2D){
+  const outline=gemOutline('red');ctx.save();ctx.rotate(-.16);ctx.scale(99,99);ctx.lineWidth/=99;
+  ctx.beginPath();outline.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.beginPath();outline.forEach(([x,y],i)=>i?ctx.lineTo(x*.47,y*.47):ctx.moveTo(x*.47,y*.47));ctx.closePath();
+  for(const [x,y] of outline){ctx.moveTo(x,y);ctx.lineTo(x*.47,y*.47);}ctx.stroke();ctx.restore();
 }

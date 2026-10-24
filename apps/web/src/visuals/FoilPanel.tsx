@@ -3,8 +3,8 @@ import {paintIdentity,paintIdentityGlass} from './identity-foil';
 import {useEffectsPreference} from './preferences';
 import {cardTilt,cardPerspective} from './card-tilt';
 
-export type FoilPanelProps=HTMLAttributes<HTMLDivElement>&{primary?:boolean;illumination?:number};
-export function FoilPanel({children,className='',primary=false,illumination=1,...props}:FoilPanelProps){
+export type FoilPanelProps=HTMLAttributes<HTMLDivElement>&{primary?:boolean;illumination?:number;radialGlare?:boolean};
+export function FoilPanel({children,className='',primary=false,illumination=1,radialGlare=false,...props}:FoilPanelProps){
   const root=useRef<HTMLDivElement>(null),face=useRef<HTMLDivElement>(null),canvas=useRef<HTMLCanvasElement>(null),film=useRef<HTMLCanvasElement>(null);
   const lighting=useRef<(value:number)=>void>(undefined);
   const {reduced}=useEffectsPreference();
@@ -15,7 +15,7 @@ export function FoilPanel({children,className='',primary=false,illumination=1,..
     const paint=()=>{
       const tilt=cardTilt(.5+(current.x-.5)*current.tilt,.5+(current.y-.5)*current.tilt,card.offsetWidth,card.offsetHeight);
       card.style.transform=reduced?'none':`perspective(${cardPerspective(card.offsetWidth,card.offsetHeight)}px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`;
-      paintIdentity(source,card.clientWidth,card.clientHeight,current.x,current.y,current.light);
+      paintIdentity(source,card.clientWidth,card.clientHeight,current.x,current.y,current.light,radialGlare);
       paintIdentityGlass(film.current!,element.clientWidth,element.clientHeight,current.x,current.y,current.presence,intro,current.light);
     };
     const frame=(now:number)=>{
@@ -42,7 +42,7 @@ export function FoilPanel({children,className='',primary=false,illumination=1,..
     const intersection=new IntersectionObserver(([entry])=>{visible=entry.isIntersecting;if(visible&&!seen){seen=true;intro=reduced?1:0;}wake();},{threshold:.05});intersection.observe(element);
     element.addEventListener('pointerenter',enter);element.addEventListener('pointermove',move);element.addEventListener('pointerleave',leave);element.addEventListener('focusin',focus);element.addEventListener('focusout',blur);document.addEventListener('visibilitychange',wake);paint();
     return()=>{lighting.current=undefined;cancelAnimationFrame(raf);resize.disconnect();intersection.disconnect();element.removeEventListener('pointerenter',enter);element.removeEventListener('pointermove',move);element.removeEventListener('pointerleave',leave);element.removeEventListener('focusin',focus);element.removeEventListener('focusout',blur);document.removeEventListener('visibilitychange',wake);};
-  },[reduced]);
+  },[reduced,radialGlare]);
   useEffect(()=>{lighting.current?.(illumination);},[illumination]);
   return <div {...props} ref={root} className="identity-shell" data-foil-light={illumination}><div ref={face} className={`identity-card ${primary?'player-primary ':''}${className}`}><canvas ref={canvas} className="identity-material" aria-hidden="true"/>{children}</div><canvas ref={film} className="identity-glass" aria-hidden="true"/></div>;
 }

@@ -13,20 +13,33 @@ import {FrameProfiler} from './frame-profiler';
 const vertex='varying vec2 v_uv;void main(){v_uv=uv;gl_Position=vec4(position.xy,0.,1.);}';
 // The stock FXAA threshold skips the deliberately dark YOUR MOVE outlines.
 const antialiasFragment=FXAAShader.fragmentShader.replace('float _ContrastThreshold = 0.0312;','float _ContrastThreshold = 0.006;');
+const lensExclusionLimit=16;
 const lensFragment=String.raw`
 varying vec2 v_uv;
 uniform sampler2D u_page;
 uniform vec2 u_pointer;
-uniform vec4 u_gameRect;
+uniform vec4 u_exclusions[16];
+uniform int u_exclusionCount;
+bool excluded(vec2 point){
+  for(int i=0;i<16;i++){
+    if(i>=u_exclusionCount)break;
+    vec4 rect=u_exclusions[i];
+    if(point.x>=rect.x&&point.y>=rect.y&&point.x<=rect.z&&point.y<=rect.w)return true;
+  }
+  return false;
+}
 void main(){
   vec2 screen=u_pointer+(v_uv-.5)*vec2(200.,-200.);
-  if(screen.x>=u_gameRect.x&&screen.y>=u_gameRect.y&&screen.x<=u_gameRect.z&&screen.y<=u_gameRect.w)discard;
+  if(excluded(screen))discard;
   vec2 p=(v_uv-.5)*2.;float r=length(p);if(r>=1.)discard;
   float dome=max(0.,1.-r*r);
   float bend=.46*pow(dome,1.25)+.055*smoothstep(.48,.82,r)*(1.-smoothstep(.82,1.,r));
   vec2 uv=.5+(v_uv-.5)*(1.-bend)*200./256.;
   float split=(.4+6.6*r*r*r)*smoothstep(.30,.83,r)/256.;
   vec2 chroma=normalize(p+vec2(.0001))*split;
+  vec2 source=u_pointer+(uv-.5)*vec2(256.,-256.);
+  vec2 fringe=chroma*vec2(256.,-256.);
+  if(excluded(source)||excluded(source+fringe)||excluded(source-fringe))discard;
   vec3 color=vec3(texture2D(u_page,uv+chroma).r,texture2D(u_page,uv).g,texture2D(u_page,uv-chroma).b);
   gl_FragColor=vec4(color,1.-smoothstep(.965,1.,r));
 }`;
@@ -76,7 +89,8 @@ export function VisualExperience({enabled,page}:{enabled:boolean;page:string}){
     let alive=true;document.fonts.ready.then(()=>{if(alive){drawGlyph();heroDirty=true;schedule();}});
     const title=material(titleFragment,{u_glyph:{value:glyphTexture},u_paint:{value:paintTexture},u_res:{value:new Vector2()},u_time:{value:0},u_progress:{value:0}});
     const compositor=new LensCompositor(),pageTexture=texture(compositor.canvas);
-    const lensMaterial=material(lensFragment,{u_page:{value:pageTexture},u_pointer:{value:new Vector2()},u_gameRect:{value:new Vector4(-2,-2,-1,-1)}});
+    const lensExclusions=Array.from({length:lensExclusionLimit},()=>new Vector4());
+    const lensMaterial=material(lensFragment,{u_page:{value:pageTexture},u_pointer:{value:new Vector2()},u_exclusions:{value:lensExclusions},u_exclusionCount:{value:0}});
     const dimensions=(canvas:HTMLCanvasElement)=>{
       const r=canvas.getBoundingClientRect();
       const ratio=Math.min(Math.max(1.5,devicePixelRatio||1),2,Math.sqrt(5e6/Math.max(1,r.width*r.height)),3072/Math.max(1,r.width),2048/Math.max(1,r.height));
@@ -129,7 +143,7 @@ export function VisualExperience({enabled,page}:{enabled:boolean;page:string}){
     const visualFrame=()=>{if(allowed())invalidate();};
     const transition=(event:Event)=>{
       const target=event.target as Element;
-      const duration=target.closest?.('.tz-gallery-scope')?1300:target.closest?.('.cursor-lens-toggle')?250:0;
+      const duration=target.closest?.('.tz-gallery-scope')?1300:target.matches?.('.playing-card')?300:target.closest?.('.ui-switch')?250:0;
       if(duration){visualMotionUntil=Math.max(visualMotionUntil,performance.now()+duration);invalidate();}
     };
     const tick=(now:number)=>{
@@ -189,8 +203,15 @@ export function VisualExperience({enabled,page}:{enabled:boolean;page:string}){
         const paintStarted=performance.now();compositor.paint(pointer.x,pointer.y);pageTexture.needsUpdate=true;
         profiler?.record('canvasSample',compositor.sampleMs);profiler?.record('domPaint',performance.now()-paintStarted-compositor.sampleMs);
         (lensMaterial.uniforms.u_pointer.value as Vector2).set(pointer.x,pointer.y);
-        const blocked=document.querySelector<HTMLElement>('[data-player-surface]')?.getBoundingClientRect();
-        (lensMaterial.uniforms.u_gameRect.value as Vector4).set(blocked?.left??-2,blocked?.top??-2,blocked?.right??-1,blocked?.bottom??-1);
+        let exclusionCount=0;
+        for(const element of document.querySelectorAll<HTMLElement>('[data-cursor-lens="off"]')){
+          if(element.parentElement?.closest('[data-cursor-lens="off"]'))continue;
+          const rect=element.getBoundingClientRect();
+          if(!rect.width||!rect.height||rect.right<pointer.x-128||rect.left>pointer.x+128||rect.bottom<pointer.y-128||rect.top>pointer.y+128)continue;
+          lensExclusions[exclusionCount++].set(rect.left-1,rect.top-1,rect.right+1,rect.bottom+1);
+          if(exclusionCount===lensExclusionLimit)break;
+        }
+        lensMaterial.uniforms.u_exclusionCount.value=exclusionCount;
         lens.current.style.transform='translate3d('+(pointer.x-100)+'px,'+(pointer.y-100)+'px,0)';
         lens.current.style.opacity='1';
         profiler?.beginGpu();const submitStarted=performance.now();render(lensMaterial,256,256);profiler?.endGpu();profiler?.record('renderSubmit',performance.now()-submitStarted);
