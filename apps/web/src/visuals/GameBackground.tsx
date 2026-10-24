@@ -4,7 +4,8 @@ import type {TableTheme} from './table-models';
 import type {TablePhysics} from './table-physics';
 import {TILE_IMAGES} from '../games/azul/artwork';
 import {CITADELS_OBJECTS} from '../games/citadels/table-models';
-const fallbackSymbols:Record<TableTheme,string[]>={doudizhu:['♠','♥','♦','♣'],holdem:['♠','♥','♦','♣'],baohuang:['♛','⛨','♟','⚔'],chess:['♔','♕','♖','♗','♘','♙'],azul:[''],citadels:CITADELS_OBJECTS};
+import {GUANDAN_SYMBOLS} from '../games/guandan/table-models';
+const fallbackSymbols:Record<TableTheme,readonly string[]>={doudizhu:['♠','♥','♦','♣'],holdem:['♠','♥','♦','♣'],baohuang:['♛','⛨','♟','⚔'],chess:['♔','♕','♖','♗','♘','♙'],azul:[''],citadels:CITADELS_OBJECTS,guandan:GUANDAN_SYMBOLS};
 
 export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme}){
   const effects=useEffectsPreference();
