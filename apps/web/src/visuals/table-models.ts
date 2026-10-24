@@ -9,8 +9,9 @@ import {ChessTableModels} from '../games/chess/table-models';
 import {SplendorModels} from '../games/splendor/table-models';
 import {AzulTableModels} from '../games/azul/table-models';
 import {CitadelsModels} from '../games/citadels/table-models';
+import {GuandanTableModels} from '../games/guandan/table-models';
 
-export type TableTheme='holdem'|'doudizhu'|'baohuang'|'chess'|'azul'|'citadels'|'splendor';
+export type TableTheme='holdem'|'doudizhu'|'baohuang'|'chess'|'azul'|'citadels'|'splendor'|'guandan';
 type Collider={shape:CollisionShape;offset?:Vec3};
 interface GameModelSet {create:(index:number,scale:number)=>{mesh:Group;colliders:Collider[]};dispose:()=>void}
 
@@ -104,6 +105,7 @@ export class TableModels{
     if(theme==='splendor'){this.gameModels=new SplendorModels();return;}
     if(theme==='azul'){this.gameModels=new AzulTableModels();return;}
     if(theme==='citadels'){this.gameModels=new CitadelsModels();return;}
+    if(theme==='guandan'){this.gameModels=new GuandanTableModels();return;}
     if(theme!=='holdem'&&theme!=='doudizhu')throw new Error(`未注册的牌桌物件主题：${theme}`);
     this.disc=new CircleGeometry(.704,64);this.geometries.push(this.disc);
     this.chipMaterial=this.material({vertexColors:true,roughness:.32,metalness:.22,clearcoat:.6});

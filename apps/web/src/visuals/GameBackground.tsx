@@ -5,7 +5,8 @@ import type {TablePhysics} from './table-physics';
 import {SplendorFallback} from '../games/splendor/gem';
 import {TILE_IMAGES} from '../games/azul/artwork';
 import {CITADELS_OBJECTS} from '../games/citadels/table-models';
-const fallbackSymbols:Record<Exclude<TableTheme,'splendor'>,string[]>={doudizhu:['♠','♥','♦','♣'],holdem:['♠','♥','♦','♣'],baohuang:['♛','⛨','♟','⚔'],chess:['♔','♕','♖','♗','♘','♙'],azul:[''],citadels:CITADELS_OBJECTS};
+import {GUANDAN_SYMBOLS} from '../games/guandan/table-models';
+const fallbackSymbols:Record<Exclude<TableTheme,'splendor'>,readonly string[]>={doudizhu:['♠','♥','♦','♣'],holdem:['♠','♥','♦','♣'],baohuang:['♛','⛨','♟','⚔'],chess:['♔','♕','♖','♗','♘','♙'],azul:[''],citadels:CITADELS_OBJECTS,guandan:GUANDAN_SYMBOLS};
 
 export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme}){
   const effects=useEffectsPreference();
