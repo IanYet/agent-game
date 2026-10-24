@@ -3,6 +3,12 @@ name: Build and release connectors
 # Deliberate manual baseline builds; publishing games never rebuilds a connector.
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: '发布到 Release；不勾选时仅构建并上传产物'
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -40,7 +46,37 @@ jobs:
         with:
           node-version: '24.19.0'
           cache: npm
+      - name: Select a stable Xcode with the current macOS UI SDK
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readdir, appendFile, access } from 'node:fs/promises';
+          import { execFileSync } from 'node:child_process';
+          const candidates = (await readdir('/Applications')).flatMap(name => {
+            const match = /^Xcode_(\d+(?:\.\d+)*)\.app$/.exec(name);
+            return match && Number(match[1].split('.')[0]) >= 26 ? [{ name, parts: match[1].split('.').map(Number) }] : [];
+          }).sort((a, b) => {
+            for (let i = 0; i < Math.max(a.parts.length, b.parts.length); i++) {
+              const difference = (b.parts[i] ?? 0) - (a.parts[i] ?? 0);
+              if (difference) return difference;
+            }
+            return a.name.localeCompare(b.name);
+          });
+          if (!candidates.length) throw new Error('This runner needs stable Xcode 26 or newer.');
+          const developer = `/Applications/${candidates[0].name}/Contents/Developer`;
+          await access(developer);
+          await appendFile(process.env.GITHUB_ENV, `DEVELOPER_DIR=${developer}\n`);
+          const env = { ...process.env, DEVELOPER_DIR: developer };
+          execFileSync('/usr/bin/xcodebuild', ['-version'], { env, stdio: 'inherit' });
+          execFileSync('/usr/bin/xcrun', ['--sdk', 'macosx', '--show-sdk-version'], { env, stdio: 'inherit' });
+          NODE
       - run: npm ci
+      - name: Set up .NET for the native Windows launcher
+        if: runner.os == 'Windows'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
       - run: npm test
       - run: npm run typecheck
       - run: npm run build:web
@@ -58,6 +94,7 @@ jobs:
           retention-days: 14
 
   publish:
+    if: ${{ inputs.publish_release }}
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15

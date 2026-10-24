@@ -11,9 +11,11 @@ export async function preparePayload(destination, runtimeName) {
   await cp(resolve('dist/connector'), join(destination, 'dist/connector'), { recursive: true });
   await copyFile('connector.config.json', join(destination, 'connector.config.json'));
   const { version } = JSON.parse(await readFile('apps/connector/version.json', 'utf8'));
-  const launcher = await readFile('apps/connector/windows/Launcher.cs', 'utf8');
-  for (const attribute of ['AssemblyVersion', 'AssemblyFileVersion']) {
-    if (!launcher.includes(`${attribute}("${version}.0")`)) throw new Error(`Windows ${attribute} must match connector version ${version}.`);
+  for (const file of ['Launcher.cs', 'Bootstrap.cs']) {
+    const launcher = await readFile(`apps/connector/windows/${file}`, 'utf8');
+    for (const attribute of ['AssemblyVersion', 'AssemblyFileVersion']) {
+      if (!launcher.includes(`${attribute}("${version}.0")`)) throw new Error(`Windows ${file} ${attribute} must match connector version ${version}.`);
+    }
   }
   await writeFile(join(destination, 'package.json'), JSON.stringify({ name: 'agent-arcade-connector', version, private: true }) + '\n');
   await cp('THIRD_PARTY_NOTICES.md', join(destination, 'THIRD_PARTY_NOTICES.md'));
@@ -43,10 +45,11 @@ export async function packageMetadata(asset, platform, arch, signing) {
   const protocol = /PROTOCOL_VERSION = (\d+)/.exec(await readFile('packages/protocol/src/index.ts', 'utf8'));
   if (!/^\d+\.\d+\.\d+$/.test(version) || !protocol) throw new Error('Invalid connector version or protocol.');
   const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).trim();
-  if (process.env.CI && execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8', windowsHide: true }).trim()) throw new Error('CI package source must be clean.');
+  const sourceDirty = !!execFileSync('git', ['status', '--porcelain', '--untracked-files=normal'], { encoding: 'utf8', windowsHide: true }).trim();
+  if (process.env.CI && sourceDirty) throw new Error('CI package source must be clean.');
   const bytes = await readFile(asset), sha256 = createHash('sha256').update(bytes).digest('hex');
   const name = asset.split(/[\\/]/).at(-1);
-  const metadata = { schemaVersion: 1, asset: name, version, protocolVersion: Number(protocol[1]), platform, arch, sourceCommit,
+  const metadata = { schemaVersion: 1, asset: name, version, protocolVersion: Number(protocol[1]), platform, arch, sourceCommit, sourceDirty,
     nodeVersion: process.version, builtAt: new Date().toISOString(), sha256, size: bytes.length, signing,
     workflowRun: process.env.GITHUB_RUN_ID ? `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null };
   await writeFile(`${asset}.sha256`, `${sha256}  ${name}\n`);

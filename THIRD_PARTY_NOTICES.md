@@ -5,3 +5,5 @@ The portable connector redistributes Node.js (MIT and third-party licenses; <htt
 Codex is detected from the user's local installation and is not redistributed. The connector uses that installation's existing ChatGPT sign-in. No OpenAI API key or ChatGPT credential is included in this project or portable package.
 
 License texts for redistributed packages and the runtime are included in the portable package's licenses directory by the packaging script.
+
+The Windows launcher also redistributes the self-contained .NET runtime (MIT; https://github.com/dotnet/runtime) and Windows App SDK / WinUI runtime (Microsoft's Windows App SDK redistribution terms; https://aka.ms/windowsappsdk/1.0-license). Their package license and notice files are included in the Windows bundle. SVG icons are rendered at build time using resvg (MPL-2.0; https://github.com/linebender/resvg); this renderer is not required at application runtime.

@@ -11,7 +11,14 @@ import type { ConnectorInfo, HarnessAdapter } from './types';
 import { PROTOCOL_VERSION, CONNECTOR_CAPABILITIES } from '@agent-game/protocol';
 import { dataDirectory, preparePlatformEnvironment } from './platform';
 
+// Private launcher framing. Native windows consume JSON events, never translated
+// log messages. No account credentials, session tokens or RPC payloads go here.
+function launcherEvent(event: Record<string, unknown>) {
+  if (process.env.AGENT_GAME_LAUNCHER === '1') console.log(`TONGZHUO_UI:${JSON.stringify(event)}`);
+}
+
 async function main() {
+  launcherEvent({ event: 'starting' });
   await preparePlatformEnvironment();
   const port = Number(process.env.AGENT_GAME_PORT ?? 3211);
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('AGENT_GAME_PORT 必须是 1024–65535 的端口');
@@ -54,16 +61,27 @@ async function main() {
   }
   const bridge = new LocalBridge(connector, adapters, directory);
   const service = createConnectorServer(bridge, allowedOrigins);
-  bridge.on('connected', () => console.log('AGENT_ARCADE_STATUS:connected'));
-  bridge.on('disconnect', () => console.log('AGENT_ARCADE_STATUS:ready'));
+  bridge.on('connected', () => launcherEvent({ event: 'connection', connected: true }));
+  bridge.on('disconnect', () => launcherEvent({ event: 'connection', connected: false }));
   try { await service.listen(); } catch (error: any) {
-    if (error.code === 'EADDRINUSE') throw new Error(`端口 ${port} 已在使用。连接器可能已经启动，请回网页点击连接。`);
+    if (error.code === 'EADDRINUSE') throw new Error(`端口 ${port} 已被占用。请在连接器窗口的「端口与进程」中重新检测，确认占用者后选择退出或清理。`);
     throw error;
   }
   console.log(`\n  同桌 · Agent Arcade 本地连接器 v${CONNECTOR_VERSION}\n\n  状态：已就绪，等待网页连接\n  监听：127.0.0.1:${port}\n  Harness：${connector.harnesses.filter(h => h.available).map(h => h.name).join('、') || '暂未找到可用 Harness，请查看网页本地连接说明'}\n  Codex：${connector.auth === 'chatgpt' ? '已使用 ChatGPT 订阅登录' : '未就绪；其他 Harness 使用各自登录'}\n\n  现在回到游戏网页，点击「连接本机」。\n  请从${process.platform === 'darwin' ? '菜单栏「同桌」' : '窗口或托盘菜单'}选择「退出连接器」来退出。\n`);
-  console.log('AGENT_ARCADE_STATUS:ready');
+  launcherEvent({ event: 'ready', pid: process.pid, port, version: CONNECTOR_VERSION,
+    harnesses: connector.harnesses.map(({ id, name, available, detail, version }) => ({ id, name, available, detail, version })) });
   let stopping = false;
   const shutdown = async () => { if (stopping) return; stopping = true; await service.close(); process.exit(0); };
   process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);
+  if (process.env.AGENT_GAME_LAUNCHER === '1' && process.platform === 'win32') {
+    const { createInterface } = await import('node:readline');
+    createInterface({ input: process.stdin }).on('line', line => {
+      try { if (JSON.parse(line).command === 'stop') void shutdown(); } catch { /* Ignore malformed private input. */ }
+    }).on('close', () => void shutdown());
+  }
 }
-main().catch(error => { console.error(`\n连接器启动失败：${error.message}\n`); process.exitCode = 1; });
+main().catch(error => {
+  const message = String(error.message ?? error).replace(/Bearer\s+\S+|sk-[A-Za-z0-9_-]+/gi, '[redacted]').slice(0, 2000);
+  launcherEvent({ event: 'error', message });
+  console.error(`\n连接器启动失败：${message}\n`); process.exitCode = 1;
+});

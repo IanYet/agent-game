@@ -1,369 +1,293 @@
-using System;
-using System.ComponentModel;
-using System.Drawing;
-using System.IO;
-using System.IO.Compression;
 using System.Diagnostics;
-using System.Net;
-using System.Net.Http;
 using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Web.Script.Serialization;
-using System.Windows.Forms;
-using Microsoft.Win32.SafeHandles;
+using System.Text.Json;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Windowing;
+using Windows.Graphics;
 
-[assembly: AssemblyTitle("同桌 · 本地连接器")]
-[assembly: AssemblyDescription("Portable local bridge for Agent Arcade")]
-[assembly: AssemblyVersion("0.4.2.0")]
-[assembly: AssemblyFileVersion("0.4.2.0")]
+[assembly: AssemblyTitle("同桌连接器")]
+[assembly: AssemblyProduct("同桌连接器")]
+[assembly: AssemblyVersion("0.4.3.0")]
+[assembly: AssemblyFileVersion("0.4.3.0")]
+[assembly: System.Runtime.Versioning.SupportedOSPlatform("windows10.0.19041.0")]
 
-namespace AgentArcade {
-    internal static class Program {
-        [STAThread]
-        private static int Main(string[] args) {
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            bool headless = Array.IndexOf(args, "--headless") >= 0;
-            if (headless) Console.SetOut(new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true });
-            int exitAfter = 0;
-            foreach (string arg in args) if (arg.StartsWith("--exit-after-ms=")) Int32.TryParse(arg.Substring("--exit-after-ms=".Length), out exitAfter);
-            int port = 3211;
-            string configuredPort = Environment.GetEnvironmentVariable("AGENT_GAME_PORT");
-            if (!String.IsNullOrEmpty(configuredPort) && (!Int32.TryParse(configuredPort, out port) || port < 1024 || port > 65535)) return 2;
-            bool first;
-            using (var instance = new Mutex(true, "Local\\AgentArcade.Connector." + port, out first)) {
-                if (!first) {
-                    if (!headless) MessageBox.Show("本地连接器已经在运行。可从右下角托盘打开窗口，或回到游戏网页连接本机。", "同桌", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return 0;
-                }
-                try {
-                    string root = ExtractPayload();
-                    string sidecar = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "connector.config.json");
-                    if (File.Exists(sidecar)) File.Copy(sidecar, Path.Combine(root, "connector.config.json"), true);
-                    if (headless) {
-                        using (var process = new JobProcess()) { process.Output += line => Console.WriteLine(line); process.Start(root); if (exitAfter > 0) Thread.Sleep(exitAfter); else process.Wait(); }
-                    } else {
-                        Application.Run(new ConnectorWindow(root, port));
-                    }
-                    return 0;
-                } catch (Exception error) {
-                    if (!headless) MessageBox.Show("连接器启动失败：" + error.Message, "同桌", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return 1;
-                } finally { instance.ReleaseMutex(); }
-            }
-        }
+namespace TongZhuo;
 
-        private static string ExtractPayload() {
-            var assembly = Assembly.GetExecutingAssembly();
-            string hash;
-            using (var stream = assembly.GetManifestResourceStream("AgentArcade.Payload"))
-            using (var sha = SHA256.Create()) { hash = BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").Substring(0, 20); }
-            string cache = Path.Combine(Path.GetTempPath(), "AgentArcade", "runtime-" + hash);
-            if (File.Exists(Path.Combine(cache, ".ready"))) return cache;
-            string staging = cache + "-" + Guid.NewGuid().ToString("N");
-            Directory.CreateDirectory(staging);
-            string prefix = Path.GetFullPath(staging).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            using (var stream = assembly.GetManifestResourceStream("AgentArcade.Payload"))
-            using (var archive = new ZipArchive(stream, ZipArchiveMode.Read)) {
-                foreach (var entry in archive.Entries) {
-                    string path = Path.GetFullPath(Path.Combine(staging, entry.FullName));
-                    if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Invalid embedded runtime path.");
-                    if (entry.FullName.EndsWith("/")) { Directory.CreateDirectory(path); continue; }
-                    Directory.CreateDirectory(Path.GetDirectoryName(path));
-                    entry.ExtractToFile(path);
-                }
-            }
-            File.WriteAllText(Path.Combine(staging, ".ready"), hash);
-            if (!Directory.Exists(cache)) { Directory.Move(staging, cache); return cache; }
-            return staging;
-        }
+public partial class App : Application {
+    private Mutex? instance;
+    private MainWindow? window;
+    public App() {
+        UnhandledException += (_, e) => {
+            e.Handled = true;
+            string folder = Environment.GetEnvironmentVariable("AGENT_GAME_DATA_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AgentArcade");
+            Directory.CreateDirectory(folder); File.WriteAllText(Path.Combine(folder, "launcher-error.log"), e.Exception.ToString());
+            StartupMessage(IntPtr.Zero, "连接器界面未能打开：\n" + e.Exception.Message + "\n\n详情：" + Path.Combine(folder, "launcher-error.log"), "同桌连接器", 0x10);
+            Exit();
+        };
+        InitializeComponent();
     }
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "MessageBoxW", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int StartupMessage(IntPtr window, string text, string caption, uint flags);
+    protected override async void OnLaunched(LaunchActivatedEventArgs args) {
+        string? configurationError = null;
+        string raw = Environment.GetEnvironmentVariable("AGENT_GAME_PORT") ?? "3211";
+        if (!int.TryParse(raw, out int port) || port < 1024 || port > 65535) {
+            port = 3211; configurationError = $"AGENT_GAME_PORT「{raw}」无效。请改为 1024–65535 的整数后重新打开连接器。";
+        }
+        instance = new Mutex(true, $"Local\\TongZhuo.Connector.UI.{port}", out bool first);
+        if (!first && await LauncherPipe.SendAsync(port, "show") is not null) { Exit(); return; }
+        window = new MainWindow(port, configurationError ?? (!first ? "另一个连接器窗口未响应，请从它的托盘退出后重试。" : null));
+        window.Activate();
+        await window.InitializeAsync(first);
+    }
+}
 
-    // The job handle is owned ONLY by this launcher, never inherited. Windows
-    // kills all descendants when the handle closes, including if the launcher
-    // is force-killed and managed finally/ProcessExit handlers cannot execute.
-    internal sealed class JobProcess : IDisposable {
-        private IntPtr job = IntPtr.Zero;
-        private IntPtr process = IntPtr.Zero;
-        private readonly object gate = new object();
-        private bool disposed;
-        public event Action<string> Output;
-        public event Action<int> Exited;
+internal sealed class MainWindow : Window {
+    private static readonly Version CurrentVersion = Assembly.GetExecutingAssembly().GetName().Version!;
+    private static readonly string CurrentVersionText = CurrentVersion.ToString(3);
+    internal const string GameUrl = "https://ianyet.github.io/agent-game/";
+    internal const string ReleasesUrl = "https://github.com/IanYet/agent-game/releases/latest";
+    private readonly int port;
+    private readonly string? configurationError;
+    private readonly NavigationView navigation = new() { IsBackButtonVisible = NavigationViewBackButtonVisible.Collapsed, IsSettingsVisible = false, OpenPaneLength = 224, ExpandedModeThresholdWidth = 900 };
+    private readonly Dictionary<string, ScrollViewer> pages = new();
+    private readonly InfoBar status = new() { IsOpen = true, IsClosable = false };
+    private readonly InfoBar portNotice = new() { IsOpen = true, IsClosable = false };
+    private readonly ProgressBar progress = new() { IsIndeterminate = true, Visibility = Visibility.Collapsed };
+    private readonly TextBlock serviceText = Text("正在启动…", true), browserText = Text("等待本机服务"), programsText = Text("正在检测…");
+    private readonly TextBlock versionText = Text("当前版本 v" + CurrentVersionText), updateText = Text("手动检查 GitHub 正式发行版。"), portSummary = Text("");
+    private readonly StackPanel programRows = new() { Spacing = 8 }, listenerRows = new() { Spacing = 8 };
+    private readonly Button start = Button("启动连接器"), stop = Button("停止服务"), scan = Button("重新检测"), detect = Button("重新检测程序"), update = Button("检查更新");
+    private readonly string data = Environment.GetEnvironmentVariable("AGENT_GAME_DATA_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AgentArcade");
+    private JobProcess? process;
+    private LauncherPipe? pipe;
+    private TrayIcon? tray;
+    private bool running, connected, busy, quitting, checking, updateAvailable;
+    private List<PortOwner> owners = new();
+    private string lastError = "";
 
-        public void Start(string root) {
-            job = Native.CreateJobObject(IntPtr.Zero, null);
-            if (job == IntPtr.Zero) throw new Win32Exception();
-            var limits = new Native.ExtendedLimitInformation();
-            limits.BasicLimitInformation.LimitFlags = 0x00002000; // KILL_ON_JOB_CLOSE
-            if (!Native.SetInformationJobObject(job, 9, ref limits, (uint)Marshal.SizeOf(limits))) throw new Win32Exception();
-            var security = new Native.SecurityAttributes();
-            security.Length = Marshal.SizeOf(security); security.InheritHandle = true;
-            IntPtr outputRead, outputWrite, inputRead, inputWrite;
-            if (!Native.CreatePipe(out outputRead, out outputWrite, ref security, 0)) throw new Win32Exception();
-            if (!Native.CreatePipe(out inputRead, out inputWrite, ref security, 0)) { Native.CloseHandle(outputRead); Native.CloseHandle(outputWrite); throw new Win32Exception(); }
-            Native.SetHandleInformation(outputRead, 1, 0); Native.SetHandleInformation(inputWrite, 1, 0);
-            var start = new Native.StartupInfo();
-            start.Size = Marshal.SizeOf(start); start.Flags = 0x00000100;
-            start.StandardInput = inputRead; start.StandardOutput = outputWrite; start.StandardError = outputWrite;
-            var child = new Native.ProcessInformation();
-            string node = Path.Combine(root, "runtime", "node.exe");
-            string entrypoint = Path.Combine(root, "dist", "connector", "index.cjs");
-            var command = new StringBuilder("\"" + node + "\" \"" + entrypoint + "\"");
-            try {
-                // Assign the SUSPENDED child to the job BEFORE any Node code can
-                // execute. This closes the usual spawn/assign orphan race.
-                if (!Native.CreateProcess(node, command, IntPtr.Zero, IntPtr.Zero, true, 0x08000004, IntPtr.Zero, root, ref start, out child)) throw new Win32Exception();
-                process = child.Process;
-                if (!Native.AssignProcessToJobObject(job, process)) { Native.TerminateProcess(process, 1); throw new Win32Exception(); }
-                if (Native.ResumeThread(child.Thread) == UInt32.MaxValue) { Native.TerminateProcess(process, 1); throw new Win32Exception(); }
-            } finally {
-                if (child.Thread != IntPtr.Zero) Native.CloseHandle(child.Thread);
-                Native.CloseHandle(outputWrite); Native.CloseHandle(inputRead); Native.CloseHandle(inputWrite);
+    public MainWindow(int port, string? error) {
+        this.port = port; configurationError = error;
+        Title = "同桌连接器";
+        SystemBackdrop = new MicaBackdrop();
+        double scale = TrayIcon.WindowDpi(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
+        var work = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        int width = Math.Min((int)(1040 * scale), work.Width - (int)(32 * scale));
+        int height = Math.Min((int)(820 * scale), work.Height - (int)(32 * scale));
+        AppWindow.MoveAndResize(new RectInt32(work.X + (work.Width - width) / 2, work.Y + (work.Height - height) / 2, width, height));
+        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "connector.ico"));
+        Content = navigation;
+        navigation.ActualThemeChanged += (_, _) => TrayIcon.CaptionTheme(WinRT.Interop.WindowNative.GetWindowHandle(this), navigation.ActualTheme == ElementTheme.Dark);
+        var brand = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Margin = new Thickness(16, 14, 8, 20) };
+        brand.Children.Add(new Image { Source = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "brand.png"))), Width = 36, Height = 36 });
+        var brandText = new StackPanel(); brandText.Children.Add(Text("同桌", true)); brandText.Children.Add(Text("本地连接器")); brand.Children.Add(brandText); navigation.PaneHeader = brand;
+        AddNavigation("overview", "概览", Symbol.Home); AddNavigation("programs", "可用程序", Symbol.AllApps);
+        AddNavigation("ports", "端口与进程", Symbol.Link); AddNavigation("about", "关于与更新", Symbol.Setting);
+        BuildOverview(); BuildPrograms(); BuildPorts(); BuildAbout();
+        navigation.SelectionChanged += (_, e) => { if (e.SelectedItem is NavigationViewItem item) ShowPage((string)item.Tag); };
+        navigation.SelectedItem = navigation.MenuItems[0];
+        start.Click += async (_, _) => await StartAsync(); stop.Click += async (_, _) => await StopAsync();
+        scan.Click += async (_, _) => await ScanAsync();
+        detect.Click += async (_, _) => {
+            if (running && await ConfirmAsync("重新检测可用程序？", "这会重启本机服务，断开游戏网页并停止本次连接器启动的 Agent 会话。请先暂停牌局。", "重启并检测") != ContentDialogResult.Primary) return;
+            await StopAsync(); await StartAsync();
+        };
+        update.Click += async (_, _) => { if (updateAvailable) Open(ReleasesUrl); else await CheckUpdatesAsync(); };
+        AppWindow.Closing += async (_, e) => { if (!quitting) { e.Cancel = true; if (tray?.Available == true) AppWindow.Hide(); else await QuitAsync(); } };
+        Closed += (_, _) => { tray?.Dispose(); pipe?.Dispose(); process?.Dispose(); Application.Current.Exit(); };
+        UpdateControls();
+    }
+    internal async Task InitializeAsync(bool hostPipe) {
+        try {
+            Directory.CreateDirectory(data);
+            tray = new TrayIcon(WinRT.Interop.WindowNative.GetWindowHandle(this), Restore, () => Open(GameUrl), async () => await QuitAsync());
+            if (hostPipe) pipe = new LauncherPipe(port, () => process?.Pid ?? 0, Restore, async () => await QuitAsync(), DispatcherQueue);
+            if (configurationError is not null) { SetStatus("无法启动", configurationError, InfoBarSeverity.Error); return; }
+            await StartAsync();
+        } catch (Exception e) { SetStatus("无法启动", e.Message, InfoBarSeverity.Error); }
+    }
+    private void AddNavigation(string key, string label, Symbol symbol) => navigation.MenuItems.Add(new NavigationViewItem { Content = label, Tag = key, Icon = new SymbolIcon(symbol) });
+    private void ShowPage(string key) { navigation.Header = key switch { "programs" => "可用程序", "ports" => "端口与进程", "about" => "关于与更新", _ => "概览" }; navigation.Content = pages[key]; if (key == "ports" && !busy) _ = ScanAsync(); }
+    private StackPanel Page(string key) {
+        var panel = new StackPanel { Spacing = 12, MaxWidth = 980, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(28, 8, 28, 28) };
+        pages[key] = new ScrollViewer { Content = panel, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        return panel;
+    }
+    private void BuildOverview() {
+        var p = Page("overview"); p.Children.Add(Text("让游戏网页与本机的 Agent 程序连接。")); p.Children.Add(status); p.Children.Add(progress);
+        p.Children.Add(SettingsRow("本机服务", Symbol.Home, Actions(start, stop), serviceText, Text($"127.0.0.1:{port} · 仅此电脑可访问")));
+        var open = Button("打开游戏网页"); open.Click += (_, _) => Open(GameUrl);
+        p.Children.Add(SettingsRow("游戏网页", Symbol.Link, open, browserText, Text("在网页点击「连接本机」。")));
+        var programs = Button("查看可用程序"); programs.Click += (_, _) => navigation.SelectedItem = navigation.MenuItems[1];
+        p.Children.Add(SettingsRow("Agent 程序", Symbol.AllApps, programs, programsText));
+        p.Children.Add(SettingsRow("后台运行", Symbol.Setting, QuitButton(), Text("关闭窗口会留在托盘，单击图标可恢复；最小化留在任务栏。"), Text("退出会停止本次会话并释放端口。")));
+    }
+    private void BuildPrograms() {
+        var p = Page("programs"); p.Children.Add(Text("连接器检测程序与已有登录。每个程序使用自己的模型目录与推理权限。"));
+        p.Children.Add(detect); p.Children.Add(programRows); programRows.Children.Add(Card("等待检测", Text("本机服务启动后显示各程序的可用状态与原因。")));
+        p.Children.Add(Text("安装或登录后，重新检测。真实推理会使用对应账户额度。"));
+    }
+    private void BuildPorts() {
+        var p = Page("ports"); p.Children.Add(Text($"当前端口 {port}，由 AGENT_GAME_PORT 指定；未设置时使用 3211。检测同时覆盖 IPv4 与 IPv6。"));
+        p.Children.Add(portNotice); p.Children.Add(scan); p.Children.Add(portSummary); p.Children.Add(listenerRows);
+        var retry = Button("重新检测并启动"); retry.Click += async (_, _) => await StartAsync(); p.Children.Add(retry);
+        p.Children.Add(Text("优先从原程序正常退出。强制结束只针对你确认的 PID，可能中断它的任务；清理后会重新检测，不会批量结束同名程序。"));
+    }
+    private void BuildAbout() {
+        var p = Page("about");
+        p.Children.Add(Card("同桌连接器 · Windows 64 位", versionText, Text("WinUI 3 · Windows App SDK · 自带 .NET 与 Node.js"), Text("Windows 10 2004（19041）或更新版本。Windows 11 使用系统 Mica 材质，其他环境由系统提供回退。")));
+        p.Children.Add(Card("更新", updateText, update));
+        var appearance = new ComboBox { Header = "外观", ItemsSource = new[] { "跟随系统", "浅色", "深色" }, SelectedIndex = 0, MinWidth = 180 };
+        appearance.SelectionChanged += (_, _) => navigation.RequestedTheme = appearance.SelectedIndex switch { 1 => ElementTheme.Light, 2 => ElementTheme.Dark, _ => ElementTheme.Default };
+        p.Children.Add(Card("窗口", appearance, Text("使用系统字体和原生控件。高对比度与缩放由 Windows 提供。")));
+        var files = Button("打开数据文件夹"); files.Click += (_, _) => Open(data);
+        p.Children.Add(Card("本机数据", Text(data), files, Text("只保存会话工作目录；游戏存档在浏览器中。")));
+        p.Children.Add(Card("分发状态", Text("当前为未做 Authenticode 签名的便携包。更新会打开官方下载；下载后先退出连接器，再运行新包。"), Text("关闭此窗口不会退出。"), QuitButton()));
+    }
+    private Button QuitButton() { var b = Button("退出连接器"); b.Click += async (_, _) => await QuitAsync(); return b; }
+    private async Task StartAsync() {
+        if (busy || process is not null || configurationError is not null) return;
+        busy = true; progress.Visibility = Visibility.Visible; UpdateControls();
+        try {
+            await InspectAsync();
+            if (owners.Count > 0) {
+                SetStatus("端口被占用", $"端口 {port} 有 {owners.Count} 个监听进程。请到「端口与进程」确认并清理后重试。", InfoBarSeverity.Warning);
+                navigation.SelectedItem = navigation.MenuItems[2]; return;
             }
-            var readHandle = new SafeFileHandle(outputRead, true);
-            var readerThread = new Thread(delegate() {
-                try {
-                    using (var stream = new FileStream(readHandle, FileAccess.Read))
-                    using (var reader = new StreamReader(stream, new UTF8Encoding(false))) {
-                        string line;
-                        while ((line = reader.ReadLine()) != null) { var output = Output; if (output != null) output(line); }
-                    }
-                } catch (IOException) { }
+            Environment.SetEnvironmentVariable("AGENT_GAME_LAUNCHER", "1");
+            Environment.SetEnvironmentVariable("AGENT_GAME_ROOT", AppContext.BaseDirectory);
+            SetStatus("正在启动", "正在检测 Agent 程序与登录。请稍候。", InfoBarSeverity.Informational);
+            serviceText.Text = "启动中"; browserText.Text = "等待本机服务"; lastError = "";
+            var child = new JobProcess(); process = child;
+            child.Output += line => DispatcherQueue.TryEnqueue(() => { if (ReferenceEquals(process, child)) Receive(line); });
+            child.Exited += code => DispatcherQueue.TryEnqueue(() => {
+                if (!ReferenceEquals(process, child)) return;
+                process = null; running = connected = false; child.Dispose(); progress.Visibility = Visibility.Collapsed;
+                serviceText.Text = "已停止"; browserText.Text = "未连接";
+                SetStatus(code == 0 ? "服务已停止" : "服务启动失败", lastError.Length > 0 ? lastError : $"进程退出（代码 {code}）。可重新检测端口后启动。", code == 0 ? InfoBarSeverity.Informational : InfoBarSeverity.Error);
+                UpdateControls();
             });
-            readerThread.IsBackground = true; readerThread.Start();
-            var waitThread = new Thread(delegate() {
-                Native.WaitForSingleObject(process, UInt32.MaxValue);
-                uint code; Native.GetExitCodeProcess(process, out code);
-                var exited = Exited; if (exited != null) exited((int)code);
-            });
-            waitThread.IsBackground = true; waitThread.Start();
-        }
-        public void Wait() { if (process != IntPtr.Zero) Native.WaitForSingleObject(process, UInt32.MaxValue); }
-        public void Dispose() {
-            lock (gate) {
-                if (disposed) return; disposed = true;
-                if (job != IntPtr.Zero) { Native.CloseHandle(job); job = IntPtr.Zero; }
-                if (process != IntPtr.Zero) {
-                    // Explicit exit waits for the owned listener to die.
-                    if (Native.WaitForSingleObject(process, 5000) == 0x00000102) Native.TerminateProcess(process, 1);
-                    Native.CloseHandle(process); process = IntPtr.Zero;
+            child.Start(AppContext.BaseDirectory);
+            navigation.SelectedItem = navigation.MenuItems[0];
+        } catch (Exception e) { process?.Dispose(); process = null; SetStatus("无法启动", e.Message, InfoBarSeverity.Error); progress.Visibility = Visibility.Collapsed; }
+        finally { busy = false; if (process is null) progress.Visibility = Visibility.Collapsed; UpdateControls(); }
+    }
+    private void Receive(string line) {
+        if (!line.StartsWith("TONGZHUO_UI:")) return;
+        try {
+            using var json = JsonDocument.Parse(line["TONGZHUO_UI:".Length..]); var e = json.RootElement;
+            switch (e.GetProperty("event").GetString()) {
+                case "ready":
+                    running = true; connected = false; progress.Visibility = Visibility.Collapsed;
+                    serviceText.Text = "运行中"; browserText.Text = "等待网页连接";
+                    SetStatus("连接器已就绪", "回到游戏网页，点击「连接本机」。", InfoBarSeverity.Success);
+                    programRows.Children.Clear(); int available = 0;
+                    foreach (var h in e.GetProperty("harnesses").EnumerateArray()) {
+                        bool ready = h.GetProperty("available").GetBoolean(); if (ready) available++;
+                        programRows.Children.Add(Card(h.GetProperty("name").GetString() ?? "Agent", Text(ready ? "可用" : "未就绪", true), Text(h.TryGetProperty("detail", out var d) ? d.GetString() ?? "" : ""), Text(h.TryGetProperty("version", out var v) ? v.GetString() ?? "" : "")));
+                    }
+                    programsText.Text = $"{available} 个程序可用"; UpdateControls(); break;
+                case "connection":
+                    connected = e.GetProperty("connected").GetBoolean(); browserText.Text = connected ? "游戏网页已连接" : "等待网页连接";
+                    SetStatus(connected ? "游戏网页已连接" : "连接器已就绪", connected ? "连接器正在为此网页提供本机 Agent 服务。" : "回到游戏网页，点击「连接本机」。", InfoBarSeverity.Success); break;
+                case "error": lastError = e.GetProperty("message").GetString() ?? "未知错误"; SetStatus("服务出错", lastError, InfoBarSeverity.Error); break;
+            }
+        } catch (JsonException) { lastError = "本机服务返回了无法读取的状态，请停止后重新启动。"; }
+    }
+    private async Task StopAsync() {
+        if (busy) return;
+        busy = true; running = connected = false; progress.Visibility = Visibility.Visible; UpdateControls();
+        var child = process; process = null;
+        SetStatus("正在停止", "正在结束本次连接器的会话并释放端口。", InfoBarSeverity.Informational);
+        if (child is not null) await child.StopAsync();
+        busy = false; progress.Visibility = Visibility.Collapsed; serviceText.Text = "已停止"; browserText.Text = "未连接";
+        SetStatus("服务已停止", "可重新启动。窗口与托盘仍在运行。", InfoBarSeverity.Informational); UpdateControls();
+    }
+    private async Task ScanAsync() {
+        if (busy) return; busy = true; UpdateControls(); portNotice.Title = "正在检测"; portNotice.Message = $"读取端口 {port} 的 IPv4 / IPv6 监听信息…";
+        try { await InspectAsync(); } catch (Exception e) { portNotice.Severity = InfoBarSeverity.Error; portNotice.Title = "无法检测"; portNotice.Message = e.Message; }
+        finally { busy = false; UpdateControls(); }
+    }
+    private async Task InspectAsync() {
+        owners = await PortInspector.InspectAsync(port, process?.Pid ?? 0);
+        listenerRows.Children.Clear();
+        portSummary.Text = owners.Count == 0 ? "未发现监听进程。端口可尝试启动；若系统保留该端口，启动时会显示实际错误。" : $"发现 {owners.Count} 个监听进程";
+        portNotice.Severity = owners.Count == 0 ? InfoBarSeverity.Success : InfoBarSeverity.Warning;
+        portNotice.Title = owners.Count == 0 ? "端口空闲" : "确认占用者后再操作";
+        portNotice.Message = owners.Count == 0 ? "点击「重新检测并启动」启动服务。" : "同一进程的多个监听地址已合并。其他程序不会被自动停止。";
+        foreach (var owner in owners) {
+            var graceful = Button(owner.Owned ? "停止本连接器服务" : "请求连接器正常退出");
+            graceful.IsEnabled = owner.Owned || owner.Cooperative;
+            graceful.Click += async (_, _) => {
+                if (owner.Owned) await StopAsync();
+                else {
+                    if (await ConfirmAsync("让此连接器退出？", Describe(owner) + "\n\n将断开它的网页并停止由它启动的全部 Agent 会话。", "请求正常退出") != ContentDialogResult.Primary) return;
+                    var response = await LauncherPipe.SendAsync(port, "quit", owner.Pid);
+                    if (response is null) { portNotice.Title = "未能请求正常退出"; portNotice.Message = "进程可能已退出或未响应，请重新检测。"; return; }
+                    await Task.Delay(800);
                 }
-            }
-        }
-    }
-
-    internal static class UpdateChecker {
-        internal const string DownloadUrl = "https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-Windows-x64.exe";
-        internal static string CurrentVersionText { get { return Assembly.GetExecutingAssembly().GetName().Version.ToString(3); } }
-        internal sealed class Result {
-            internal bool Available;
-            internal string LatestVersion;
-        }
-        public sealed class ReleaseMetadata {
-            public string tag_name { get; set; }
-            public bool draft { get; set; }
-            public bool prerelease { get; set; }
-            public ReleaseAsset[] assets { get; set; }
-        }
-        public sealed class ReleaseAsset { public string name { get; set; } }
-        internal static Result ParseResponse(string json, Version current) {
-            var release = new JavaScriptSerializer().Deserialize<ReleaseMetadata>(json);
-            Version latest;
-            if (release == null || release.draft || release.prerelease || String.IsNullOrEmpty(release.tag_name) || !Version.TryParse(release.tag_name.TrimStart('v', 'V'), out latest)) throw new InvalidDataException("无法识别最新版本。");
-            if (release.assets == null || !Array.Exists(release.assets, asset => asset.name == "TongZhuo-Connector-Windows-x64.exe")) throw new InvalidDataException("最新版本尚未提供 Windows 下载包。");
-            var normalizedLatest = new Version(latest.Major, latest.Minor, Math.Max(0, latest.Build), Math.Max(0, latest.Revision));
-            var normalizedCurrent = new Version(current.Major, current.Minor, Math.Max(0, current.Build), Math.Max(0, current.Revision));
-            return new Result { Available = normalizedLatest > normalizedCurrent, LatestVersion = latest.ToString(latest.Build >= 0 ? 3 : 2) };
-        }
-        internal static async Task<Result> CheckAsync() {
-            // The bundled csc targets the legacy CLR defaults; GitHub requires TLS 1.2.
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            using (var client = new HttpClient()) {
-                client.Timeout = TimeSpan.FromSeconds(12);
-                client.DefaultRequestHeaders.UserAgent.ParseAdd("AgentArcade-Connector/" + CurrentVersionText);
-                client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
-                string json = await client.GetStringAsync("https://api.github.com/repos/IanYet/agent-game/releases/latest").ConfigureAwait(false);
-                return ParseResponse(json, Assembly.GetExecutingAssembly().GetName().Version);
-            }
-        }
-    }
-
-    internal sealed class ConnectorWindow : Form {
-        private readonly JobProcess process = new JobProcess();
-        private readonly Label status = new Label();
-        private readonly Label detail = new Label();
-        private readonly Label account = new Label();
-        private readonly NotifyIcon tray = new NotifyIcon();
-        private readonly Icon appIcon = ConnectorIcon.Load(256);
-        private readonly Icon trayIcon = ConnectorIcon.Load(SystemInformation.SmallIconSize.Width);
-        private readonly Label version = new Label();
-        private readonly Button update = new Button();
-        private readonly string root;
-        private string lastLine = "请确认所选 Harness 已安装并登录；各自使用已有模型目录。";
-        private bool stopping;
-        private bool exitRequested;
-        private bool checkingUpdate;
-        private bool updateAvailable;
-        private static readonly Color Green = Color.FromArgb(43, 97, 76);
-        public ConnectorWindow(string runtimeRoot, int port, bool preview = false) {
-            root = runtimeRoot;
-            SuspendLayout();
-            // Build the complete tree before DPI scaling. Incrementally adding
-            // auto-sized nested panels while scaling is active scales margins
-            // repeatedly on high-DPI desktops.
-            AutoScaleMode = AutoScaleMode.None;
-            Text = "同桌 · 本地连接器"; ClientSize = new Size(560, 540);
-            MinimumSize = new Size(520, 500); MaximizeBox = false;
-            AutoSize = true; AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            StartPosition = FormStartPosition.CenterScreen; BackColor = Color.FromArgb(247, 249, 243);
-            Font = new Font("Microsoft YaHei UI", 10F);
-            Icon = appIcon; tray.Icon = trayIcon;
-            tray.Text = "同桌 · 本地连接器";
-            tray.Visible = !preview;
-            var trayMenu = new ContextMenuStrip();
-            trayMenu.Items.Add("显示窗口", null, delegate { RestoreFromTray(); });
-            trayMenu.Items.Add("检查更新", null, delegate { RestoreFromTray(); CheckForUpdates(); });
-            trayMenu.Items.Add(new ToolStripSeparator());
-            trayMenu.Items.Add("退出连接器", null, delegate { ExitConnector(); });
-            tray.ContextMenuStrip = trayMenu;
-            tray.DoubleClick += delegate { RestoreFromTray(); };
-            Resize += delegate { if (WindowState == FormWindowState.Minimized) HideToTray(); };
-            // The scroll viewport must be separate from the auto-sized table.
-            // A Fill table with a percent filler row can get a negative row
-            // height on a short desktop and never expose its bottom buttons.
-            var viewport = new Panel(); viewport.Dock = DockStyle.Fill; viewport.AutoScroll = true; Controls.Add(viewport);
-            var layout = new TableLayoutPanel(); layout.Dock = DockStyle.Top; layout.Padding = new Padding(28);
-            layout.AutoSize = true; layout.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            layout.ColumnCount = 1; layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            layout.RowCount = 6; for (int i = 0; i < 6; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            viewport.Controls.Add(layout);
-            var heading = new TableLayoutPanel(); heading.AutoSize = true; heading.Dock = DockStyle.Top;
-            heading.AutoSizeMode = AutoSizeMode.GrowAndShrink; heading.RowCount = 1; heading.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            heading.ColumnCount = 2; heading.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56)); heading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            heading.SizeChanged += delegate { FitText(heading); };
-            heading.Margin = new Padding(0, 0, 0, 24);
-            var logo = new LogoPanel(); logo.Size = new Size(39, 39); logo.Margin = new Padding(0, 6, 0, 0); heading.Controls.Add(logo, 0, 0);
-            var titles = Stack(); var title = AddText(titles, "同桌 · 本地连接器", 18F, Green);
-            title.Font = new Font(Font.FontFamily, 18F, FontStyle.Bold);
-            AddText(titles, "WINDOWS  /  PORTABLE", 8F, Color.FromArgb(118, 137, 105)); heading.Controls.Add(titles, 1, 0); layout.Controls.Add(heading, 0, 0);
-            var panel = Stack(); panel.BackColor = Color.White; panel.Padding = new Padding(20); panel.Margin = new Padding(0, 0, 0, 20);
-            ConfigureText(status, "正在启动连接器…", 13F, Green); status.Font = new Font(Font.FontFamily, 13F, FontStyle.Bold); status.Margin = new Padding(0, 0, 0, 10); panel.Controls.Add(status);
-            ConfigureText(account, "正在检测 Codex、dsh 与 WorkBuddy", 10F, Color.FromArgb(104, 124, 91)); panel.Controls.Add(account); layout.Controls.Add(panel, 0, 1);
-            ConfigureText(detail, "启动后，回到游戏网页点击「连接本机」。关闭窗口会继续在托盘运行。", 10F, Color.FromArgb(92, 112, 80)); detail.Margin = new Padding(0, 0, 0, 20); layout.Controls.Add(detail, 0, 2);
-            var updates = Stack(); updates.Margin = new Padding(0, 0, 0, 20);
-            ConfigureText(version, "当前版本 v" + UpdateChecker.CurrentVersionText, 9F, Color.FromArgb(104, 124, 91)); version.Margin = new Padding(0, 0, 0, 10); updates.Controls.Add(version);
-            StyleButton(update, "检查更新", false); update.Click += delegate { if (updateAvailable) OpenUpdateDownload(); else CheckForUpdates(); }; updates.Controls.Add(update); layout.Controls.Add(updates, 0, 3);
-            var address = AddText(layout, "本机地址  127.0.0.1:" + port + "  ·  登录凭据留在本机", 9F, Color.FromArgb(118, 137, 105)); address.Margin = new Padding(0, 0, 0, 18); layout.SetCellPosition(address, new TableLayoutPanelCellPosition(0, 4));
-            var actions = new FlowLayoutPanel(); actions.AutoSize = true; actions.Dock = DockStyle.Top; actions.WrapContents = true; actions.Margin = Padding.Empty;
-            var minimize = new Button(); StyleButton(minimize, "缩到托盘", false); minimize.Click += delegate { HideToTray(); }; actions.Controls.Add(minimize);
-            var exit = new Button(); StyleButton(exit, "退出连接器", true); exit.Click += delegate { ExitConnector(); }; actions.Controls.Add(exit); layout.Controls.Add(actions, 0, 5);
-            // Each text block takes the available column width and grows in
-            // height. The action row never overlaps long status/error messages.
-            layout.SizeChanged += delegate { FitText(layout); }; FitText(layout);
-            AutoScaleMode = AutoScaleMode.Dpi; AutoScaleDimensions = new SizeF(96F, 96F);
-            ResumeLayout(true);
-            process.Output += HandleOutput;
-            process.Exited += delegate(int code) { OnUI(delegate { if (!stopping) { process.Dispose(); status.Text = code == 0 ? "连接器已停止" : "连接器启动失败"; status.ForeColor = Color.FromArgb(166, 105, 72); detail.Text = lastLine; } }); };
-            Shown += delegate { FitText(layout); if (preview) return; try { process.Start(root); } catch (Exception error) { status.Text = "连接器启动失败"; detail.Text = error.Message; process.Dispose(); } };
-            FormClosing += delegate(object sender, FormClosingEventArgs e) {
-                if (e.CloseReason == CloseReason.UserClosing && !exitRequested) { e.Cancel = true; HideToTray(); return; }
-                stopping = true; tray.Visible = false; process.Dispose();
+                await ScanAsync();
             };
-            Disposed += delegate { trayMenu.Dispose(); tray.Dispose(); appIcon.Dispose(); trayIcon.Dispose(); process.Dispose(); };
-        }
-        private void HideToTray() { Hide(); ShowInTaskbar = false; }
-        private void RestoreFromTray() { WindowState = FormWindowState.Normal; ShowInTaskbar = true; Show(); Activate(); }
-        private void ExitConnector() { exitRequested = true; Close(); }
-        private async void CheckForUpdates() {
-            if (checkingUpdate || stopping) return;
-            checkingUpdate = true; update.Enabled = false; update.Text = "检查中…";
-            try {
-                var result = await UpdateChecker.CheckAsync();
-                if (IsDisposed || stopping) return;
-                updateAvailable = result.Available;
-                version.Text = "当前 v" + UpdateChecker.CurrentVersionText + (result.Available ? " · 发现 v" + result.LatestVersion : " · 已是最新版本");
-                update.Text = result.Available ? "下载更新" : "重新检查";
-            } catch {
-                if (IsDisposed || stopping) return;
-                version.Text = "检查失败，请确认网络后重试。"; updateAvailable = false; update.Text = "重试检查";
-            } finally { checkingUpdate = false; if (!IsDisposed && !stopping) update.Enabled = true; }
-        }
-        private void OpenUpdateDownload() {
-            try { Process.Start(new ProcessStartInfo(UpdateChecker.DownloadUrl) { UseShellExecute = true }); }
-            catch { version.Text = "无法打开浏览器，请从游戏网页下载。"; }
-        }
-        private static TableLayoutPanel Stack() {
-            var panel = new TableLayoutPanel(); panel.AutoSize = true; panel.AutoSizeMode = AutoSizeMode.GrowAndShrink; panel.Dock = DockStyle.Top;
-            panel.ColumnCount = 1; panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); panel.Margin = Padding.Empty;
-            panel.GrowStyle = TableLayoutPanelGrowStyle.AddRows;
-            panel.ControlAdded += delegate { panel.RowCount = panel.Controls.Count; while (panel.RowStyles.Count < panel.RowCount) panel.RowStyles.Add(new RowStyle(SizeType.AutoSize)); };
-            panel.SizeChanged += delegate { FitText(panel); }; return panel;
-        }
-        private void ConfigureText(Label label, string text, float size, Color color) {
-            label.AutoSize = true; label.Dock = DockStyle.Top; label.Margin = Padding.Empty;
-            label.Text = text; label.Font = new Font(Font.FontFamily, size); label.ForeColor = color;
-        }
-        private Label AddText(Control parent, string text, float size, Color color) {
-            var label = new Label(); ConfigureText(label, text, size, color); parent.Controls.Add(label); return label;
-        }
-        private static void FitText(Control parent) {
-            foreach (Control child in parent.Controls) {
-                var label = child as Label;
-                if (label != null) label.MaximumSize = new Size(Math.Max(100, parent.ClientSize.Width - parent.Padding.Horizontal - label.Margin.Horizontal), 0);
-                if (child.HasChildren) FitText(child);
-            }
-        }
-        private static void StyleButton(Button button, string text, bool primary) {
-            button.Text = text; button.AutoSize = true; button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            button.Padding = new Padding(16, 8, 16, 8); button.Margin = new Padding(0, 0, 12, 0);
-            button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = primary ? 0 : 1;
-            button.BackColor = primary ? Green : Color.FromArgb(247, 249, 243); button.ForeColor = primary ? Color.White : Green;
-            button.UseVisualStyleBackColor = false; button.Cursor = Cursors.Hand;
-        }
-        private void HandleOutput(string line) {
-            if (line.Trim().Length > 0 && !line.StartsWith("AGENT_ARCADE_STATUS:")) lastLine = line.Trim();
-            OnUI(delegate {
-                if (line == "AGENT_ARCADE_STATUS:ready") { status.Text = "●  已就绪，等待网页连接"; tray.Text = "同桌 · 等待网页连接"; detail.Text = "回到网页连接本机。最小化或关闭窗口会留在托盘。"; }
-                else if (line == "AGENT_ARCADE_STATUS:connected") { status.Text = "●  游戏网页已连接"; tray.Text = "同桌 · 游戏网页已连接"; detail.Text = "托盘中继续运行。选择「退出连接器」会停止所有玩家并释放端口。"; }
-                else if (line.Trim().StartsWith("Harness：")) account.Text = line.Trim();
-            });
-        }
-        private void OnUI(Action action) { if (IsDisposed || !IsHandleCreated) return; try { BeginInvoke(action); } catch (InvalidOperationException) { } }
-    }
-    internal sealed class LogoPanel : Panel {
-        private readonly Icon icon = ConnectorIcon.Load(256);
-        protected override void OnPaint(PaintEventArgs e) {
-            e.Graphics.DrawIcon(icon, new Rectangle(0, 0, Width, Height));
-        }
-        protected override void Dispose(bool disposing) { if (disposing) icon.Dispose(); base.Dispose(disposing); }
-    }
-    internal static class ConnectorIcon {
-        internal static Icon Load(int size) {
-            using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("AgentArcade.Icon"))
-            using (var icon = new Icon(stream, new Size(size, size))) return (Icon)icon.Clone();
+            var force = Button("强制结束此进程…"); force.IsEnabled = owner.StartTime is not null && owner.Pid > 4 && owner.Pid != Environment.ProcessId && !owner.Owned;
+            force.Click += async (_, _) => await ForceAsync(owner);
+            listenerRows.Children.Add(Card($"{owner.Name} · PID {owner.Pid}", Text(owner.Kind, true), Text(owner.Path ?? "无法获取程序路径（可能没有权限）"), Text(string.Join("\n", owner.Addresses)), Text(owner.Cooperative || owner.Owned ? "可请求正常退出。" : "未确认正常退出接口。若是旧版连接器，请先从原托盘退出；其他程序请先保存任务并在其窗口退出。"), Actions(graceful, force)));
         }
     }
-    internal static class Native {
-        [StructLayout(LayoutKind.Sequential)] internal struct SecurityAttributes { public int Length; public IntPtr SecurityDescriptor; [MarshalAs(UnmanagedType.Bool)] public bool InheritHandle; }
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] internal struct StartupInfo { public int Size; public string Reserved, Desktop, Title; public int X, Y, XSize, YSize, XCountChars, YCountChars, FillAttribute, Flags; public short ShowWindow, Reserved2Size; public IntPtr Reserved2, StandardInput, StandardOutput, StandardError; }
-        [StructLayout(LayoutKind.Sequential)] internal struct ProcessInformation { public IntPtr Process, Thread; public uint ProcessId, ThreadId; }
-        [StructLayout(LayoutKind.Sequential)] internal struct BasicLimitInformation { public long PerProcessUserTimeLimit, PerJobUserTimeLimit; public uint LimitFlags; public UIntPtr MinimumWorkingSetSize, MaximumWorkingSetSize; public uint ActiveProcessLimit; public UIntPtr Affinity; public uint PriorityClass, SchedulingClass; }
-        [StructLayout(LayoutKind.Sequential)] internal struct IoCounters { public ulong ReadOperationCount, WriteOperationCount, OtherOperationCount, ReadTransferCount, WriteTransferCount, OtherTransferCount; }
-        [StructLayout(LayoutKind.Sequential)] internal struct ExtendedLimitInformation { public BasicLimitInformation BasicLimitInformation; public IoCounters IoInfo; public UIntPtr ProcessMemoryLimit, JobMemoryLimit, PeakProcessMemoryUsed, PeakJobMemoryUsed; }
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] internal static extern IntPtr CreateJobObject(IntPtr attributes, string name);
-        [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool SetInformationJobObject(IntPtr job, int infoClass, ref ExtendedLimitInformation info, uint length);
-        [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool CreateProcess(string application, StringBuilder command, IntPtr processAttributes, IntPtr threadAttributes, bool inheritHandles, uint flags, IntPtr environment, string directory, ref StartupInfo startup, out ProcessInformation info);
-        [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool CreatePipe(out IntPtr read, out IntPtr write, ref SecurityAttributes attributes, uint size);
-        [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool SetHandleInformation(IntPtr handle, uint mask, uint flags);
-        [DllImport("kernel32.dll", SetLastError = true)] internal static extern uint ResumeThread(IntPtr thread);
-        [DllImport("kernel32.dll", SetLastError = true)] internal static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
-        [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool GetExitCodeProcess(IntPtr process, out uint exitCode);
-        [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool TerminateProcess(IntPtr process, uint exitCode);
-        [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool CloseHandle(IntPtr handle);
+    private async Task ForceAsync(PortOwner owner) {
+        if (busy) return;
+        if (await ConfirmAsync("强制结束这个进程？", Describe(owner) + "\n\n仅结束此 PID，不批量结束同名程序。它正在进行的任务会中断，未保存的数据可能丢失；其子进程可能仍在运行。操作前会再次核对进程身份与端口。", $"结束 PID {owner.Pid}") != ContentDialogResult.Primary) return;
+        busy = true; UpdateControls(); string result;
+        try { result = await PortInspector.TerminateAsync(port, owner); }
+        catch (Exception e) { result = "未能结束进程：" + e.Message; }
+        try { await InspectAsync(); } catch (Exception e) { result += "\n重新检测失败：" + e.Message; }
+        portNotice.Title = owners.Count == 0 ? "端口已释放" : "端口仍有占用"; portNotice.Message = result + (owners.Count == 0 ? " 可重新启动连接器。" : " 请核对最新列表后重试。");
+        busy = false; UpdateControls();
     }
+    private static string Describe(PortOwner p) => $"{p.Name} · PID {p.Pid}\n{p.Path ?? "路径不可用"}\n{string.Join("\n", p.Addresses)}";
+    private void SetStatus(string title, string message, InfoBarSeverity severity) { status.Title = title; status.Message = message; status.Severity = severity; tray?.SetText("同桌 · " + title); }
+    private void UpdateControls() { start.IsEnabled = !busy && process is null && configurationError is null; stop.IsEnabled = !busy && process is not null; scan.IsEnabled = detect.IsEnabled = !busy && configurationError is null; }
+    internal void Restore() { AppWindow.Show(); if (AppWindow.Presenter is OverlappedPresenter p) p.Restore(); Activate(); }
+    private async Task QuitAsync() {
+        if (quitting) return;
+        quitting = true;
+        while (busy) await Task.Delay(50);
+        await StopAsync(); tray?.Dispose(); pipe?.Dispose(); Close();
+    }
+    private async Task<ContentDialogResult> ConfirmAsync(string title, string detail, string primary) {
+        var dialog = new ContentDialog { XamlRoot = ((FrameworkElement)Content).XamlRoot, Title = title, Content = new ScrollViewer { Content = Text(detail), MaxHeight = 380 }, PrimaryButtonText = primary, CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
+        return await dialog.ShowAsync();
+    }
+    private async Task CheckUpdatesAsync() {
+        if (checking) return; checking = true; update.IsEnabled = false; updateText.Text = "正在检查…";
+        try {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(12) }; http.DefaultRequestHeaders.UserAgent.ParseAdd("TongZhuo-Connector/" + CurrentVersionText);
+            using var json = JsonDocument.Parse(await http.GetStringAsync("https://api.github.com/repos/IanYet/agent-game/releases/latest"));
+            var r = json.RootElement; string tag = r.GetProperty("tag_name").GetString() ?? "";
+            if (r.GetProperty("draft").GetBoolean() || r.GetProperty("prerelease").GetBoolean() || !Version.TryParse(tag.TrimStart('v', 'V'), out var latest)) throw new IOException("无法识别正式版本。");
+            bool hasAsset = r.GetProperty("assets").EnumerateArray().Any(a => a.GetProperty("name").GetString() == "TongZhuo-Connector-Windows-x64.exe");
+            if (!hasAsset) throw new IOException("最新版本尚未提供 Windows 64 位下载包。");
+            var normalized = new Version(latest.Major, latest.Minor, Math.Max(0, latest.Build), Math.Max(0, latest.Revision));
+            bool available = normalized > CurrentVersion; updateText.Text = available ? $"发现新版本 {tag}。下载后先退出当前连接器，再打开新包。" : "当前已是最新正式版本。";
+            updateAvailable = available; update.Content = available ? "下载新版本" : "重新检查";
+        } catch (Exception e) { updateText.Text = "检查失败，可重试。" + e.Message; }
+        finally { checking = false; update.IsEnabled = true; }
+    }
+    internal static void Open(string path) { try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); } catch { } }
+    private static TextBlock Text(string text, bool strong = false) => new() { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, FontWeight = strong ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal, Margin = new Thickness(0, 2, 0, 2) };
+    private static Button Button(string label) => new() { Content = label, Margin = new Thickness(0, 4, 8, 4) };
+    private static StackPanel Actions(params Button[] buttons) { var p = new StackPanel { Orientation = Orientation.Horizontal }; foreach (var b in buttons) p.Children.Add(b); return p; }
+    private static Border SettingsRow(string title, Symbol symbol, FrameworkElement action, params UIElement[] detail) {
+        var grid = new Grid { ColumnSpacing = 16, RowSpacing = 12 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var icon = new SymbolIcon(symbol) { Width = 24, Height = 24, VerticalAlignment = VerticalAlignment.Center };
+        var labels = new StackPanel { Spacing = 4 }; labels.Children.Add(Text(title, true)); foreach (var item in detail) labels.Children.Add(item);
+        grid.Children.Add(icon); Grid.SetColumn(labels, 1); grid.Children.Add(labels); grid.Children.Add(action);
+        grid.SizeChanged += (_, _) => { bool narrow = grid.ActualWidth < 580; Grid.SetColumn(action, narrow ? 1 : 2); Grid.SetRow(action, narrow ? 1 : 0); if (action is FrameworkElement element) element.VerticalAlignment = VerticalAlignment.Center; };
+        return new Border { Style = (Style)Application.Current.Resources["SettingsCard"], Child = grid };
+    }
+    private static Border Card(string title, params UIElement[] children) { var p = new StackPanel { Spacing = 8 }; p.Children.Add(Text(title, true)); foreach (var c in children) p.Children.Add(c); return new Border { Style = (Style)Application.Current.Resources["SettingsCard"], Child = p }; }
 }
