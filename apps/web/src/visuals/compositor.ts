@@ -6,10 +6,12 @@ const SIZE=256;
 const intersects=(a:DOMRect,b:{left:number;top:number;right:number;bottom:number})=>a.right>b.left&&a.left<b.right&&a.bottom>b.top&&a.top<b.bottom;
 export class LensCompositor {
   readonly canvas=document.createElement('canvas');
+  sampleMs=0;
   private context:CanvasRenderingContext2D;
   private planes=new WeakMap<HTMLElement,HTMLCanvasElement>();
   constructor(){this.canvas.width=SIZE;this.canvas.height=SIZE;this.context=this.canvas.getContext('2d')!;}
   paint(x:number,y:number){
+    this.sampleMs=0;
     let ctx=this.context;
     const box={left:x-SIZE/2,top:y-SIZE/2,right:x+SIZE/2,bottom:y+SIZE/2};
     let plane:{root:HTMLElement;projection:ReturnType<typeof cardProjection>}|undefined;
@@ -74,7 +76,17 @@ export class LensCompositor {
       }
       if(el.matches('.effects-preference .choice-group>button[aria-pressed="true"]')){ctx.fillStyle='#e7b7a288';ctx.fillRect(rect.left+12,rect.bottom-1,Math.max(0,rect.width-24),1);}
       if(el instanceof HTMLCanvasElement){
-        if(el.width&&el.height){ctx.filter=style.filter==='none'?'none':style.filter;if(style.mixBlendMode==='screen')ctx.globalCompositeOperation='screen';ctx.drawImage(el,rect.x,rect.y,rect.width,rect.height);ctx.filter='none';}
+        if(el.width&&el.height){
+          const sampleStarted=performance.now();
+          ctx.filter=style.filter==='none'?'none':style.filter;if(style.mixBlendMode==='screen')ctx.globalCompositeOperation='screen';
+          if(plane)ctx.drawImage(el,rect.x,rect.y,rect.width,rect.height);
+          else{
+            const left=Math.max(rect.left,box.left),top=Math.max(rect.top,box.top),width=Math.min(rect.right,box.right)-left,height=Math.min(rect.bottom,box.bottom)-top;
+            if(width>0&&height>0)ctx.drawImage(el,(left-rect.left)/rect.width*el.width,(top-rect.top)/rect.height*el.height,width/rect.width*el.width,height/rect.height*el.height,left,top,width,height);
+          }
+          ctx.filter='none';
+          if(import.meta.env.DEV)this.sampleMs+=performance.now()-sampleStarted;
+        }
       }else if(el instanceof SVGSVGElement){
         const view=el.viewBox.baseVal;ctx.translate(rect.x,rect.y);ctx.scale(rect.width/(view.width||24),rect.height/(view.height||24));ctx.translate(-view.x,-view.y);ctx.strokeStyle=style.stroke==='none'?style.color:style.stroke;ctx.lineWidth=Number(el.getAttribute('stroke-width')??2);ctx.lineCap='round';ctx.lineJoin='round';
         for(const shape of el.children){let path:Path2D|undefined;const n=(name:string)=>Number(shape.getAttribute(name)??0);ctx.save();const transforms=(shape as SVGGraphicsElement).transform?.baseVal;if(transforms)for(let i=0;i<transforms.numberOfItems;i++){const m=transforms.getItem(i).matrix;ctx.transform(m.a,m.b,m.c,m.d,m.e,m.f);}if(shape.tagName==='ellipse'){path=new Path2D();path.ellipse(n('cx'),n('cy'),n('rx'),n('ry'),0,0,Math.PI*2);}else if(shape.tagName==='path')path=new Path2D(shape.getAttribute('d')??'');else if(shape.tagName==='line'){path=new Path2D();path.moveTo(n('x1'),n('y1'));path.lineTo(n('x2'),n('y2'));}else if(shape.tagName==='circle'){path=new Path2D();path.arc(n('cx'),n('cy'),n('r'),0,Math.PI*2);}else if(shape.tagName==='polyline'||shape.tagName==='polygon'){const points=(shape.getAttribute('points')??'').trim().split(/[ ,]+/).map(Number);path=new Path2D();for(let i=0;i<points.length;i+=2)i?path.lineTo(points[i],points[i+1]):path.moveTo(points[i],points[i+1]);if(shape.tagName==='polygon')path.closePath();}else if(shape.tagName==='rect'){path=new Path2D();path.roundRect(n('x'),n('y'),n('width'),n('height'),n('rx'));}if(path)ctx.stroke(path);ctx.restore();}

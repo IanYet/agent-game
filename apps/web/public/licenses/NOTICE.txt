@@ -1,6 +1,6 @@
 同桌 · 网页第三方组件与资源
 
-React Bits / David Haz：MetallicPaint、Magnet、Side Rays、Strands、GlareHover 反光参考与基于 AccordionGallery 的悬停手风琴。MIT + Commons Clause，完整许可见 ReactBits.md。
+React Bits / David Haz：MetallicPaint、Magnet、Strands、GlareHover 反光参考与基于 AccordionGallery 的悬停手风琴。MIT + Commons Clause，完整许可见 ReactBits.md。
 https://reactbits.dev/
 
 项目适配：MetallicPaint 增加 30 FPS、像素比上限、页面隐藏与静态回退；Magnet 响应运行时动态偏好；AccordionGallery 适配真实游戏数量、悬停展开、键盘入口与共享绘制源。运行代码位于 apps/web/src/visuals/。
@@ -9,20 +9,19 @@ Fluid Glass：参考同帧内容平面投影、mip/梯度采样、斜视边缘�
 https://reactbits.dev/components/fluid-glass
 上游源码版本：https://github.com/DavidHDev/react-bits/commit/382dc89411ce8446ef2b2ed99e352c44a53a1b54
 
-Side Rays：使用上游原生 WebGL2 源码，增加弹窗暂停、减少动态偏好及保留帧缓冲供局部透镜读取。完整许可见 ReactBits.md；运行组件为 apps/web/src/visuals/vendor/SideRays.tsx。
-https://reactbits.dev/backgrounds/side-rays
-https://reactbits.dev/r/SideRays-TS-CSS.json
-
 Strands：基于上游光丝与玻璃着色器，以 Calm 为待机状态，去掉暗色球底和固定不透明度，让下层卡片透出。项目增加玩家状态驱动、思考与收束动画、共享 WebGL2 绘制器、30 FPS、离屏与弹窗暂停、动态偏好及透明 Canvas 回退。完整许可见 ReactBits.md；运行着色器为 apps/web/src/visuals/vendor/strands-shaders.ts。
 https://reactbits.dev/animations/strands
 https://reactbits.dev/r/Strands-TS-CSS.json
 
-Three.js 0.186.1：共享 WebGL 绘制器与首屏 FXAAShader 抗锯齿；调整暗部检测阈值。MIT，完整许可见 Three.txt。
+Three.js 0.186.1：共享 WebGL 绘制器、首屏 FXAAShader 抗锯齿及牌桌三维背景；调整暗部检测阈值。MIT，完整许可见 Three.txt。
+cannon-es 0.20.0：牌桌背景的刚体碰撞。MIT，完整许可见 cannon-es.txt。筹码与花色模型由同桌自行生成。
+https://github.com/pmndrs/cannon-es
 GSAP 3.13.0：手风琴布局与时间线。GSAP Standard License，完整许可见 GSAP.txt。
 https://gsap.com/standard-license/
 
 vgpu / Vercel Labs：玻璃环光束剖面的高斯算法参考。MIT，完整许可见 vgpu.txt。造型与光学着色器为同桌原创。
 Lusion About：仅研究字形填充、边缘、指针绘制与滚动机制，未使用其脚本、品牌或素材。
+Lusion 首页：牌桌背景参考其立体物件碰撞的视觉方向，未使用其脚本或模型。
 
 Anton / Vernon Adams；Noto Sans SC / Adobe、Google：SIL OFL，完整许可见 OFL-Anton.txt、OFL-NotoSansSC.txt。
 React、React DOM、scheduler：MIT，完整许可见 react.txt、react-dom.txt、scheduler.txt。
