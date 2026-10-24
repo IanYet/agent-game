@@ -1,18 +1,16 @@
 import {useState} from 'react';
-import {Copy} from 'lucide-react';
+import {ArrowUpRight,Pause} from 'lucide-react';
 import {modelsForHarness} from '@agent-game/protocol';
 import type {AppSnapshot,PlayerConfig} from './runtime/types';
-import {AgentModelFields,kindName} from './AgentModelFields';
-import {Avatar} from './UiBits';
-import {Modal} from './Modal';export function PlayerSettingsModal({ state, busy, onClose, onSave, onError }: { state: AppSnapshot; busy: boolean; onClose: () => void; onSave: (players: PlayerConfig[]) => void; onError: (message: string) => void }) {
-  const [players, setPlayers] = useState<PlayerConfig[]>(state.room!.roster.map(p => ({...p})));
-  const agents = state.room!.roster.map((p,seat)=>({...p,seat})).filter(p => p.kind !== 'human');
-  return <Modal title="玩家设置与会话" subtitle="牌局已暂停。设置在该玩家下次行动时生效，沿用原会话。" onClose={onClose} wide>
-    <div className="player-settings-list">{agents.map(player => <section className="player-settings-card" key={player.seat}>
-      <div className="player-settings-heading"><Avatar kind={player.kind} seat={player.seat} /><strong>{player.name}</strong><small>{kindName[player.kind]}</small></div>
-      <AgentModelFields models={modelsForHarness(state.connector, player.kind)} label={player.name} settings={players[player.seat]} onChange={value => setPlayers(all => all.map((p, i) => i === player.seat ? { ...p, ...value } : p))} />
-      <div className="conversation-info"><small>{state.persistConversations ? '已开启本机历史保留' : '临时会话 · 结束后不保留'}</small>{state.persistConversations && <><code>{state.seats[player.seat].conversationId ?? '首次行动时创建会话'}</code>{state.seats[player.seat].conversationId && <button className="button subtle" onClick={() => { void navigator.clipboard.writeText(state.seats[player.seat].conversationId!).catch(() => onError('无法复制，请手动复制会话 ID')); }}><Copy size={13} />复制会话 ID</button>}</>}</div>
-    </section>)}</div>
-    <div className="modal-footer"><small>关闭弹窗后，点击「继续游戏」恢复对局。</small><button className="button primary" disabled={busy || state.room?.finished} onClick={() => onSave(players)}>保存设置</button></div>
-  </Modal>;
+import {AgentModelFields,kindName,effortLabel} from './AgentModelFields';
+import {Avatar,PrimaryButton} from './UiBits';
+import {Modal} from './Modal';
+import {gameRegistry} from './games/registry';
+import {playerProblem} from './TableSetup';
+export function PlayerSettingsModal({state,busy,onClose,onSave,onPause,onConnect}:{state:AppSnapshot;busy:boolean;onClose:()=>void;onSave:(players:PlayerConfig[])=>void;onPause:()=>Promise<void>;onConnect:()=>void}){
+  const [editing,setEditing]=useState(false),[active,setActive]=useState(0),[error,setError]=useState(''),[waiting,setWaiting]=useState(false);
+  const [draft,setDraft]=useState<PlayerConfig[]>(state.room!.roster.map(p=>({...p})));
+  const players=editing?draft:state.room!.roster,p=players[active],problem=editing?(!state.connected?'请先连接本机，读取可用模型目录':players.map(p=>playerProblem(state,p)).find(Boolean)):undefined;
+  const model=modelsForHarness(state.connector,p.kind).find(m=>m.id===p.model)??modelsForHarness(state.connector,p.kind).find(m=>m.isDefault);
+  return <Modal wide symbol={gameRegistry.get(state.room!.moduleId).presentation.symbol} title="玩家与模型" subtitle={editing?'已暂停 / 仅编辑模型与强度':'只读查看 / 不改变运行状态'} onClose={onClose} footer={<><div className="footer-reason" role="status">{error||problem||(editing?'保存或取消后均保持暂停，请明确继续。':'查看不会暂停对局；阵容与程序在下一局前修改。')}</div><div className="footer-actions">{!state.connected&&<button className="text-button" onClick={onConnect}>连接本机 ↗</button>}<button className="text-button" onClick={onClose}>{editing?'取消修改':'关闭'}</button>{!state.room?.finished&&(editing?<PrimaryButton disabled={busy||!!problem} onClick={()=>{try{onSave(draft);}catch(e){setError((e as Error).message);}}}>保存设置<ArrowUpRight size={18}/></PrimaryButton>:<PrimaryButton disabled={busy||waiting||!state.connected} onClick={async()=>{setWaiting(true);try{await onPause();setDraft(state.room!.roster.map(p=>({...p})));setEditing(true);}catch(e){setError((e as Error).message);}finally{setWaiting(false);}}}><Pause size={14}/>暂停并修改模型</PrimaryButton>)}</div></>}><div className="roster-editor"><nav className="roster-list" aria-label="玩家名单">{players.map((p,i)=><button key={p.playerId} aria-pressed={i===active} onClick={()=>setActive(i)}><Avatar kind={p.kind} seat={i}/><span><b>{p.name}</b><small>{kindName[p.kind]}</small></span><em>{i===active?'↗':''}</em></button>)}</nav><section className="player-editor"><div className="player-editor-heading"><strong>{p.name}</strong><span>{editing?'模型可编辑':'只读'}</span></div>{editing&&p.kind!=='human'?<AgentModelFields label={p.name} models={modelsForHarness(state.connector,p.kind)} settings={p} onChange={patch=>setDraft(all=>all.map((v,i)=>i===active?{...v,...patch}:v))}/>:<dl className="readonly-fields"><dt>控制方式</dt><dd>{kindName[p.kind]}</dd><dt>模型</dt><dd>{p.kind==='human'?'由你直接操作':model?.name??p.model??'程序默认'}</dd><dt>思考强度</dt><dd>{p.kind==='human'?'—':effortLabel(p.reasoningEffort)}</dd><dt>活动</dt><dd>{state.seats[active]?.message??(state.paused?'已暂停':'等待游戏决策')}</dd></dl>}<div className="conversation-info"><span>{state.persistConversations?'已开启本机历史保留':'临时会话 · 不保留到历史'}</span><code>{state.seats[active]?.conversationId??state.seats[active]?.sessionId??'需要行动时创建独立会话'}</code></div></section></div></Modal>;
 }

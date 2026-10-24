@@ -23,10 +23,14 @@ export class ConnectorClient {
     if (!response.ok) throw new Error(data.error ?? '连接器请求失败');
     return data as T;
   }
-  async connect(): Promise<ConnectorInfo> {
+  async inspect(): Promise<ConnectorInfo> {
     const info = await this.request<ConnectorInfo>('/health');
     const problem = connectorCompatibilityProblem(info);
     if (problem) throw new ConnectorVersionError(problem, info);
+    return info;
+  }
+  async connect(): Promise<ConnectorInfo> {
+    const info = await this.inspect();
     const result = await this.request<{ token: string; info: ConnectorInfo }>('/api/connect', 'POST', { protocolVersion: PROTOCOL_VERSION, requiredCapabilities: connectorRequirements.capabilities });
     this.token = result.token;
     const stream = new AbortController(); this.stream = stream; const generation = ++this.generation;

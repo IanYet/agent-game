@@ -12,7 +12,9 @@ const descriptors=[
 ];
 const observe=(run:StoredRun<DoudizhuState>,actor:string|null)=>decorateView(viewGame(run.state,actor===null?null:seatFor(run,actor)),run.roster);
 export const doudizhuModule:GameModule<DoudizhuState>={
+ presentation:{english:'DOUDIZHU',symbol:'3',tone:'warm'},
  id:'doudizhu',version:'1.0.0',stateVersion:1,name:'斗地主',description:'一位地主，两位农民。和 agents 过过招。',tagline:'经典三人局',minPlayers:3,maxPlayers:3,defaultPlayers:3,defaultConfig:{},runNoun:'局',
+ activity:run=>({phase:run.state.phase==='finished'?'已结束':run.state.phase==='bidding'?'正在叫分':'对局中',detail:`第 ${run.index} 局`}),
  rules:()=>DOUDIZHU_RULES,lifecycle:{sessionScope:'run',eagerAgents:false},
  create:(run,random)=>createGame(run.roomId,enginePlayers(run.roster),{random,round:run.index}),
  next:(previous,run,random)=>createGame(run.roomId,enginePlayers(run.roster),{random,round:run.index,firstBidder:(previous.state.firstBidder+1)%3,scores:run.roster.map(p=>previous.state.players[previous.roster.findIndex(old=>old.playerId===p.playerId)]?.score??0)}),
