@@ -13,7 +13,7 @@ export class ConnectorClient {
   onEvent: (event: ConnectorEvent) => void = () => {};
   onTool: (request: BrowserToolRequest) => ToolResponse | Promise<ToolResponse> = () => ({ content: [], isError: true });
   onDisconnect: () => void = () => {};
-  constructor(readonly endpoint = `http://127.0.0.1:${CONNECTOR_PORT}`, private fetcher: typeof fetch = (...args) => fetch(...args)) {}
+  constructor(readonly endpoint = import.meta.env.VITE_CONNECTOR_URL??`http://127.0.0.1:${CONNECTOR_PORT}`, private fetcher: typeof fetch = (...args) => fetch(...args)) {}
   private async request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
     let response: Response;
     try {
