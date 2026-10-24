@@ -49,7 +49,7 @@ export function createConnectorServer(bridge: LocalBridge, allowedOrigins: strin
     bridge.toolResult(body.id, CallToolResultSchema.parse(body.response)); res.json({ ok: true });
   });
   app.post('/api/sessions', async (req, res) => {
-    const request = z.object({ scopeId: z.string().min(1).max(200), playerId: z.string().min(1).max(200), persistConversation: z.boolean().optional(), kind: z.enum(['codex', 'codex-acp', 'dsh', 'workbuddy']), name: z.string().min(1).max(100), displayTitle: z.string().min(1).max(300), instructions: z.string().max(200_000), tools: z.array(z.object({ name:z.string(), description:z.string(), inputSchema:z.record(z.unknown()) }).passthrough()).min(1).max(128), model: z.string().min(1).max(500).optional(), reasoningEffort: z.string().min(1).max(100).optional() }).parse(req.body);
+    const request = z.object({ scopeId: z.string().min(1).max(200), playerId: z.string().min(1).max(200), kind: z.enum(['codex', 'codex-acp', 'dsh', 'workbuddy']), name: z.string().min(1).max(100), instructions: z.string().max(200_000), tools: z.array(z.object({ name:z.string(), description:z.string(), inputSchema:z.record(z.unknown()) }).passthrough()).min(1).max(128), model: z.string().min(1).max(500).optional(), reasoningEffort: z.string().min(1).max(100).optional() }).parse(req.body);
     res.status(201).json(await bridge.createSession(request as unknown as SessionRequest));
   });
   app.post('/api/sessions/:id/turn', async (req, res) => {

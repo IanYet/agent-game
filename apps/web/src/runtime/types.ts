@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react';
-import type { AgentSettings, BrowserToolRequest, ConnectorInfo, PlayerKind, ToolDefinition, ToolResponse } from '@agent-game/protocol';
+import type { AgentSettings, BrowserToolRequest, ConnectorInfo, ConversationEntry, PlayerKind, ToolDefinition, ToolResponse } from '@agent-game/protocol';
 import type { GameController } from '../controller';
 
 export interface PlayerConfig extends AgentSettings { playerId?: string; name: string; kind: PlayerKind }
@@ -11,9 +11,10 @@ export interface StoredRun<S = any> {
 }
 export interface PendingDecision { decisionId: string; actorId: string; allowedTools?: string[]; deadline?: number }
 export interface MatchSummary { id: string; gameId: string; round: number; endedAt: string; title: string; subtitle: string; entries: Array<{ label: string; value: string; positive?: boolean }> }
-export interface SeatRuntime { playerId: string; seat: number; kind: PlayerKind; status: 'idle'|'connecting'|'ready'|'thinking'|'error'|'paused'; sessionId?:string; conversationId?:string; message?:string; lastTool?:string; turns:number; tokens:number }
-export interface AppSnapshot<V = any> { connector:ConnectorInfo|null; connected:boolean; connectorUpdateRequired:boolean; game:V|null; room:Omit<StoredRun,'state'> & {finished:boolean} | null; seats:SeatRuntime[]; paused:boolean; persistConversations:boolean; error:string|null; history:MatchSummary[]; activity:{phase:string;detail?:string;actors:string[]} | null }
-export interface CreateOptions { gameId?:string; config?:any; persistConversations?:boolean }
+export interface SeatRuntime { playerId: string; seat: number; kind: PlayerKind; status: 'idle'|'connecting'|'ready'|'thinking'|'error'|'paused'; sessionId?:string; message?:string; lastTool?:string; turns:number; tokens:number }
+export interface AppSnapshot<V = any> { connector:ConnectorInfo|null; connected:boolean; connectorUpdateRequired:boolean; game:V|null; room:Omit<StoredRun,'state'> & {finished:boolean} | null; seats:SeatRuntime[]; paused:boolean; curiosityMode:boolean; conversations:Record<string,ConversationEntry[]>; conversationError:string|null; error:string|null; history:MatchSummary[]; activity:{phase:string;detail?:string;actors:string[]} | null }
+export interface CreateOptions { gameId?:string; config?:any; curiosityMode?:boolean }
+export interface TableViewOptions { revealHands:boolean }
 export interface GameUiProps { state:AppSnapshot; controller:GameController; onError:(message:string)=>void; tableActions?:ReactNode }
 export interface GameModule<S = any,V = any> {
   id:string; version:string; stateVersion:number; name:string; description:string; tagline:string;
@@ -27,6 +28,7 @@ export interface GameModule<S = any,V = any> {
   next:(previous:StoredRun<S>,run:Omit<StoredRun<S>,'state'>,random:()=>number)=>S;
   finished:(state:S)=>boolean;
   observe:(run:StoredRun<S>,playerId:string|null)=>V;
+  tableView:(run:StoredRun<S>,playerId:string|null,options:TableViewOptions)=>V;
   decisions:(run:StoredRun<S>)=>PendingDecision[];
   tools:(run:StoredRun<S>,playerId:string)=>ToolDefinition[];
   initializePrompt:(run:StoredRun<S>,playerId:string)=>string;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {createDeck,RuleError} from '@agent-game/core';
 import {applyAction,createGame,getLegalActions,viewGame} from './engine';
 import {classify,enumeratePlays,beats} from './combinations';
+import {doudizhuModule} from './definition';
 import type { Card, PlayerConfig, Seat } from '@agent-game/core';
 
 const players: PlayerConfig[] = [{ name: '你', kind: 'human' }, { name: 'Atlas', kind: 'agent' }, { name: 'Nova', kind: 'agent' }];
@@ -51,7 +52,7 @@ describe('牌局、权限与计分', () => {
     expect(() => createGame('bad', [...players.slice(0, 2), { name: 'B', kind: 'human' }])).toThrow(RuleError);
     expect(() => createGame('agents', players.map(p => ({ ...p, kind: 'agent' })))).not.toThrow();
   });
-  it('玩家视图只披露自己手牌；观战不能查看任何手牌或叫分时的底牌', () => {
+  it('私有视图只披露自己手牌；公共记录隐藏所有手牌和叫分时的底牌', () => {
     const state = createGame('test', players);
     for (const seat of [0, 1, 2] as Seat[]) {
       const view = viewGame(state, seat);
@@ -61,6 +62,57 @@ describe('牌局、权限与计分', () => {
     }
     expect(viewGame(state, null).players.every(p => !p.hand)).toBe(true);
     expect(viewGame(state, null).legalActions).toEqual([]);
+  });
+  it('观战可翻开所有手牌，仍隐藏叫分底牌，且不会改变 Agent 的提示和工具视图', () => {
+    const meta={moduleId:'doudizhu',moduleVersion:'1.0.0',stateVersion:1,roomId:'room',runId:'run',index:1,config:{},roster:Array.from({length:3},(_,i)=>({playerId:`p${i}`,name:`P${i}`,kind:'codex' as const}))};
+    const run={...meta,state:doudizhuModule.create(meta,seeded(1))},before=structuredClone(run.state);
+    const table=doudizhuModule.tableView(run,null,{revealHands:true});
+    expect(table.players.map((p:any)=>p.hand)).toEqual(run.state.players.map(p=>p.hand));
+    expect(table.bottom).toEqual([]);expect(table.legalActions).toEqual([]);
+    for(const player of run.roster){
+      const privateView=doudizhuModule.observe(run,player.playerId);
+      expect(privateView.players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
+      const prompt=doudizhuModule.initializePrompt(run,player.playerId);
+      expect(JSON.parse(prompt.split('初始观察：')[1]).players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
+      const result=doudizhuModule.handleTool(run,{id:'read',scopeId:'run',playerId:player.playerId,tool:'game_get_state',args:{}}).result.structuredContent as any;
+      expect(result.players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
+    }
+    expect(run.state).toEqual(before);
+  });
+  it('结算余牌由牌桌显式翻开；关闭时仍只展示自己的牌', () => {
+    let state=applyAction(createGame('reveal',players),0,{type:'bid',value:3});
+    const card=state.players[0].hand[0];state.players[0].hand=[card];
+    state=applyAction(state,0,{type:'play',cards:[card.id]});
+    expect(state.phase).toBe('finished');
+    expect(viewGame(state,0).players.filter(p=>p.hand).map(p=>p.seat)).toEqual([0]);
+    expect(viewGame(state,0,true).players.map(p=>p.hand)).toEqual(state.players.map(p=>p.hand));
+    expect(viewGame(state,null).players.every(p=>!p.hand)).toBe(true);
+  });
+  it('Agent 可读取超过界面条数的完整出牌与不出记录，下一局从新记录开始', () => {
+    const meta={moduleId:'doudizhu',moduleVersion:'1.0.0',stateVersion:1,roomId:'history-room',runId:'history-run',index:1,config:{},roster:Array.from({length:3},(_,i)=>({playerId:`p${i}`,name:`P${i}`,kind:'codex' as const}))};
+    const run={...meta,state:applyAction(doudizhuModule.create(meta,seeded(5)),0,{type:'bid',value:3})};
+    const step=()=>{const legal=getLegalActions(run.state,run.state.turn),choice=legal.find(a=>a.action.type==='pass')??legal.find(a=>a.action.type==='play'&&a.cards.length===1)!;run.state=applyAction(run.state,run.state.turn,choice.action);};
+    while(run.state.events.length<45)step();
+    expect(run.state.phase).toBe('playing');
+    const expected=structuredClone(run.state.events);
+    expect(expected.length).toBeGreaterThan(35);
+    expect(expected.map(e=>e.seq)).toEqual(Array.from({length:expected.length},(_,i)=>i+1));
+    expect(expected.some(e=>e.type==='play'&&e.cards?.length&&e.combination)).toBe(true);
+    expect(expected.some(e=>e.type==='pass')).toBe(true);
+    for(const player of run.roster){
+      const view=doudizhuModule.handleTool(run,{id:'history',scopeId:run.runId,playerId:player.playerId,tool:'game_get_state',args:{}}).result.structuredContent as any;
+      expect(view.events).toEqual(expected);
+      expect(view.players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
+      expect(JSON.parse(doudizhuModule.initializePrompt(run,player.playerId).split('初始观察：')[1]).events).toEqual(expected);
+    }
+    const decision=doudizhuModule.decisions(run)[0];
+    expect(JSON.parse(doudizhuModule.decisionPrompt(run,decision).split('当前观察：')[1]).events).toEqual(expected);
+    const publicCards=new Set([...run.state.bottom,...expected.filter(e=>e.type==='play').flatMap(e=>e.cards??[])].map(c=>c.id));
+    expect(expected.flatMap(e=>e.cards??[]).every(c=>publicCards.has(c.id))).toBe(true);
+    while(run.state.phase!=='finished')step();
+    const nextMeta={...meta,runId:'history-run-2',index:2},next={...nextMeta,state:doudizhuModule.next(run,nextMeta,seeded(6))};
+    const nextView=doudizhuModule.handleTool(next,{id:'new-history',scopeId:next.runId,playerId:'p1',tool:'game_get_state',args:{}}).result.structuredContent as any;
+    expect(nextView.round).toBe(2);expect(nextView.events).toEqual([expect.objectContaining({seq:1,type:'deal'})]);
   });
   it('叫3分直接当地主；三人不叫重新发牌且版本递增', () => {
     let state = createGame('test', players);
@@ -92,7 +144,7 @@ describe('牌局、权限与计分', () => {
     state.players[0].hand = cards([3, 3, 3, 3]);
     state = applyAction(state, 0, { type: 'play', cards: state.players[0].hand.map(c => c.id) });
     expect(state.result).toMatchObject({ winner: 'landlord', spring: true, multiplier: 4, deltas: [24, -12, -12] });
-    expect(viewGame(state, null).players.every(p => p.hand)).toBe(true);
+    expect(viewGame(state, null, true).players.every(p => p.hand)).toBe(true);
   });
   it('100局自动对弈最终结束；每步牌守恒、手牌互斥、分数零和', () => {
     for (let seed = 1; seed <= 100; seed++) {

@@ -1,0 +1,13 @@
+.app-notice{position:fixed;top:calc(var(--header-height,88px) + 16px);right:var(--page);z-index:80;width:min(392px,calc(100vw - 32px));padding:16px 18px;border:1px solid #626a7d66;border-radius:12px;background:linear-gradient(135deg,#252b38ed,#181c27f5);backdrop-filter:blur(24px) saturate(1.15);-webkit-backdrop-filter:blur(24px) saturate(1.15);box-shadow:0 16px 48px #0006;color:var(--fg);pointer-events:auto;animation:notice-in .2s ease-out both}
+.app-notice[hidden]{display:none}
+.app-notice>header{display:flex;align-items:center;gap:10px}
+.app-notice>header>svg{color:var(--warm);flex:none}
+.app-notice h2{flex:1;font-size:13px;line-height:1.7;font-weight:400;letter-spacing:.3px}
+.app-notice .icon-button{width:29px;height:29px;margin:-3px -4px -3px 0;color:var(--muted)}
+.app-notice>p{margin:10px 0 0 27px;font-size:11px;line-height:1.95;color:#c1c7d3;overflow-wrap:anywhere}
+.app-notice>footer{display:flex;justify-content:flex-end;margin-top:14px}
+.app-notice>footer>.button{min-height:34px;padding:7px 13px;gap:14px;font-size:11px;border-color:#e7b7a247;color:var(--warm)}
+.app-notice>footer>.button:hover{border-color:#e7b7a288;background:#e7b7a209}
+@keyframes notice-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@media(max-width:700px){.app-notice{right:16px;top:calc(var(--header-height,76px) + 12px)}}
+@media(prefers-reduced-motion:reduce){.app-notice{animation:none}}

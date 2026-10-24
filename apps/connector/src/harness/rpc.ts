@@ -17,6 +17,7 @@ export class JsonRpcProcess extends EventEmitter {
     lines.on('line', line => {
       let message: any;
       try { message = JSON.parse(line); } catch { return; }
+      this.emit('message', 'received', message);
       if (message.method) {
         if (process.env.AGENT_GAME_DEBUG === '1') console.error('[agent RPC]', message.method, message.params?.update?.sessionUpdate ?? message.params?.turn?.status ?? '', message.method === 'error' ? String(message.params?.error?.message ?? '').replace(/https?:\/\/\S+/g, '[endpoint]').slice(0, 250) : '');
         if (message.id !== undefined) {
@@ -51,7 +52,7 @@ export class JsonRpcProcess extends EventEmitter {
     this.pending.clear(); this.emit('exit', error);
   }
   private write(message: unknown): void {
-    if (!this.exited && !this.child.stdin.destroyed) this.child.stdin.write(JSON.stringify(message) + '\n');
+    if (!this.exited && !this.child.stdin.destroyed) { this.emit('message', 'sent', message); this.child.stdin.write(JSON.stringify(message) + '\n'); }
   }
   notify(method: string, params: unknown = {}): void { this.write({ jsonrpc: '2.0', method, params }); }
   call<T = any>(method: string, params: unknown = {}, timeoutMs = 45_000): Promise<T> {

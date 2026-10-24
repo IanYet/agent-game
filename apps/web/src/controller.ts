@@ -2,17 +2,19 @@ import {toolResult,type BrowserToolRequest,type ConnectorInfo,type PlayerKind,ty
 import {ToolRegistry} from '../../../packages/protocol/src/validation';
 import {ConnectorClient,ConnectorVersionError} from './connector';
 import {gameRegistry} from './games/registry';
+import {ConversationStore} from './conversations';
 import {GameRegistry,type AppSnapshot,type CreateOptions,type PendingDecision,type PlayerConfig,type SeatRuntime,type StablePlayer,type StoredRun} from './runtime/types';
 
 export type {CreateOptions} from './runtime/types';
 export interface LocalStore {getItem:(key:string)=>string|null;setItem:(key:string,value:string)=>void}
-interface SavedGames {version:3;current:StoredRun|null;archives:StoredRun[];persistConversations?:boolean}
+interface SavedGames {version:4;current:StoredRun|null;archives:StoredRun[];curiosityMode:boolean}
 interface Binding {scopeId:string;registry:ToolRegistry}
-const STORE_KEY='agent-arcade.games.v3';
+const STORE_KEY='agent-arcade.games.v4';
 const harnesses=new Set<PlayerKind>(['human','codex','codex-acp','dsh','workbuddy']);
 const secureRandom=()=>{const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]/4294967296;};
 export class GameController {
-  private data:SavedGames={version:3,current:null,archives:[]};
+  private data:SavedGames={version:4,current:null,archives:[],curiosityMode:false};
+  private conversations:ConversationStore;
   private listeners=new Set<()=>void>();
   private snapshot!:AppSnapshot;
   private seats:SeatRuntime[]=[];
@@ -28,10 +30,11 @@ export class GameController {
   private cleanupTask:Promise<void>|null=null;
   private deadlineTimer:ReturnType<typeof setTimeout>|null=null;
   constructor(private store:LocalStore,private client=new ConnectorClient(),readonly registry:GameRegistry=gameRegistry) {
+    this.conversations=new ConversationStore(store,()=>this.refresh());
     const raw=store.getItem(STORE_KEY);
     if(raw)try{
       const saved=JSON.parse(raw);
-      if(saved.version!==3||!Array.isArray(saved.archives))throw new Error('不支持的平台存档版本，请新建游戏');
+      if(saved.version!==4||!Array.isArray(saved.archives))throw new Error('不支持的平台存档版本，请新建游戏');
       const restore=(value:StoredRun|null):StoredRun|null=>{
         if(!value)return null;
         const module=registry.get(value.moduleId);
@@ -39,12 +42,16 @@ export class GameController {
         if(value.stateVersion!==module.stateVersion)throw new Error('游戏模块的存档版本已改变，请新建游戏');
         return {...value,roster:this.normalizePlayers(value.roster,module.minPlayers,module.maxPlayers),state:module.restore(value.state,value.stateVersion)};
       };
-      this.data={version:3,current:restore(saved.current),archives:saved.archives.map(restore).filter(Boolean) as StoredRun[],persistConversations:saved.persistConversations===true};
+      this.data={version:4,current:restore(saved.current),archives:saved.archives.map(restore).filter(Boolean) as StoredRun[],curiosityMode:saved.curiosityMode===true};
     }catch(e:any){this.error=`存档未载入：${e.message}。开发阶段不迁移旧存档。`;}
     this.resetSeats();this.refresh();
     client.onTool=request=>this.handleTool(request);
     client.onEvent=event=>{
       if(event.type==='ready')this.info=event.info;
+      if(event.type==='conversation'){
+        const run=[this.data.current,...this.data.archives].find(r=>r&&this.scope(r)===event.scopeId&&r.roster.some(p=>p.playerId===event.playerId&&p.kind!=='human'));
+        if(run)this.conversations.record(run.runId,event.playerId,event);
+      }
       if(event.type==='activity'||event.type==='usage'){
         const seat=this.seats.find(s=>s.playerId===event.playerId);
         if(seat&&event.type==='activity'){seat.message=event.text;seat.lastTool=event.tool;}
@@ -80,10 +87,11 @@ export class GameController {
   private refresh(){
     const run=this.data.current,viewer=run?.roster.find(p=>p.kind==='human')?.playerId??null;
     const {state:_state,...room}=run??({} as StoredRun);
-    this.snapshot={connector:this.info,connected:this.connected,connectorUpdateRequired:this.connectorUpdateRequired,game:run?this.module().observe(run,viewer):null,room:run?{...room,finished:this.module().finished(run.state)}:null,seats:structuredClone(this.seats),paused:this.paused,persistConversations:this.data.persistConversations===true,error:this.error,activity:run?{...this.module().activity(run),actors:[...new Set(this.pending().map(d=>d.actorId))]}:null,history:[...this.data.archives].reverse().map(r=>this.registry.get(r.moduleId).summary(r))};
+    this.snapshot={connector:this.info,connected:this.connected,connectorUpdateRequired:this.connectorUpdateRequired,game:run?this.module().tableView(run,viewer,{revealHands:viewer===null||(this.data.curiosityMode&&this.module().finished(run.state))}):null,room:run?{...room,finished:this.module().finished(run.state)}:null,seats:structuredClone(this.seats),paused:this.paused,curiosityMode:this.data.curiosityMode,conversations:run?this.conversations.forRun(run.runId):{},conversationError:this.conversations.error,error:this.error,activity:run?{...this.module().activity(run),actors:[...new Set(this.pending().map(d=>d.actorId))]}:null,history:[...this.data.archives].reverse().map(r=>this.registry.get(r.moduleId).summary(r))};
     this.listeners.forEach(listener=>listener());
   }
   private save(){
+    this.conversations.retain(new Set([this.data.current,...this.data.archives].filter((r):r is StoredRun=>!!r).map(r=>r.runId)));
     try{this.store.setItem(STORE_KEY,JSON.stringify(this.data));}
     catch{this.error='浏览器存储空间不足；本次变更可能无法恢复，请导出记录或释放空间。';}
   }
@@ -101,7 +109,7 @@ export class GameController {
     if(!this.connected)throw new Error('请先启动并连接本地连接器');
     await this.pause();await this.client.stopSessions();this.bindings.clear();
     if(!this.connected)throw new Error('连接已断开，请重新连接本机后开始');
-    this.data.current=run;this.data.persistConversations=options.persistConversations===true;this.paused=false;this.error=null;this.resetSeats();this.recordFinish();this.save();this.refresh();this.schedule();
+    this.data.current=run;this.data.curiosityMode=options.curiosityMode??this.data.curiosityMode;this.paused=false;this.error=null;this.resetSeats();this.recordFinish();this.save();this.refresh();this.schedule();
   }
   async nextRound(configs?:PlayerConfig[]){
     const old=this.data.current;if(!old||!this.module().finished(old.state))throw new Error('当前游戏尚未结束，不能变更阵容');
@@ -166,6 +174,9 @@ export class GameController {
   replay(id:string,round:number){const run=this.data.archives.find(r=>r.roomId===id&&r.index===round);return run?structuredClone(run):undefined;}
   planning(){const run=this.data.current;return run?this.module().planning?.(run):undefined;}
   rules(){return this.data.current?this.module().rules(this.data.current):this.registry.list()[0].rules();}
+  setCuriosityMode(enabled:boolean){this.data.curiosityMode=enabled;this.save();this.refresh();}
+  conversation(runId:string,playerId:string){return structuredClone(this.conversations.forRun(runId)[playerId]??[]);}
+  flushConversations(){this.conversations.flush();}
   clearError(){this.error=null;this.refresh();}
   handleTool(request:BrowserToolRequest):ToolResponse{
     try{
@@ -205,9 +216,9 @@ export class GameController {
     runtime.status='connecting';runtime.message='创建独立玩家会话';this.refresh();
     this.bindings.set(playerId,{scopeId,registry});
     try{
-      const {sessionId}=await this.client.createSession({scopeId,playerId,kind:player.kind,name:player.name,displayTitle:`同桌 · ${module.name} · ${player.name} · 第 ${run.index} ${module.runNoun}`,instructions:module.initializePrompt(run,playerId),tools:registry.definitions,persistConversation:this.data.persistConversations===true,model:player.model,reasoningEffort:player.reasoningEffort});
+      const {sessionId}=await this.client.createSession({scopeId,playerId,kind:player.kind,name:player.name,instructions:module.initializePrompt(run,playerId),tools:registry.definitions,model:player.model,reasoningEffort:player.reasoningEffort});
       runtime.sessionId=sessionId;runtime.status=this.paused||generation!==this.generation?'paused':'ready';
-      if(this.data.persistConversations)runtime.conversationId=sessionId;this.refresh();
+      this.refresh();
     }catch(e){this.bindings.delete(playerId);throw e;}
   }
   private async pump(generation:number){

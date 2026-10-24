@@ -1,4 +1,4 @@
-# 桥接协议 4 与动态 MCP
+# 桥接协议 5 与动态 MCP
 
 ## 版本分离
 
@@ -9,7 +9,7 @@
 | 桥接协议 | `packages/protocol/src/index.ts` 的 PROTOCOL_VERSION | 网页 HTTP/SSE wire 格式 |
 | required capabilities / minimumVersion | `apps/web/src/version.ts` | 网页所需能力与最低修复版本 |
 | 模块 version / stateVersion | 各 GameModule | 模块发行与浏览器领域状态格式 |
-| MCP/ACP 协商版本 | 官方 SDK/原生 Harness | 原生协议；不等于桥接协议 4 |
+| MCP/ACP 协商版本 | 官方 SDK/原生 Harness | 原生协议；不等于桥接协议 5 |
 
 网页先读 health，检查协议、所需 capability 和最低连接器版本。不要求网页与连接器同版本或同 minor；满足条件的更高连接器可直接连接。新增游戏、提示词、工具名或 schema 不提高连接器版本要求。
 
@@ -20,6 +20,7 @@
 - `player-scopes-v1`
 - `concurrent-decisions-v1`
 - `structured-results-v1`
+- `local-conversations-v1`
 
 ## HTTP 与事件
 
@@ -29,7 +30,7 @@
 | --- | --- |
 | GET /health | 连接器版本、协议、能力、原生 Harness 状态与各自模型目录 |
 | POST /api/connect | 协议/能力握手，返回控制令牌 |
-| GET /api/events | 授权 SSE：ready、tool、activity、usage |
+| GET /api/events | 授权 SSE：ready、tool、activity、usage、conversation |
 | POST /api/sessions | 创建单玩家原生会话及固定工具注册表 |
 | POST /api/sessions/:id/turn | 传 decisionId、模块提示词和可选模型/强度；按玩家并发 |
 | POST /api/tool-results | 网页返回标准 MCP 结果 |
@@ -46,10 +47,8 @@ interface SessionRequest {
   playerId:string;
   kind:'codex'|'codex-acp'|'dsh'|'workbuddy';
   name:string;
-  displayTitle:string;
   instructions:string;
   tools:ToolDefinition[];
-  persistConversation?:boolean;
   model?:string;
   reasoningEffort?:string;
 }
@@ -60,6 +59,14 @@ interface SessionRequest {
 `/turn` 接受 `{decisionId,prompt,settings?}`。同一原生会话不允许重叠任务，不同会话可并发。桥只报告原生任务 completed，决策完成与否由网页模块检查。
 
 转发的工具请求是 `{id,scopeId,playerId,decisionId?,tool,args}`；控制事件用 playerId 路由。工具结果通过 id 与原请求关联，默认 20 秒未得到网页响应即失败。
+
+## 本地对话事件
+
+`conversation` 事件包含 `{scopeId,playerId,entry,append?}`。`entry` 使用 `{id,time,kind,title,text}`，kind 为 instructions、prompt、message、reasoning、tool-call、tool-result、event 或 error。同一 id 的事件更新原条目；`append:true` 将流式片段接到原文之后，其他事件替换全文。时间使用 ISO 字符串。
+
+连接器记录初始化指令、工具声明、实际发送给 Harness 的提示、回复、可见思考、工具参数和完整结果，以及权限答复、暂停与错误。原生会话结束前仍可转发收尾消息，避免最后一次行动丢失记录。认证交换、进程配置和带凭据的 MCP 地址不进入对话。
+
+网页按作用域与玩家归属接收对话，按 runId/playerId 存入 `agent-arcade.conversations.v1`。流式内容合并后分批保存，页面隐藏或关闭前立即保存。开关只控制显示，记录不依赖好奇模式；刷新可重新查看已保存内容。原生 Harness 始终使用临时会话，不提供客户端历史保留开关。
 
 ## 动态注册与校验
 
@@ -77,7 +84,7 @@ interface SessionRequest {
 - 无效参数在桥内拒绝，不转发到浏览器；网页另做同样校验和领域规则校验。
 - 每个成功结果先校验标准 CallToolResult，再校验 outputSchema；校验失败不提交网页状态。
 
-dsh 的 tools.guard 与 WorkBuddy 的 allowedTools 来自当前注册表。Codex 仅挂载该玩家的 agent_game MCP，关闭无关工具、服务和审批；不改用户全局配置。工具说明和 MCP annotations 不授予原生权限。
+dsh 的 tools.guard 与 WorkBuddy 的 allowedTools 来自当前注册表。Codex 仅挂载该玩家的 agent_game MCP，停用其他工具与服务；文件和命令审批一律拒绝，游戏工具审批只接受本会话注册、当前任务内可关联的调用。桥与网页仍分别校验玩家和决策。不改用户全局配置。工具说明和 MCP annotations 不授予原生权限。
 
 ## 决策授权
 

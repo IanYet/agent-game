@@ -2,7 +2,7 @@ import {CONNECTOR_VERSION} from '../version';
 import { JsonRpcProcess, abortError } from './rpc';
 import { executableCommand } from './discovery';
 import { sessionInstructions } from './instructions';
-import { playerConversationTitle } from './settings';
+import { captureConversation } from './conversation';
 import type { AgentSession, HarnessAdapter, HarnessContext, ModelInfo } from '../types';
 
 export function subscriptionEnvironment(): NodeJS.ProcessEnv {
@@ -40,11 +40,24 @@ export class CodexAdapter implements HarnessAdapter {
   async createSession(context: HarnessContext): Promise<AgentSession> {
     const command = await executableCommand(this.path, ['app-server', '--listen', 'stdio://', ...configArguments(gameConfig(undefined, this.disabledServers))]);
     const rpc = new JsonRpcProcess({ ...command, env: subscriptionEnvironment() }, context.cwd);
+    captureConversation(rpc, context);
     let turnId: string | null = null;
+    let sessionId: string | null = null;
+    let activeSignal: AbortSignal | undefined;
+    const registeredTools = new Set(context.tools.map(tool => tool.name));
+    const gameCalls = new Set<string>();
     let activeDone: ((error?: Error) => void) | null = null;
-    rpc.onRequest = async method => {
+    rpc.onRequest = async (method, params) => {
+      if (method === 'mcpServer/elicitation/request') {
+        // Codex correlates MCP approval with the preceding item/started. Only
+        // approve one registered game call in this player's active prompt.
+        const allowed = activeSignal && !activeSignal.aborted && params.threadId === sessionId && params.serverName === 'agent_game' &&
+          params.mode === 'form' && params._meta?.codex_approval_kind === 'mcp_tool_call' && gameCalls.size === 1;
+        if (allowed) gameCalls.clear();
+        return { action: allowed ? 'accept' : 'cancel', content: null, _meta: null };
+      }
       if (method.includes('requestApproval')) return { decision: 'decline' };
-      if (method === 'tool/requestUserInput') return { answers: {} };
+      if (method === 'item/tool/requestUserInput') return { answers: {} };
       throw new Error('只允许游戏 MCP 工具');
     };
     rpc.on('exit', error => activeDone?.(error));
@@ -54,7 +67,14 @@ export class CodexAdapter implements HarnessAdapter {
         turnId = null;
         activeDone?.(params.turn?.status === 'completed' ? undefined : new Error(params.turn?.error?.message ?? `Codex 回合${params.turn?.status ?? '失败'}`));
       }
-      if (method === 'item/started' && params.item?.type === 'mcpToolCall') context.onActivity('正在使用游戏工具', params.item.tool);
+      if (params.item?.type === 'mcpToolCall') {
+        const item = params.item;
+        if (method === 'item/completed') gameCalls.delete(item.id);
+        if (method === 'item/started') {
+          if (activeSignal && !activeSignal.aborted && params.threadId === sessionId && item.server === 'agent_game' && registeredTools.has(item.tool)) gameCalls.add(item.id);
+          context.onActivity('正在使用游戏工具', item.tool);
+        }
+      }
       if (method === 'thread/tokenUsage/updated') context.onUsage(params.tokenUsage?.total?.totalTokens ?? 0);
     });
     try {
@@ -64,19 +84,18 @@ export class CodexAdapter implements HarnessAdapter {
       if (!account.account || account.account.type !== 'chatgpt') throw new Error('请先运行 codex login，使用 ChatGPT 订阅登录 Codex');
       const result = await rpc.call('thread/start', {
         cwd: context.cwd, ...(context.model ? { model: context.model } : {}),
-        sandbox: 'read-only', approvalPolicy: 'never', developerInstructions: sessionInstructions(context),
-        config: gameConfig(context.mcpUrl, this.disabledServers), ephemeral: !context.persistConversation,
+        sandbox: 'read-only', approvalPolicy: 'on-request', developerInstructions: sessionInstructions(context),
+        config: gameConfig(context.mcpUrl, this.disabledServers), ephemeral: true,
       }, 90_000);
-      const sessionId: string = result.thread.id;
-      if (context.persistConversation) await rpc.call('thread/name/set', { threadId: sessionId, name: playerConversationTitle(context) });
+      const createdSessionId: string = result.thread.id; sessionId = createdSessionId;
       return {
-        sessionId,
+        sessionId: createdSessionId,
         playTurn: async (prompt, signal, settings) => {
           if (signal.aborted) throw abortError();
-          turnId = null;
+          turnId = null; gameCalls.clear(); activeSignal = signal;
           await new Promise<void>((resolve, reject) => {
             let settled = false;
-            const finish = (error?: Error) => { if (settled) return; settled = true; clearTimeout(timer); signal.removeEventListener('abort', abort); activeDone = null; error ? reject(error) : resolve(); };
+            const finish = (error?: Error) => { if (settled) return; settled = true; clearTimeout(timer); signal.removeEventListener('abort', abort); activeDone = null; activeSignal = undefined; gameCalls.clear(); error ? reject(error) : resolve(); };
             // Wait for turn/completed before allowing resume to send a new turn.
             // The abort may arrive while turn/start is still being acknowledged.
             let interrupting = false;
@@ -91,7 +110,7 @@ export class CodexAdapter implements HarnessAdapter {
             }).catch(finish);
           });
         },
-        close: () => rpc.close(),
+        close: () => { activeSignal = undefined; gameCalls.clear(); return rpc.close(); },
       };
     } catch (error) { await rpc.close(); throw error; }
   }

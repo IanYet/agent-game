@@ -123,7 +123,11 @@ export function VisualExperience({enabled,page}:{enabled:boolean;page:string}){
     };
     const wake=()=>{reduced=runtime.current.reduced;lensDirty=true;heroDirty=true;if(lens.current)lens.current.style.opacity='0';schedule();};
     const invalidate=()=>{lensDirty=true;schedule();};
-    const transition=(event:Event)=>{if((event.target as Element).closest?.('.tz-gallery-scope')){visualMotionUntil=performance.now()+1300;invalidate();}};
+    const transition=(event:Event)=>{
+      const target=event.target as Element;
+      const duration=target.closest?.('.tz-gallery-scope')?1300:target.closest?.('.cursor-lens-toggle')?250:0;
+      if(duration){visualMotionUntil=Math.max(visualMotionUntil,performance.now()+duration);invalidate();}
+    };
     const tick=(now:number)=>{
       frame=0;if(!alive||lost||document.hidden)return;
       if(now-last<33){schedule();return;}

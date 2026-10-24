@@ -9,12 +9,13 @@
 .tz-gallery-scope .r-foil-source{display:block;width:100%;height:100%}
 .tz-gallery-scope .r-accordion-caption{position:absolute;left:24px;right:22px;bottom:28px;display:flex;flex-direction:column;gap:11px;white-space:nowrap;writing-mode:horizontal-tb;z-index:2;pointer-events:none}
 .tz-gallery-scope .r-accordion-caption strong{font-weight:400;font-size:23px;line-height:1.3;letter-spacing:-1px;color:#c3c9d4}
-.tz-gallery-scope .r-accordion-caption small{display:block;opacity:0;transition:opacity .6s;font:9px/1.8 Arial,'Noto Sans SC',sans-serif;letter-spacing:1px;color:#959fb3}
+.tz-gallery-scope .r-accordion-caption small{display:block;opacity:0;transition:opacity .18s;font:9px/1.8 Arial,'Noto Sans SC',sans-serif;letter-spacing:1px;color:#959fb3}
 .tz-gallery-scope .ag-panel--active .r-accordion-caption{writing-mode:horizontal-tb;left:27px;right:22px}
 .tz-gallery-scope .ag-panel--active .r-accordion-caption strong{font-size:37px;letter-spacing:-1px;color:#f0f0e9}
 .tz-gallery-scope .ag-panel--active .r-accordion-caption small{opacity:1}
 .tz-gallery-scope .r-accordion-choice{position:absolute;inset:0;z-index:4;background:transparent;border:0;color:#f0f0e9;text-align:right;padding:26px;display:flex;align-items:flex-end;justify-content:flex-end}
-.tz-gallery-scope .r-accordion-choice>span{display:flex;gap:12px;align-items:center;font-size:11px;opacity:0;transform:translateY(8px);transition:none}
+.tz-gallery-scope .r-accordion-choice>span{display:flex;gap:12px;align-items:center;font-size:11px;opacity:0;transform:translateY(8px);transition:opacity .18s,transform .22s}
 .tz-gallery-scope .r-accordion-choice b{font:30px/1 Arial,sans-serif;font-weight:400;color:#e7b7a2}
-.tz-gallery-scope .ag-panel--active[data-expanded="true"] .r-accordion-choice>span{opacity:1;transform:none;transition:opacity .2s,transform .25s}
+.tz-gallery-scope .ag-panel--active .r-accordion-choice>span{opacity:1;transform:none}
 .tz-gallery-scope .r-accordion-choice:focus-visible{outline:2px solid #e7b7a2;outline-offset:-4px;border-radius:5px}
+.tz-gallery-scope[data-gallery-reduced="true"] .r-accordion-caption small,.tz-gallery-scope[data-gallery-reduced="true"] .r-accordion-choice>span{transition:none}

@@ -4,16 +4,18 @@ import { executableCommand } from './discovery';
 import { gameConfig, subscriptionEnvironment } from './codex';
 import { sessionInstructions } from './instructions';
 import { readFile } from 'node:fs/promises';
-import { playerConversationTitle, selectAcpModel } from './settings';
+import { selectAcpModel } from './settings';
+import { captureConversation } from './conversation';
 import type { AgentSession, HarnessAdapter, HarnessContext } from '../types';
 
 export class AcpAdapter implements HarnessAdapter {
   id = 'codex-acp';
   constructor(private path: string, private codexPath: string, private disabledServers: string[] = []) {}
   async createSession(context: HarnessContext): Promise<AgentSession> {
-    if (!context.persistConversation && !(await readFile(this.path, 'utf8').catch(() => '')).includes('AgentArcade: ephemeral sessions')) throw new Error('此 ACP 适配器不支持临时会话。请更新连接器，或主动开启“保留玩家对话”。');
+    if (!(await readFile(this.path, 'utf8').catch(() => '')).includes('AgentArcade: ephemeral sessions')) throw new Error('此 ACP 适配器不支持临时会话，请更新连接器。');
     const command = await executableCommand(this.path);
     const rpc = new JsonRpcProcess({ ...command, env: { ...subscriptionEnvironment(), CODEX_PATH: this.codexPath, MODEL_PROVIDER: 'agent_arcade_chatgpt', INITIAL_AGENT_MODE: 'read-only', CODEX_CONFIG: JSON.stringify({ ...gameConfig(undefined, this.disabledServers), ...(context.reasoningEffort ? { model_reasoning_effort: context.reasoningEffort } : {}), ...(context.model ? { model: context.model } : {}), developer_instructions: sessionInstructions(context) }) } }, context.cwd);
+    captureConversation(rpc, context);
     const registeredTools = new Set(context.tools.map(tool => tool.name));
     const gameCalls = new Set<string>();
     let sessionId: string | undefined;
@@ -50,7 +52,7 @@ export class AcpAdapter implements HarnessAdapter {
       const initialized = await rpc.call('initialize', { protocolVersion: 1, clientCapabilities: { _meta: { jetbrains: { air: { version: 1, capabilities: ['sessionIndex'] } } } }, clientInfo: { name: 'agent_arcade', title: '同桌 Agent Arcade', version: CONNECTOR_VERSION } });
       if (initialized.protocolVersion !== 1) throw new Error(`暂不支持此 ACP 版本：${initialized.protocolVersion}`);
       if (!initialized.agentCapabilities?.mcpCapabilities?.http) throw new Error('此 ACP harness 不支持 HTTP MCP，请使用 Codex App Server 模式');
-      const result = await rpc.call('session/new', { cwd: context.cwd, mcpServers: [{ type: 'http', name: 'agent_game', url: context.mcpUrl, headers: [] }], _meta: { agentArcade: { ephemeral: !context.persistConversation } } }, 90_000);
+      const result = await rpc.call('session/new', { cwd: context.cwd, mcpServers: [{ type: 'http', name: 'agent_game', url: context.mcpUrl, headers: [] }] }, 90_000);
       const createdSessionId: string = result.sessionId;
       sessionId = createdSessionId;
       const models: Array<{ modelId: string }> = result.models?.availableModels ?? [];
@@ -60,7 +62,6 @@ export class AcpAdapter implements HarnessAdapter {
         if (selected && selected !== currentModelId) { await rpc.call('session/set_model', { sessionId, modelId: selected }); currentModelId = selected; }
       };
       await configure(context);
-      if (context.persistConversation) await rpc.call('_session/rename', { sessionId, title: playerConversationTitle(context) });
       return {
         sessionId: createdSessionId,
         playTurn: async (prompt, signal, settings) => {

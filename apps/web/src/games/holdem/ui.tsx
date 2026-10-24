@@ -1,6 +1,6 @@
 import type {HoldemView} from './engine';
 import {useEffect,useState} from 'react';
-import {ShieldCheck,Radio} from 'lucide-react';
+import {ShieldCheck} from 'lucide-react';
 import {cardLabel,rankLabel,SUIT_LABELS,type Card} from '@agent-game/core';
 import {modelsForHarness} from '@agent-game/protocol';
 import type {ControlledView,GameUiProps} from '../../runtime/types';
@@ -38,15 +38,15 @@ export function HoldemTable({state,controller,onError,tableActions}:GameUiProps)
           <div className="poker-seat-body"><div className="hole-cards">{[0,1].map(i=><PokerCard key={i} card={p.hand?.[i]}/>)}</div><div className="poker-balance"><small>可用筹码</small><strong>{p.chips}</strong><small>已投入 {p.committed}</small></div></div><div className="poker-seat-status" data-player-status>{status(p)}</div>
         </PlayerCard>)}</div>
       </div>
-      <PlayerCard state={own?cardState(own):'waiting'} primary={!!own} className={`holdem-player ${ownTurn?'is-your-turn':''}`} data-player-surface={!!own||undefined} data-cursor-lens={own?'off':undefined} aria-label={own?'我的底牌与操作':'观战与牌桌操作'}>
-        {own?<div className="holdem-player-body"><div className="holdem-own-cards"><header><div><span className="identity-caption">YOU ARE IN.</span><div className="holdem-own-name"><span className="poker-player-number">{String(own.seat+1).padStart(2,'0')}</span><strong>{own.name}</strong>{tags(own.seat)}</div></div><span className="own-turn-state" data-player-status>{status(own)}</span></header><div className="own-cards-balance"><div className="hole-cards">{[0,1].map(i=><PokerCard key={i} card={own.hand?.[i]}/>)}</div><div className="poker-balance"><small>可用筹码</small><strong>{own.chips}</strong><small>已投入 {own.committed}</small></div></div></div>
+      {own?<PlayerCard state={cardState(own)} primary className={`holdem-player ${ownTurn?'is-your-turn':''}`} data-player-surface data-cursor-lens="off" aria-label="我的底牌与操作">
+        <div className="holdem-player-body"><div className="holdem-own-cards"><header><div><span className="identity-caption">YOU ARE IN.</span><div className="holdem-own-name"><span className="poker-player-number">{String(own.seat+1).padStart(2,'0')}</span><strong>{own.name}</strong>{tags(own.seat)}</div></div><span className="own-turn-state" data-player-status>{status(own)}</span></header><div className="own-cards-balance"><div className="hole-cards">{[0,1].map(i=><PokerCard key={i} card={own.hand?.[i]}/>)}</div><div className="poker-balance"><small>可用筹码</small><strong>{own.chips}</strong><small>已投入 {own.committed}</small></div></div></div>
           <div className="holdem-own-actions"><span className="identity-caption">{ownTurn?'YOUR MOVE.':'YOUR NEXT MOVE.'}</span>
             {ownTurn&&betting?<div className="poker-controls"><div className="poker-basic-actions">{game.legalActions.filter(a=>a.action.type!=='raise').map(a=><button className={`button ${a.id==='fold'?'outline':'primary'}`} key={a.id} onClick={()=>act(a.action)}>{a.label}</button>)}</div>
               {betting.canRaise&&<div className="poker-raise"><label>本轮下注到<input aria-label="加注到" type="number" min={Math.min(betting.minRaiseTo,betting.maxRaiseTo)} max={betting.maxRaiseTo} step="1" value={raise} onChange={e=>setRaise(e.target.value)}/></label><button className="button outline" disabled={!validRaise} onClick={()=>act({type:'raise',amount:Number(raise)})}>加注至 {raise||'—'}</button><div className="raise-presets">{game.legalActions.filter(a=>a.action.type==='raise').map(a=><button key={a.id} onClick={()=>a.action.type==='raise'&&setRaise(String(a.action.amount))}>{a.label}</button>)}</div><small>{betting.shortAllInOnly?'筹码不足最小加注，只能全下':`最小加注到 ${betting.minRaiseTo}，最多 ${betting.maxRaiseTo}`}</small></div>}
             </div>:<p className="poker-waiting">{game.phase==='finished'?'本手已结束，确认玩家后开始下一手。':state.paused?'游戏已暂停，准备好后继续。':own.folded?'本手已弃牌，等待结算。':own.allIn?'你已全下，等待摊牌。':'等待其他玩家行动。'}</p>}
-          </div></div>:<div className="spectator-controls"><Radio size={20}/><div><span className="identity-caption">AT THE TABLE.</span><p>{game.phase==='finished'?'本手已结束，可查看结算。':'观战时隐藏所有底牌，摊牌时展示未弃牌玩家。'}</p></div></div>}
+          </div></div>
         <div className="player-table-actions">{tableActions}</div>
-      </PlayerCard>
+      </PlayerCard>:<div className="spectator-table-actions"><p>{game.phase==='finished'?'本手已结束，可查看结算。':'观战中 · 点击 Agent 光球查看对话'}</p>{tableActions}</div>}
     </section>
     <aside className="table-rail">{game.phase==='finished'&&<FoilPanel className="poker-result"><h3>本手结算</h3><div className="poker-results">{game.players.map((p,i)=><div key={p.playerId}><strong>{p.name}</strong><span>{p.startingChips} → {p.chips}</span><b className={(game.result?.deltas[i]??0)>0?'positive':''}>{(game.result?.deltas[i]??0)>0?'+':''}{game.result?.deltas[i]}</b></div>)}</div>{game.result?.pots.map((pot,i)=><p key={i}>{i===0?'主池':`边池 ${i}`} {pot.amount} · {pot.awards.map(a=>`${game.players[a.seat].name} +${a.amount}`).join('，')}</p>)}<p>在下方「准备下一手」确认玩家后继续。</p><small>筹码留在这张牌桌；下一手为每位 Agent 创建全新会话。</small></FoilPanel>}
       <FoilPanel className="event-card"><div className="event-heading"><h3>牌桌动态</h3><span>第 {game.round} 手</span></div><div className="event-list">{[...game.events].reverse().map(e=><div className="game-event" key={e.seq}><span className="event-time">{new Date(e.time).toLocaleTimeString('zh-CN',{hour12:false})}</span><p>{e.seat!==undefined&&<b>{game.players[e.seat].name} </b>}{e.text}</p>{e.cards&&<span>{e.cards.map(cardLabel).join(' ')}</span>}</div>)}</div></FoilPanel>

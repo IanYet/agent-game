@@ -42,7 +42,8 @@ export const gameRegistry = new GameRegistry([existingGame, myGame]);
 | `create(meta,random)` | 创建新桌初始领域状态 |
 | `next(previous,meta,random)` | 同桌新一局；按稳定 playerId 决定继承、离桌或买入 |
 | `finished(state)` | 判断整局结束 |
-| `observe(run,playerId|null)` | 当前玩家的私有视图，null 表示观众 |
+| `observe(run,playerId|null)` | 当前玩家的私有视图，null 表示公开记录；供提示词与工具使用 |
+| `tableView(run,playerId|null,{revealHands})` | 浏览器牌桌视图；按显式标记公开全部手牌，不能用于 Agent 提示或工具 |
 | `decisions(run)` | 当前待完成决策集合 |
 | `tools(run,playerId)` | 为该玩家声明完整、固定的会话工具列表 |
 | `initializePrompt/decisionPrompt` | 初始化与本次唤醒的提示；包含必要规则及私有观察 |
@@ -80,6 +81,8 @@ const tools: ToolDefinition[] = [{
 
 工具列表在会话建立时冻结。不要按瞬时阶段改变 tools/list；将各阶段能力固定声明，在 handler 和 allowedTools 中限制阶段。room 会话进入下一轮时若工具声明改变，平台会创建新会话。
 
+斗地主与德州的 `game_get_state` 在 `events` 字段返回当前局／手从发牌开始的全部公开记录，`seq` 按发生顺序递增。初始化与每轮提示也包含这份记录，界面显示条数不限制 Agent 读取。下一局／手开始后记录重置。记录中的 `cards` 只包含已经公开的牌，不包含对手未公开的手牌、牌库或烧牌。
+
 ## 决策设计
 
 顺序游戏可以返回当前行动者的一个 decision；同时游戏返回多个。模块必须保证 decisionId 在自己的语义窗口内稳定，并且完成后不再复用。一个玩家在一段原生 prompt 内可以有多次交互。
@@ -100,7 +103,7 @@ decisions: run => run.roster
 
 ## 状态版本与开发期存档
 
-平台只读 `agent-arcade.games.v3`，保存当前 run、最近 20 局和历史保留偏好。原生会话和令牌不存入浏览器。
+平台只读 `agent-arcade.games.v4`，保存当前 run、最近 20 局和好奇模式偏好。对话另存于 `agent-arcade.conversations.v1`，按 runId/playerId 保留完整指令、回复、思考与工具结果。两类存档都不迁移旧格式。原生会话句柄不用于恢复，令牌不存入浏览器。
 
 当前没有旧用户数据，不提供旧格式兼容、迁移器或恢复导出。修改状态结构时递增 stateVersion；版本不匹配会拒绝载入并提示新建游戏。开发时可在浏览器开发者工具清除该键后重开。moduleVersion 用于标识模块发行，不替代 stateVersion 或连接器协议。
 
@@ -127,7 +130,7 @@ const visualState = playerCardState({
 </PlayerCard>
 ```
 
-`PlayerCardState` 包含 `waiting`、`connecting`、`thinking`、`acting`、`folded`、`paused`、`finished`。也可直接传入其中一个状态，适配同时行动的游戏。弃牌优先级最高，其后是结束和暂停；等待回合不因 Agent 上次任务尚未收尾而显示思考。头像必须放在对应的 `PlayerCard` 内，才能取得正确状态；不要给每位玩家单独创建 WebGL 绘制器。将光球放在独立区域，避免挤进姓名行；若编号已在姓名旁显示，给 `PlayerCardAvatar` 传入 `showNumber={false}`，关闭光球下方的重复编号。
+`PlayerCardState` 包含 `waiting`、`connecting`、`thinking`、`acting`、`folded`、`paused`、`finished`。也可直接传入其中一个状态，适配同时行动的游戏。弃牌优先级最高，其后是结束和暂停；等待回合不因 Agent 上次任务尚未收尾而显示思考。头像必须放在对应的 `PlayerCard` 内，才能取得正确状态；不要给每位玩家单独创建 WebGL 绘制器。全 Agent 观战或好奇模式开启时，公共 PlayerCardAvatar 自动把 Agent 光球作为对话弹窗入口，游戏无需自行绑定点击。将光球放在独立区域，避免挤进姓名行；若编号已在姓名旁显示，给 `PlayerCardAvatar` 传入 `showNumber={false}`，关闭光球下方的重复编号。
 
 真人主卡使用 `primary`，并传入 `data-player-surface` 和 `data-cursor-lens="off"`；出牌／下注按钮与输入放进主卡内部。`tableActions` 提供暂停／继续或准备下一局的控制；规则、玩家与模型、选择新桌由公共 `GameChrome` 放在游戏标题右侧。所有卡片共用 20 CSS px 的最大屏幕边缘位移。状态光效、静态偏好、透镜画布同步由公共层处理，状态文案仍由游戏提供。
 

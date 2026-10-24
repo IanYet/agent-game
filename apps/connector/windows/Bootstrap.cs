@@ -8,8 +8,8 @@ using System.Security.Cryptography;
 
 [assembly: AssemblyTitle("同桌连接器 · Windows 64 位")]
 [assembly: AssemblyProduct("同桌连接器")]
-[assembly: AssemblyVersion("0.4.3.0")]
-[assembly: AssemblyFileVersion("0.4.3.0")]
+[assembly: AssemblyVersion("0.5.0.0")]
+[assembly: AssemblyFileVersion("0.5.0.0")]
 
 // The downloaded EXE is just a portable bundle. The actual visible application
 // is self-contained WinUI 3, including its native Windows App SDK dependencies.
