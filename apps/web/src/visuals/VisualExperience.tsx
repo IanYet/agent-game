@@ -8,6 +8,7 @@ import {GlassLightPaths} from './glass-optics';
 import {GlassBeams} from './glass-beams';
 import {LensCompositor} from './compositor';
 import {useEffectsPreference} from './preferences';
+import {FrameProfiler} from './frame-profiler';
 
 const vertex='varying vec2 v_uv;void main(){v_uv=uv;gl_Position=vec4(position.xy,0.,1.);}';
 // The stock FXAA threshold skips the deliberately dark YOUR MOVE outlines.
@@ -40,6 +41,8 @@ export function VisualExperience({enabled,page}:{enabled:boolean;page:string}){
     // Fullscreen ray marching needs shader supersampling, not triangle-edge MSAA.
     try{renderer=new WebGLRenderer({alpha:true,antialias:false,powerPreference:'high-performance'});}catch{return;}
     renderer.setPixelRatio(1);renderer.setClearColor(0,0);renderer.setSize(1,1,false);renderer.setScissorTest(true);renderer.autoClear=false;
+    const profileContext=renderer.getContext();
+    const profiler=import.meta.env.DEV&&lens.current&&'beginQuery' in profileContext?new FrameProfiler(lens.current,profileContext):undefined;
     const scene=new Scene(),camera=new OrthographicCamera(-1,1,1,-1,0,1),geometry=new PlaneGeometry(2,2),mesh=new Mesh(geometry);scene.add(mesh);
     const materials:ShaderMaterial[]=[],textures:CanvasTexture[]=[];
     const material=(fragmentShader:string,uniforms:Record<string,{value:unknown}>)=>{
@@ -123,6 +126,7 @@ export function VisualExperience({enabled,page}:{enabled:boolean;page:string}){
     };
     const wake=()=>{reduced=runtime.current.reduced;lensDirty=true;heroDirty=true;if(lens.current)lens.current.style.opacity='0';schedule();};
     const invalidate=()=>{lensDirty=true;schedule();};
+    const visualFrame=()=>{if(allowed())invalidate();};
     const transition=(event:Event)=>{if((event.target as Element).closest?.('.tz-gallery-scope')){visualMotionUntil=performance.now()+1300;invalidate();}};
     const tick=(now:number)=>{
       frame=0;if(!alive||lost||document.hidden)return;
@@ -176,13 +180,19 @@ export function VisualExperience({enabled,page}:{enabled:boolean;page:string}){
         animated=animated||heroMotion;
       }
       if(lens.current&&allowed()&&(lensDirty||animated||Math.hypot(pointer.targetX-pointer.x,pointer.targetY-pointer.y)>.15)){
+        const lensStarted=performance.now();
         pointer.x+=(pointer.targetX-pointer.x)*.42;pointer.y+=(pointer.targetY-pointer.y)*.42;
-        compositor.paint(pointer.x,pointer.y);pageTexture.needsUpdate=true;
+        const paintStarted=performance.now();compositor.paint(pointer.x,pointer.y);pageTexture.needsUpdate=true;
+        profiler?.record('canvasSample',compositor.sampleMs);profiler?.record('domPaint',performance.now()-paintStarted-compositor.sampleMs);
         (lensMaterial.uniforms.u_pointer.value as Vector2).set(pointer.x,pointer.y);
         const blocked=document.querySelector<HTMLElement>('[data-player-surface]')?.getBoundingClientRect();
         (lensMaterial.uniforms.u_gameRect.value as Vector4).set(blocked?.left??-2,blocked?.top??-2,blocked?.right??-1,blocked?.bottom??-1);
         lens.current.style.transform='translate3d('+(pointer.x-100)+'px,'+(pointer.y-100)+'px,0)';
-        lens.current.style.opacity='1';render(lensMaterial,256,256);copy(lens.current,256,256);lensDirty=false;
+        lens.current.style.opacity='1';
+        profiler?.beginGpu();const submitStarted=performance.now();render(lensMaterial,256,256);profiler?.endGpu();profiler?.record('renderSubmit',performance.now()-submitStarted);
+        const copyStarted=performance.now();copy(lens.current,256,256);profiler?.record('frameCopy',performance.now()-copyStarted);lensDirty=false;
+        profiler?.record('lensCpu',performance.now()-lensStarted);profiler?.publish();
+        if(import.meta.env.DEV)lens.current.dataset.renderMs=(performance.now()-lensStarted).toFixed(2);
         animated=animated||Math.hypot(pointer.targetX-pointer.x,pointer.targetY-pointer.y)>.15;
       }else if(lens.current&&!allowed())lens.current.style.opacity='0';
       pointer.moved=false;if(!reduced&&animated)schedule();
@@ -193,7 +203,7 @@ export function VisualExperience({enabled,page}:{enabled:boolean;page:string}){
     const events:Array<[EventTarget,string,EventListener,AddEventListenerOptions?]>=[
       [window,'pointermove',move as EventListener,{passive:true}],[window,'pointerdown',down as EventListener],[window,'pointerup',up],[window,'pointercancel',up],
       [document.documentElement,'pointerleave',leave],[window,'blur',leave],[window,'scroll',wake,{passive:true,capture:true}],[window,'click',wake],[window,'focusin',wake],
-      [window,'keyup',wake],[window,'resize',wake],[window,'tongzhuo:visual-frame',invalidate],[document,'visibilitychange',wake],[document,'keydown',key as EventListener],[document,'transitionrun',transition,{capture:true}]
+      [window,'keyup',wake],[window,'resize',wake],[window,'tongzhuo:visual-frame',visualFrame],[document,'visibilitychange',wake],[document,'keydown',key as EventListener],[document,'transitionrun',transition,{capture:true}]
     ];
     events.forEach(([target,name,handler,options])=>target.addEventListener(name,handler,options));
     const mutations=new MutationObserver(invalidate);
@@ -203,7 +213,7 @@ export function VisualExperience({enabled,page}:{enabled:boolean;page:string}){
       alive=false;reset();cancelAnimationFrame(frame);mutations.disconnect();
       events.forEach(([target,name,handler,options])=>target.removeEventListener(name,handler,options));
       renderer.domElement.removeEventListener('webglcontextlost',lose);materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());
-      scenePlate.dispose();heroFrame.dispose();resolvedFrame.dispose();beams.dispose();geometry.dispose();renderer.dispose();renderer.forceContextLoss();
+      scenePlate.dispose();heroFrame.dispose();resolvedFrame.dispose();beams.dispose();geometry.dispose();profiler?.dispose();renderer.dispose();renderer.forceContextLoss();
     };
   },[page]);
   useEffect(()=>{window.dispatchEvent(new Event('resize'));},[enabled,preference.mode,preference.reduced,preference.lensEnabled]);

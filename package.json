@@ -1,6 +1,6 @@
 {
   "name": "agent-arcade",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "type": "module",
   "description": "A local game table for humans and their agents.",
@@ -28,6 +28,7 @@
     "@agentclientprotocol/codex-acp": "2.2.2",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "ajv": "^8.17.1",
+    "cannon-es": "0.20.0",
     "express": "^5.1.0",
     "gsap": "3.13.0",
     "lucide-react": "^0.468.0",
