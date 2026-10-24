@@ -46,6 +46,8 @@ gh workflow run connector.yml --repo IanYet/agent-game --ref <分支> --field pu
 gh run list --repo IanYet/agent-game --workflow connector.yml
 ```
 
+若三个平台的构建已成功，只有发布作业失败，可勾选 `publish_release`，在 `build_run_id` 填写原构建的运行 ID。工作流直接复用该次产物，发布器从 GitHub 核对原运行所属仓库、工作流和源提交；产物过期后需要重新构建。留空时仍构建三个平台。
+
 工作流分别在 Windows x64、macOS Apple Silicon 和 macOS Intel 上构建，使用 Node.js 24.19.0。各作业运行游戏规则测试、类型检查和构建，再生成原生安装包；不运行连接器、界面、协议或发布器自动测试。
 
 安装包名称和 Release 显示名统一放在 [connector-assets.mjs](../scripts/connector-assets.mjs)。Actions 下载产物与 Release 显示名会写明「同桌连接器」、系统和芯片。底层文件使用 ASCII 名称：
@@ -56,7 +58,7 @@ gh run list --repo IanYet/agent-game --workflow connector.yml
 
 三个平台打包完成后，发布作业核对版本、平台、源提交、文件大小与 SHA-256，并生成 `SHA256SUMS.txt`。只有发布作业拥有 Release 写权限，同一仓库的连接器发布按顺序运行。
 
-新版本先创建草稿 Release，上传全部文件并核对 GitHub 返回的摘要，再公开并检查下载内容。上传失败时回滚本次资产操作。重跑已有版本时保留原 tag、标题和正文；安装包的实际源提交以 `.build.json` 为准。
+新版本先创建草稿 Release，上传全部文件并核对 GitHub 返回的摘要，再公开并通过正式 tag 下载地址检查文件大小与 SHA-256。发布失败时回滚本次资产操作；重试会复用同版本草稿，下载地址短暂未就绪时会限次等待。重跑已有版本时保留原 tag、标题和正文，且 tag 必须指向安装包的源提交；实际构建信息保存在 `.build.json`。
 
 连接器版本来自 `apps/connector/version.json`。修改时同步 Windows `Launcher.cs` 和 `Bootstrap.cs` 的 `AssemblyVersion`、`AssemblyFileVersion`；打包会核对它们。macOS 的应用版本由打包脚本生成。本地未提交的构建会在 `.build.json` 标记 `sourceDirty: true`；CI 拒绝从未保存到 Git 的源码发布。
 

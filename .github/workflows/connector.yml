@@ -9,6 +9,10 @@ on:
         type: boolean
         required: true
         default: false
+      build_run_id:
+        description: '复用已完成构建的运行 ID；留空则重新构建'
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -19,6 +23,7 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ inputs.build_run_id == '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -94,12 +99,13 @@ jobs:
           retention-days: 14
 
   publish:
-    if: ${{ inputs.publish_release }}
+    if: ${{ !cancelled() && inputs.publish_release && (needs.build.result == 'success' || (needs.build.result == 'skipped' && inputs.build_run_id != '')) }}
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -109,6 +115,8 @@ jobs:
         with:
           pattern: 同桌连接器-*
           path: release-input
+          run-id: ${{ inputs.build_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Collect platform packages and checksums
         run: |
           mkdir release-assets
@@ -117,3 +125,4 @@ jobs:
         run: node scripts/publish-connector.mjs release-assets
         env:
           GH_TOKEN: ${{ github.token }}
+          CONNECTOR_BUILD_RUN_ID: ${{ inputs.build_run_id || github.run_id }}
