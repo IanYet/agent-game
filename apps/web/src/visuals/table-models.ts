@@ -6,11 +6,12 @@ import {
 import {ConvexPolyhedron, Cylinder, Vec3, type Shape as CollisionShape} from 'cannon-es';
 import {BaoTableModels} from '../games/baohuang/table-models';
 import {ChessTableModels} from '../games/chess/table-models';
+import {SplendorModels} from '../games/splendor/table-models';
 import {AzulTableModels} from '../games/azul/table-models';
 import {CitadelsModels} from '../games/citadels/table-models';
 import {GuandanTableModels} from '../games/guandan/table-models';
 
-export type TableTheme='holdem'|'doudizhu'|'baohuang'|'chess'|'azul'|'citadels'|'guandan';
+export type TableTheme='holdem'|'doudizhu'|'baohuang'|'chess'|'azul'|'citadels'|'splendor'|'guandan';
 type Collider={shape:CollisionShape;offset?:Vec3};
 interface GameModelSet {create:(index:number,scale:number)=>{mesh:Group;colliders:Collider[]};dispose:()=>void}
 
@@ -101,6 +102,7 @@ export class TableModels{
   constructor(private theme:TableTheme){
     if(theme==='baohuang'){this.gameModels=new BaoTableModels();return;}
     if(theme==='chess'){this.gameModels=new ChessTableModels();return;}
+    if(theme==='splendor'){this.gameModels=new SplendorModels();return;}
     if(theme==='azul'){this.gameModels=new AzulTableModels();return;}
     if(theme==='citadels'){this.gameModels=new CitadelsModels();return;}
     if(theme==='guandan'){this.gameModels=new GuandanTableModels();return;}
