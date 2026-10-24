@@ -15,7 +15,7 @@ export async function validatePackages(directory, sourceCommit) {
     const sha256 = createHash('sha256').update(bytes).digest('hex');
     const checksum = await readFile(join(directory, `${asset}.sha256`), 'utf8');
     if (metadata.asset !== asset || metadata.sha256 !== sha256 || metadata.size !== bytes.length || checksum !== `${sha256}  ${asset}\n`
-      || metadata.sourceCommit !== sourceCommit || metadata.protocolVersion !== 4 || metadata.platform !== platform || metadata.arch !== arch
+      || metadata.sourceCommit !== sourceCommit || metadata.sourceDirty !== false || metadata.protocolVersion !== 4 || metadata.platform !== platform || metadata.arch !== arch
       || metadata.version !== expectedVersion || !/^\d+\.\d+\.\d+$/.test(metadata.version) || (version && metadata.version !== version)) throw new Error(`Invalid package/provenance: ${asset}`);
     version = metadata.version;
     for (const name of [asset, `${asset}.sha256`, `${asset}.build.json`]) {
@@ -43,7 +43,7 @@ export async function publish({ repository, token, directory, sourceCommit, runI
   let release = await request(`${base}/releases/tags/${tag}`, { missing: true });
   if (!release) {
     release = await request(`${base}/releases`, { method: 'POST', body: { tag_name: tag, target_commitish: sourceCommit, name: `同桌连接器 ${tag}`, draft: true, prerelease: false,
-      body: `同桌连接器 ${tag}，协议 4，自带 Node.js。\n\nWindows 下载 64 位 EXE；macOS 13.5+ 按芯片选择 Apple Silicon 或 Intel ZIP，解压后将应用拖入「应用程序」。\n\nWindows 包尚未签名；macOS 包只有 ad-hoc 签名，尚未完成 Developer ID 签名与公证。首次打开受阻时，请按 Apple 官方说明处理：https://support.apple.com/102445 。\n\n每个包附带 .sha256 校验和与 .build.json 构建信息，SHA256SUMS.txt 汇总全部安装包。源提交：${sourceCommit}。` } });
+      body: `同桌连接器 ${tag}，协议 4，自带 Node.js。\n\n- Windows 改用 WinUI 3 原生窗口，macOS 改用 SwiftUI 完整窗口；关闭窗口继续后台运行，可从托盘／菜单栏恢复。\n- 新增端口与进程页面，显示 PID、路径和 IPv4／IPv6 地址；优先正常退出，强制结束须逐个确认目标与影响，操作后重新检测。\n- 两端使用最新双环品牌图标，macOS 菜单栏使用随系统深浅色变化的模板图。\n\nWindows 下载 64 位 EXE；macOS 13.5+ 按芯片选择 Apple Silicon 或 Intel ZIP，解压后将应用拖入「应用程序」。\n\nWindows 包自带 .NET 与 Windows App SDK，支持 Windows 10 2004（19041）及更新版本，尚未做 Authenticode 签名；macOS 包只有 ad-hoc 签名，尚未完成 Developer ID 签名与公证。ZIP 根目录附有「请先阅读.txt」。首次打开受阻时，先尝试打开一次；核实来源和文件完整性且信任本应用后，到「系统设置」→「隐私与安全性」针对本应用选择「仍要打开」，按要求验证身份并再次点「打开」。恶意软件、损坏或撤销提示不能当作普通身份提示放行；受管理的 Mac 可能限制此操作。ad-hoc 不代表 Apple 已审核或认证。Apple 官方说明：https://support.apple.com/zh-cn/102445 。\n\nmacOS 包由对应芯片的 macOS runner 编译并验证本地签名；下载隔离、窗口交互和真实账户仍待 Mac 实机验收。\n\n每个包附带 .sha256 校验和与 .build.json 构建信息，SHA256SUMS.txt 汇总全部安装包。源提交：${sourceCommit}。` } });
   }
   if (release.prerelease) throw new Error('Refusing to publish stable downloads into a prerelease.');
   const publishDraft = release.draft;

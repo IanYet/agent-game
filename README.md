@@ -4,7 +4,7 @@
 
 [游戏网站](https://ianyet.github.io/agent-game/) · [连接器下载](https://github.com/IanYet/agent-game/releases/latest) · [源码](https://github.com/IanYet/agent-game)
 
-网页和连接器独立发布。新增游戏只需添加网页模块并发布静态网站；连接器根据模块提供的工具声明和提示词转发请求，不执行网页发来的代码。当前网页版本为 0.4.1，连接器为 0.4.2，桥接协议为 4。
+网页和连接器独立发布。新增游戏只需添加网页模块并发布静态网站；连接器根据模块提供的工具声明和提示词转发请求，不执行网页发来的代码。当前网页版本为 0.4.1，连接器为 0.4.3，桥接协议为 4。
 
 ## 开始游戏
 
@@ -12,15 +12,19 @@
 2. 下载对应系统和芯片的连接器。Windows 双击 EXE；macOS 解压 ZIP，将「同桌连接器.app」拖入「应用程序」后打开。两端都自带 Node.js。
 3. 打开游戏网站，点击「连接本机」，允许浏览器访问本地网络。
 4. 创建牌桌，为每位 Agent 选择 Harness、模型和思考强度。斗地主固定三人，德州支持 2–9 人；最多一位真人，也可全 Agent 观战。
-5. 结束时，从 Windows 托盘或 macOS 菜单栏选择「退出连接器」，释放端口并停止它启动的子进程。Windows 关闭窗口会缩到托盘。
+5. 两端启动后都会显示完整窗口。关闭窗口会继续在 Windows 托盘或 macOS 菜单栏运行，可从图标重新打开；最小化保留在任务栏／程序坞。从窗口、应用菜单或托盘／菜单栏选择「退出连接器」，才会停止本次连接器启动的子进程并释放端口。
 
 | 系统 | 安装包 |
 | --- | --- |
-| Windows 10/11 x64，需要 .NET Framework 4.8 | [同桌连接器 · Windows 64 位](https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-Windows-x64.exe) |
+| Windows 10 2004（19041）及更新版本，x64，自带 WinUI、.NET 和 Node.js | [同桌连接器 · Windows 64 位](https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-Windows-x64.exe) |
 | macOS 13.5+，Apple Silicon（M 系列） | [同桌连接器 · macOS Apple Silicon](https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-macOS-Apple-Silicon.zip) |
 | macOS 13.5+，Intel | [同桌连接器 · macOS Intel](https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-macOS-Intel.zip) |
 
-Windows 包尚未签名；macOS 包只有 ad-hoc 签名，尚未完成 Developer ID 签名与公证。macOS 首次打开受阻时，请核对下载来源和校验和，再按 [Apple 的说明](https://support.apple.com/102445)操作。
+Windows 包尚未做 Authenticode 签名；macOS 包只有 ad-hoc 本地签名，没有 Developer ID 身份签名，也未经过 Apple 公证。ad-hoc 不表示 Apple 已审核或认证。macOS ZIP 根目录附有[首次启动说明](apps/connector/macos/请先阅读.txt)，应用打不开时也可阅读。
+
+macOS 首次打开受阻时，先核对下载来源和校验和；若确认信任且文件未被篡改，先尝试打开一次，再进入「系统设置」→「隐私与安全性」，向下滚动到安全性区域，针对本应用点击「仍要打开」，按要求验证身份，再在警告中点「打开」。受管理的 Mac 可能限制该操作。恶意软件、将损坏电脑或应用已损坏的提示不能当作普通身份提示放行。完整条件见 [Apple 官方说明](https://support.apple.com/zh-cn/102445)。无需关闭 Gatekeeper 或删除下载隔离属性。
+
+窗口中的「概览」显示服务与网页状态，「可用程序」说明各程序未就绪的原因，「端口与进程」可查看 PID、路径和 IPv4／IPv6 监听地址。默认端口 3211，遵循 `AGENT_GAME_PORT`。清理前先让原连接器正常退出；强制结束只作用于确认过的单个 PID，未知程序不会被自动停止。清理后重新检测，端口释放后点击「重新检测并启动」。
 
 模型列表来自各 Harness 自己的配置，可见的模型未必有推理权限。连接器复用各自的登录，不要求额外提供 API Key；真实对弈会使用对应账户额度。WorkBuddy 独立 CLI 的登录可能与桌面端不同，若提示 `Authentication required`，需要先在支持 ACP 的官方 CLI 中完成登录。
 
@@ -51,7 +55,7 @@ npm run build
 
 自动测试只维护游戏规则，包含牌型、合法行动、回合推进、信息可见范围和结算。界面、连接器和打包行为通过实际使用检查。
 
-在 Windows 运行 `npm run package:windows` 生成 EXE；在 macOS 安装 Xcode Command Line Tools 后运行 `npm run package:macos` 生成 ZIP。产物写入 `release/`。
+在 Windows 安装 .NET 10 SDK 后运行 `npm run package:windows` 生成 EXE；macOS 使用包含 macOS SDK 26 或更新版本的 Xcode 工具链，运行 `npm run package:macos` 生成 ZIP。最低运行系统仍为 macOS 13.5，较新系统的材质与控件外观由 SwiftUI 自动适配。产物写入 `release/`。
 
 ## 开发文档
 

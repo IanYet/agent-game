@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
     posix_spawn_file_actions_destroy(&files); posix_spawnattr_destroy(&attr);
     if (error) { errno = error; perror("connector spawn"); close(lock); return 1; }
     // The group is established atomically before any Node/Harness code runs.
-    printf("AGENT_ARCADE_SUPERVISOR:started:%d\n", child); fflush(stdout);
+    printf("TONGZHUO_UI:{\"event\":\"spawned\",\"pid\":%d}\n", child); fflush(stdout);
     int status = 0;
     while (!stopping) {
         siginfo_t info = {0};

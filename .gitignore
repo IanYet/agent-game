@@ -10,3 +10,5 @@ coverage/
 test-results/
 apps/web/public/downloads/
 .openai/
+apps/connector/windows/bin/
+apps/connector/windows/obj/
