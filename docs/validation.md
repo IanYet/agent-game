@@ -44,4 +44,6 @@ Windows 需要留意不同缩放比例下的窗口与托盘操作；macOS 需要
 
 尚未实测的项目包括其他 Windows 缩放比例、窄窗口拖动、无权限结束其他用户进程，以及托盘菜单的逐项点击。部分窗口操作受到同桌面并行输入影响，未把这些未完成项目记为通过。
 
-当前没有可用 Mac 执行环境。macOS 的 SwiftUI、进程身份辅助代码、Guardian 接入、菜单栏模板图、SDK 检查和 ZIP 根目录说明已更新；打包脚本已做 JavaScript 语法检查，但本次未编译 Swift／C、未生成新 macOS ZIP，也未验证首次下载的 Gatekeeper 行为、窗口／菜单栏操作或真实账户。后续需在 Apple Silicon 和 Intel Mac 使用 SDK 26 或更新工具链运行 `npm run package:macos` 并逐项实际检查。可用默认仅构建的 Actions 工作流做编译检查，不能把编译结果当作实机验收。
+v0.4.3 已通过[三端分支构建](https://github.com/IanYet/agent-game/actions/runs/40090299845)：Windows 64 位、macOS Apple Silicon 与 Intel 均完成规则测试、类型检查、网页／连接器构建及原生打包。macOS 使用工作流选定的稳定版 Xcode，SwiftUI／C 编译、应用 ad-hoc 签名验证和 Info.plist 检查通过，ZIP 包已生成。
+
+本机仍没有 Mac 桌面环境。首次下载的 Gatekeeper 行为、窗口／菜单栏交互与真实账户尚未实机验收；后续需在 Apple Silicon 和 Intel Mac 逐项实际检查。流水线的编译与签名结果不能当作这些操作已经通过。
