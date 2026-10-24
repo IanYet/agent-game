@@ -4,8 +4,9 @@ import {
   Shape, ShapeUtils, SRGBColorSpace, Vector2, Vector3,
 } from 'three';
 import {ConvexPolyhedron, Cylinder, Vec3, type Shape as CollisionShape} from 'cannon-es';
+import {BaoTableModels} from '../games/baohuang/table-models';
 
-export type TableTheme='holdem'|'doudizhu';
+export type TableTheme='holdem'|'doudizhu'|'baohuang';
 type Collider={shape:CollisionShape;offset?:Vec3};
 
 // One outline supplies both the visible suit and its collision geometry.
@@ -88,10 +89,12 @@ export class TableModels{
   private chips:LatheGeometry[]=[];
   private faces:MeshPhysicalMaterial[]=[];
   private suitMaterials:MeshPhysicalMaterial[]=[];
-  private chipMaterial:MeshPhysicalMaterial;
-  private disc:CircleGeometry;
+  private chipMaterial!:MeshPhysicalMaterial;
+  private disc!:CircleGeometry;
+  private gameModels?:BaoTableModels;
 
   constructor(private theme:TableTheme){
+    if(theme==='baohuang'){this.gameModels=new BaoTableModels();return;}
     this.disc=new CircleGeometry(.704,64);this.geometries.push(this.disc);
     this.chipMaterial=this.material({vertexColors:true,roughness:.32,metalness:.22,clearcoat:.6});
     if(theme==='holdem')chipColors.forEach((hex,index)=>{
@@ -145,6 +148,7 @@ export class TableModels{
   }
 
   create(index:number,scale:number):{mesh:Group;colliders:Collider[]}{
+    if(this.gameModels)return this.gameModels.create(index,scale);
     const mesh=new Group();mesh.scale.setScalar(scale);
     if(this.theme==='holdem'){
       const color=index%chipColors.length;
@@ -158,5 +162,5 @@ export class TableModels{
     return {mesh,colliders:this.pieces[suit].map(points=>prism(points,scale))};
   }
 
-  dispose(){this.geometries.forEach(g=>g.dispose());this.materials.forEach(m=>m.dispose());this.textures.forEach(t=>t.dispose());}
+  dispose(){this.gameModels?.dispose();this.geometries.forEach(g=>g.dispose());this.materials.forEach(m=>m.dispose());this.textures.forEach(t=>t.dispose());}
 }

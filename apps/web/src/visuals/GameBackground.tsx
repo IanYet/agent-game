@@ -61,7 +61,7 @@ export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme
   },[theme]);
   useEffect(()=>{window.dispatchEvent(new Event('tongzhuo:table-motion'));},[enabled,effects.reduced]);
   return <div className="game-background" data-table-theme={theme} aria-hidden="true">
-    <div className="table-object-fallback">{Array.from({length:12},(_,i)=><span key={i}>{['♠','♥','♦','♣'][i%4]}</span>)}</div>
+    <div className="table-object-fallback">{Array.from({length:12},(_,i)=><span key={i}>{(theme==='baohuang'?['♛','⛨','♟','⚔']:['♠','♥','♦','♣'])[i%4]}</span>)}</div>
     <div ref={surface} className="table-object-surface"/>
   </div>;
 }
