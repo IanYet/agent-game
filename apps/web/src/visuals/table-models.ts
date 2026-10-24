@@ -6,8 +6,9 @@ import {
 import {ConvexPolyhedron, Cylinder, Vec3, type Shape as CollisionShape} from 'cannon-es';
 import {BaoTableModels} from '../games/baohuang/table-models';
 import {ChessTableModels} from '../games/chess/table-models';
+import {AzulTableModels} from '../games/azul/table-models';
 
-export type TableTheme='holdem'|'doudizhu'|'baohuang'|'chess';
+export type TableTheme='holdem'|'doudizhu'|'baohuang'|'chess'|'azul';
 type Collider={shape:CollisionShape;offset?:Vec3};
 interface GameModelSet {create:(index:number,scale:number)=>{mesh:Group;colliders:Collider[]};dispose:()=>void}
 
@@ -98,6 +99,7 @@ export class TableModels{
   constructor(private theme:TableTheme){
     if(theme==='baohuang'){this.gameModels=new BaoTableModels();return;}
     if(theme==='chess'){this.gameModels=new ChessTableModels();return;}
+    if(theme==='azul'){this.gameModels=new AzulTableModels();return;}
     if(theme!=='holdem'&&theme!=='doudizhu')throw new Error(`未注册的牌桌物件主题：${theme}`);
     this.disc=new CircleGeometry(.704,64);this.geometries.push(this.disc);
     this.chipMaterial=this.material({vertexColors:true,roughness:.32,metalness:.22,clearcoat:.6});

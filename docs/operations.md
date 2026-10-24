@@ -6,6 +6,8 @@
 
 网页默认端口为 5173，连接器为 3211。开发入口会生成固定版本的 Codex ACP 适配器及临时会话扩展，不修改 `node_modules` 或用户安装。
 
+并行开发时可用 `npm run dev:web -- --port <网页端口>` 启动独立网页，并在该进程设置 `VITE_CONNECTOR_URL=http://127.0.0.1:<连接器端口>`（或写入被忽略的 `apps/web/.env`）。连接器设置对应的 `AGENT_GAME_PORT`，并在 `AGENT_GAME_WEB_ORIGINS` 包含该网页完整 origin。默认发布仍连接本机 3211。
+
 | 命令 | 用途 |
 | --- | --- |
 | `npm test` | 运行各游戏的规则测试 |
