@@ -30,11 +30,18 @@ private final class Child {
     static let gameURL = URL(string: "https://ianyet.github.io/agent-game/")!
     static let releaseURL = URL(string: "https://github.com/IanYet/agent-game/releases/latest")!
     @Published var page: ConnectorPage? = .overview
-    @Published var status = "正在准备", detail = "", running = false, connected = false, busy = false
+    @Published var status = "正在准备"
+    @Published var detail = ""
+    @Published var running = false
+    @Published var connected = false
+    @Published var busy = false
     @Published var servicePresent = false
-    @Published var harnesses: [Harness] = [], owners: [PortOwner] = []
+    @Published var harnesses: [Harness] = []
+    @Published var owners: [PortOwner] = []
     @Published var portMessage = "点击重新检测，查看 IPv4 / IPv6 监听进程。"
-    @Published var updateMessage = "手动检查 GitHub 正式发行版。", checkingUpdate = false, updateAvailable = false
+    @Published var updateMessage = "手动检查 GitHub 正式发行版。"
+    @Published var checkingUpdate = false
+    @Published var updateAvailable = false
     @Published var confirmation: PortOwner?
     @Published var confirmForce = false
     let port: Int, configurationError: String?, dataURL: URL
