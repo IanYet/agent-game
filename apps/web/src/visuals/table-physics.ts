@@ -10,6 +10,7 @@ import {FrameProfiler} from './frame-profiler';
 type Piece={body:Body;mesh:Group;radius:number};
 type PointerStroke={fromX:number;fromY:number;toX:number;toY:number;seconds:number};
 const HEIGHT=11,DEPTH=3.2,STEP=1/60;
+const ATTRACTOR_FROM_TOP=.2,ATTRACTOR_Y=HEIGHT*(.5-ATTRACTOR_FROM_TOP);
 
 export class TablePhysics{
   private renderer:WebGLRenderer;
@@ -186,9 +187,9 @@ export class TablePhysics{
     this.accumulator+=Math.min(elapsed,.05);
     while(this.accumulator>=STEP){
       const forceStarted=performance.now();
-      // A weak shared pull keeps the group on screen. Pairwise attraction lets
-      // pieces gather naturally, instead of returning to separate anchors.
-      for(const {body} of this.pieces)body.force.set(-body.position.x*.012,-body.position.y*.012,-body.position.z*.025);
+      // Return toward the upper part of the viewport, above the player controls.
+      // The vertical pull grows with displacement and fades near the attractor.
+      for(const {body} of this.pieces)body.force.set(-body.position.x*.012,(ATTRACTOR_Y-body.position.y)*.055,-body.position.z*.025);
       for(let i=0;i<this.pieces.length;i++)for(let j=i+1;j<this.pieces.length;j++){
         const a=this.pieces[i].body,b=this.pieces[j].body;
         const dx=b.position.x-a.position.x,dy=b.position.y-a.position.y,dz=b.position.z-a.position.z;
@@ -229,6 +230,8 @@ export class TablePhysics{
       this.canvas.dataset.renderMs=(performance.now()-started).toFixed(2);
       this.canvas.dataset.colliders=String(this.pieces.reduce((sum,p)=>sum+p.body.shapes.length,0));
       this.canvas.dataset.spread=(this.pieces.reduce((sum,p)=>sum+Math.hypot(p.body.position.x,p.body.position.y),0)/this.pieces.length).toFixed(2);
+      this.canvas.dataset.attractorY=String(ATTRACTOR_FROM_TOP);
+      this.canvas.dataset.centerY=(.5-this.pieces.reduce((sum,p)=>sum+p.body.position.y,0)/this.pieces.length/HEIGHT).toFixed(3);
     }
     const notifyStarted=performance.now();window.dispatchEvent(new Event('tongzhuo:visual-frame'));
     this.profiler?.record('lensNotify',performance.now()-notifyStarted);
