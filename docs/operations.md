@@ -6,7 +6,7 @@
 
 网页默认端口为 5173，连接器为 3211。开发入口会生成固定版本的 Codex ACP 适配器及临时会话扩展，不修改 `node_modules` 或用户安装。
 
-需要隔离本地对局时，用 `AGENT_GAME_PORT` 指定连接器端口、`AGENT_GAME_WEB_ORIGINS` 指定网页来源；启动网页前将 `VITE_CONNECTOR_URL` 设为对应地址（如 `http://127.0.0.1:43224`）。该值只在本次 Vite 进程或构建中生效，正式网站省略后仍连接默认端口。
+并行开发时可用 `npm run dev:web -- --port <网页端口>` 启动独立网页，并在该进程设置 `VITE_CONNECTOR_URL=http://127.0.0.1:<连接器端口>`（或写入被忽略的 `apps/web/.env`）。连接器设置对应的 `AGENT_GAME_PORT`，并在 `AGENT_GAME_WEB_ORIGINS` 包含该网页完整 origin。默认发布仍连接本机 3211。
 
 | 命令 | 用途 |
 | --- | --- |

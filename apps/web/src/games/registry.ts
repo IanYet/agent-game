@@ -4,5 +4,6 @@ import {game as holdem} from './holdem';
 import {game as baohuang} from './baohuang';
 import {game as chess} from './chess';
 import {game as splendor} from './splendor';
+import {game as azul} from './azul';
 // Adding a game changes its module folder and this registration only.
-export const gameRegistry=new GameRegistry([doudizhu,holdem,baohuang,chess,splendor]);
+export const gameRegistry=new GameRegistry([doudizhu,holdem,baohuang,chess,azul,splendor]);

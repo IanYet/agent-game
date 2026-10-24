@@ -1,6 +1,7 @@
 import {paintRuby} from '../games/splendor/artwork';
+import {paintAzulSymbol} from '../games/azul/artwork';
 export type FoilLabel={symbol:string;english:string;tone:'warm'|'cool'};
-const symbolPainters:Record<string,(context:CanvasRenderingContext2D)=>void>={'💎':paintRuby};
+const symbolPainters:Record<string,(context:CanvasRenderingContext2D)=>void>={'❖':paintAzulSymbol,'💎':paintRuby};
 const WIDTH=218,HEIGHT=294;
 // Canvas reproduces the approved CSS foil layers; the lens uses this very same frame.
 export function paintFoil(canvas:HTMLCanvasElement,label:FoilLabel,x=.5,y=.5,time=0){
@@ -17,7 +18,7 @@ export function paintFoil(canvas:HTMLCanvasElement,label:FoilLabel,x=.5,y=.5,tim
   ctx.save();ctx.globalCompositeOperation='hard-light';ctx.textAlign='center';ctx.textBaseline='middle';ctx.translate(WIDTH*.5,HEIGHT*.5-(label.tone==='cool'?18:8));
   if(label.tone==='cool')ctx.rotate(-16*Math.PI/180);
   const painter=symbolPainters[label.symbol];
-  if(painter){ctx.globalCompositeOperation='source-over';painter(ctx);}
+  if(painter){if(label.symbol==='💎')ctx.globalCompositeOperation='source-over';painter(ctx);}
   else{ctx.font=label.symbol==='3'?'400 198px Anton':'400 210px Arial, "Segoe UI Symbol", sans-serif';ctx.fillStyle='#090c1744';ctx.strokeStyle='#f0eff1a1';ctx.lineWidth=1;ctx.shadowOffsetX=1;ctx.shadowOffsetY=2;ctx.shadowBlur=1;ctx.shadowColor='#ffffff22';ctx.fillText(label.symbol,0,0);ctx.strokeText(label.symbol,0,0);}ctx.restore();
   ctx.fillStyle='#e9edf2dc';ctx.font='8px Arial';ctx.letterSpacing='2.5px';ctx.fillText('HUMAN × AGENT',18,24);ctx.letterSpacing='.6px';
   ctx.fillStyle='#eff1ed';ctx.font='400 22px Anton';ctx.fillText(label.english,18,HEIGHT-37);ctx.font='6px Arial';ctx.letterSpacing='1px';ctx.fillText('ANOTHER MIND. YOUR NEXT MOVE.',18,HEIGHT-18);ctx.letterSpacing='0px';
