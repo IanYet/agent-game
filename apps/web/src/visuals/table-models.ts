@@ -5,9 +5,11 @@ import {
 } from 'three';
 import {ConvexPolyhedron, Cylinder, Vec3, type Shape as CollisionShape} from 'cannon-es';
 import {BaoTableModels} from '../games/baohuang/table-models';
+import {ChessTableModels} from '../games/chess/table-models';
 
-export type TableTheme='holdem'|'doudizhu'|'baohuang';
+export type TableTheme='holdem'|'doudizhu'|'baohuang'|'chess';
 type Collider={shape:CollisionShape;offset?:Vec3};
+interface GameModelSet {create:(index:number,scale:number)=>{mesh:Group;colliders:Collider[]};dispose:()=>void}
 
 // One outline supplies both the visible suit and its collision geometry.
 function suitShape(index:number){
@@ -80,6 +82,7 @@ const chipColors=['#b94b51','#497eac','#d6c9aa','#4f9188','#8d71ad','#cf9450'];
 const suitColors=['#597697','#c45760','#cf865d','#b8c5d2'];
 
 export class TableModels{
+  private gameModels?:GameModelSet;
   private geometries:BufferGeometry[]=[];
   private materials:MeshPhysicalMaterial[]=[];
   private textures:CanvasTexture[]=[];
@@ -91,10 +94,11 @@ export class TableModels{
   private suitMaterials:MeshPhysicalMaterial[]=[];
   private chipMaterial!:MeshPhysicalMaterial;
   private disc!:CircleGeometry;
-  private gameModels?:BaoTableModels;
 
   constructor(private theme:TableTheme){
     if(theme==='baohuang'){this.gameModels=new BaoTableModels();return;}
+    if(theme==='chess'){this.gameModels=new ChessTableModels();return;}
+    if(theme!=='holdem'&&theme!=='doudizhu')throw new Error(`未注册的牌桌物件主题：${theme}`);
     this.disc=new CircleGeometry(.704,64);this.geometries.push(this.disc);
     this.chipMaterial=this.material({vertexColors:true,roughness:.32,metalness:.22,clearcoat:.6});
     if(theme==='holdem')chipColors.forEach((hex,index)=>{
