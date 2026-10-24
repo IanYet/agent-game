@@ -1,4 +1,4 @@
-import {Body, Box, GSSolver, SAPBroadphase, Sphere, Vec3, World} from 'cannon-es';
+import {Body, Box, GSSolver, SAPBroadphase, Vec3, World} from 'cannon-es';
 import {
   ACESFilmicToneMapping, DirectionalLight, Fog, Group, HemisphereLight, OrthographicCamera,
   PMREMGenerator, Quaternion, Scene, WebGLRenderer,
@@ -8,6 +8,7 @@ import {TableModels,type TableTheme} from './table-models';
 import {FrameProfiler} from './frame-profiler';
 
 type Piece={body:Body;mesh:Group;radius:number};
+type PointerStroke={fromX:number;fromY:number;toX:number;toY:number;seconds:number};
 const HEIGHT=11,DEPTH=3.2,STEP=1/60;
 
 export class TablePhysics{
@@ -18,9 +19,12 @@ export class TablePhysics{
   private models:TableModels;
   private pieces:Piece[]=[];
   private walls:Body[]=[];
-  private pointer=new Body({type:Body.KINEMATIC,shape:new Sphere(1.2),position:new Vec3(0,0,100),collisionFilterMask:0});
-  private pointerTarget=new Vec3();
+  private pointer={x:0,y:0,time:0};
+  private pointerPath:PointerStroke[]=[];
+  private pointerImpulse=new Vec3();
+  private pointerContact=new Vec3();
   private pointerActive=false;
+  private pointerHits=0;
   private width=20;
   private accumulator=0;
   private orientation=new Quaternion();
@@ -44,7 +48,6 @@ export class TablePhysics{
       this.world.broadphase=new SAPBroadphase(this.world);
       this.world.defaultContactMaterial.friction=.12;this.world.defaultContactMaterial.restitution=.35;
       this.world.defaultContactMaterial.contactEquationStiffness=1e6;
-      this.world.addBody(this.pointer);
       this.models=new TableModels(theme);
       const count=matchMedia('(max-width: 700px)').matches?12:20;
       for(let i=0;i<count;i++){
@@ -103,32 +106,86 @@ export class TablePhysics{
       body.previousPosition.copy(body.position);body.previousQuaternion.copy(body.quaternion);
       body.aabbNeedsUpdate=true;body.wakeUp();
     });
-    this.clearPointer();this.render();
+    this.clearPointer(true);this.render();
   }
 
-  movePointer(x:number,y:number){
+  movePointer(samples:readonly Pick<PointerEvent,'clientX'|'clientY'|'timeStamp'>[]){
     const rect=this.canvas.getBoundingClientRect();
-    this.pointerTarget.set(((x-rect.left)/rect.width-.5)*this.width,(.5-(y-rect.top)/rect.height)*HEIGHT,.6);
-    if(!this.pointerActive){this.pointer.position.copy(this.pointerTarget);this.pointer.velocity.setZero();this.pointer.aabbNeedsUpdate=true;}
-    this.pointerActive=true;this.pointer.collisionFilterMask=-1;
+    for(const sample of samples){
+      if(this.pointerActive&&sample.timeStamp<this.pointer.time)continue;
+      const x=((sample.clientX-rect.left)/rect.width-.5)*this.width,y=(.5-(sample.clientY-rect.top)/rect.height)*HEIGHT;
+      const fromX=this.pointerActive?this.pointer.x:x,fromY=this.pointerActive?this.pointer.y:y;
+      if(!this.pointerActive||Math.hypot(x-fromX,y-fromY)>.001){
+        const seconds=Math.min(.05,Math.max(.001,(sample.timeStamp-this.pointer.time)/1000));
+        // Keep complete sweeps even when input arrives faster than physics.
+        // Only the oldest neighbouring segments are merged if the queue fills.
+        if(this.pointerPath.length===64){
+          const oldest=this.pointerPath.shift()!;this.pointerPath[0].fromX=oldest.fromX;this.pointerPath[0].fromY=oldest.fromY;this.pointerPath[0].seconds+=oldest.seconds;
+        }
+        this.pointerPath.push({fromX,fromY,toX:x,toY:y,seconds});
+      }
+      this.pointer={x,y,time:sample.timeStamp};this.pointerActive=true;
+    }
     this.pieces.forEach(({body})=>body.wakeUp());
+    if(import.meta.env.DEV)this.canvas.dataset.pointerActive=String(this.pointerActive);
   }
 
-  clearPointer(){this.pointerActive=false;this.pointer.collisionFilterMask=0;this.pointer.velocity.setZero();}
+  clearPointer(discardPath=false){
+    this.pointerActive=false;if(discardPath)this.pointerPath.length=0;
+    if(import.meta.env.DEV)this.canvas.dataset.pointerActive='false';
+  }
   get moving(){return this.pieces.some(({body})=>body.sleepState!==Body.SLEEPING);}
+
+  private pushPointer(){
+    if(!this.pointerActive&&!this.pointerPath.length)return;
+    const depths:number[]=[];
+    for(let i=0;i<this.pieces.length;i++){
+      const {body,radius}=this.pieces[i],reach=radius+.5;
+      let strength=0,pushX=0,pushY=0,normalX=0,normalY=0;
+      for(const stroke of this.pointerPath){
+        const dx=stroke.toX-stroke.fromX,dy=stroke.toY-stroke.fromY,lengthSq=dx*dx+dy*dy;
+        const t=lengthSq?Math.max(0,Math.min(1,((body.position.x-stroke.fromX)*dx+(body.position.y-stroke.fromY)*dy)/lengthSq)):0;
+        const x=body.position.x-stroke.fromX-dx*t,y=body.position.y-stroke.fromY-dy*t,distanceSq=x*x+y*y;
+        if(distanceSq>=reach*reach)continue;
+        const length=Math.sqrt(lengthSq),distance=Math.sqrt(distanceSq);
+        const falloff=1-distanceSq/(reach*reach),impulse=falloff*Math.min(3.2,.25+length/stroke.seconds*.22);
+        if(impulse<=strength)continue;
+        const directionX=length?dx/length:Math.cos(i*2.4),directionY=length?dy/length:Math.sin(i*2.4);
+        normalX=distance>.001?x/distance:directionX;normalY=distance>.001?y/distance:directionY;
+        pushX=normalX*.75+directionX*.6;pushY=normalY*.75+directionY*.6;strength=impulse;
+      }
+      if(strength){
+        const length=Math.hypot(pushX,pushY);
+        const impulse=Math.max(0,strength-(body.velocity.x*pushX+body.velocity.y*pushY)/length);
+        if(impulse>.001){
+          this.pointerImpulse.set(pushX/length*impulse,pushY/length*impulse,0);
+          this.pointerContact.set(-normalX*radius*.65,-normalY*radius*.65,radius*.25);
+          body.applyImpulse(this.pointerImpulse,this.pointerContact);
+          if(import.meta.env.DEV){this.pointerHits++;depths.push(body.position.z);}
+        }
+      }
+      // A stationary cursor still occupies space in every visible depth layer.
+      const dx=body.position.x-this.pointer.x,dy=body.position.y-this.pointer.y,distance=Math.hypot(dx,dy);
+      if(this.pointerActive&&distance<reach){
+        const x=distance>.001?dx/distance:Math.cos(i*2.4),y=distance>.001?dy/distance:Math.sin(i*2.4);
+        const force=(reach-distance)*1.4;body.force.x+=x*force;body.force.y+=y*force;body.wakeUp();
+      }
+    }
+    this.pointerPath.length=0;
+    if(import.meta.env.DEV){
+      this.canvas.dataset.pointerHits=String(this.pointerHits);
+      if(depths.length)this.canvas.dataset.pointerHitDepths=depths.map(z=>z.toFixed(2)).join(',');
+    }
+  }
 
   step(elapsed:number){
     const started=performance.now();
     this.profiler?.record('frameInterval',elapsed*1000);
-    let forceMs=0;
+    let forceMs=0,pointerMs=0;
     const physics={broadphase:0,narrowphase:0,makeContactConstraints:0,solve:0,integrate:0};
     this.accumulator+=Math.min(elapsed,.05);
     while(this.accumulator>=STEP){
       const forceStarted=performance.now();
-      if(this.pointerActive){
-        this.pointerTarget.vsub(this.pointer.position,this.pointer.velocity);this.pointer.velocity.scale(1/STEP,this.pointer.velocity);
-        const speed=this.pointer.velocity.length();if(speed>12)this.pointer.velocity.scale(12/speed,this.pointer.velocity);
-      }
       // A weak shared pull keeps the group on screen. Pairwise attraction lets
       // pieces gather naturally, instead of returning to separate anchors.
       for(const {body} of this.pieces)body.force.set(-body.position.x*.012,-body.position.y*.012,-body.position.z*.025);
@@ -139,16 +196,19 @@ export class TablePhysics{
         const x=dx*gravity,y=dy*gravity,z=dz*gravity;
         a.force.x+=x;a.force.y+=y;a.force.z+=z;b.force.x-=x;b.force.y-=y;b.force.z-=z;
       }
+      const pointerStarted=performance.now();forceMs+=pointerStarted-forceStarted;
+      this.pushPointer();pointerMs+=performance.now()-pointerStarted;
+      const limitsStarted=performance.now();
       for(const {body} of this.pieces){
-        const speed=body.velocity.length();if(speed>2.4)body.velocity.scale(2.4/speed,body.velocity);
+        const speed=body.velocity.length();if(speed>4)body.velocity.scale(4/speed,body.velocity);
         const spin=body.angularVelocity.length();if(spin>1.5)body.angularVelocity.scale(1.5/spin,body.angularVelocity);
       }
-      forceMs+=performance.now()-forceStarted;
+      forceMs+=performance.now()-limitsStarted;
       this.world.step(STEP);this.accumulator-=STEP;
       if(this.profiler)for(const stage of Object.keys(physics) as Array<keyof typeof physics>)physics[stage]+=this.world.profile[stage];
     }
     if(import.meta.env.DEV)this.canvas.dataset.physicsMs=(performance.now()-started).toFixed(2);
-    this.profiler?.record('forces',forceMs);this.profiler?.record('physicsTotal',performance.now()-started);
+    this.profiler?.record('forces',forceMs);this.profiler?.record('pointer',pointerMs);this.profiler?.record('physicsTotal',performance.now()-started);
     if(this.profiler)for(const [stage,ms] of Object.entries(physics))this.profiler.record('physics.'+stage,ms);
     this.render(this.accumulator/STEP);
     this.profiler?.record('frameCpu',performance.now()-started);this.profiler?.publish();
@@ -177,7 +237,7 @@ export class TablePhysics{
   get source(){return this.renderer.domElement;}
 
   dispose(){
-    this.clearPointer();this.world.bodies.slice().forEach(body=>this.world.removeBody(body));
+    this.clearPointer(true);this.world.bodies.slice().forEach(body=>this.world.removeBody(body));
     this.models?.dispose();this.environment?.dispose();this.scene.clear();this.profiler?.dispose();this.renderer.dispose();this.renderer.forceContextLoss();
     this.pieces=[];this.walls=[];
   }

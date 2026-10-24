@@ -11,7 +11,7 @@ export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme
     const host=surface.current;if(!host)return;
     const target=document.createElement('canvas');target.className='table-object-canvas';host.append(target);
     let alive=true,scene:TablePhysics|undefined,frame=0,last=0,phase=0,lost=false,frames=0,measured=performance.now();
-    const stop=()=>{cancelAnimationFrame(frame);frame=0;last=0;phase=0;frames=0;measured=performance.now();scene?.clearPointer();};
+    const stop=()=>{cancelAnimationFrame(frame);frame=0;last=0;phase=0;frames=0;measured=performance.now();scene?.clearPointer(true);};
     const schedule=()=>{if(alive&&!frame&&!lost&&!document.hidden&&runtime.current.enabled&&!runtime.current.reduced)frame=requestAnimationFrame(tick);};
     const tick=(now:number)=>{
       frame=0;if(!scene||!alive||lost||document.hidden||!runtime.current.enabled||runtime.current.reduced)return;
@@ -27,10 +27,11 @@ export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme
     const move=(event:PointerEvent)=>{
       const element=event.target;
       if(!runtime.current.enabled||runtime.current.reduced||event.pointerType==='touch'||!(element instanceof Element)||
-        !element.closest('.game-page')||element.closest('button,a,input,textarea,select,[role="dialog"],.identity-shell,.game-chrome,.table-toolbar')){
+        element.closest('button,a,input,textarea,select,[role="dialog"],.identity-shell')){
         scene?.clearPointer();return;
       }
-      scene?.movePointer(event.clientX,event.clientY);
+      const samples=event.getCoalescedEvents?.();
+      scene?.movePointer(samples?.length?samples:[event]);
       schedule();
     };
     const leave=()=>scene?.clearPointer();
