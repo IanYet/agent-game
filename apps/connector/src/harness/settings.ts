@@ -1,5 +1,4 @@
 import type { AgentSettings, ModelInfo } from '@agent-game/protocol';
-import type { HarnessContext } from '../types';
 
 export function validateSettings(models: ModelInfo[], settings: AgentSettings): void {
   const model = settings.model ? models.find(m => m.id === settings.model) : models.find(m => m.isDefault) ?? models[0];
@@ -11,10 +10,6 @@ export function resolveSettings(models: ModelInfo[], settings: AgentSettings): A
   validateSettings(models, settings);
   const model = settings.model ? models.find(m => m.id === settings.model) : models.find(m => m.isDefault) ?? models[0];
   return { model: model?.id ?? settings.model, reasoningEffort: settings.reasoningEffort ?? model?.defaultReasoningEffort };
-}
-
-export function playerConversationTitle(context: HarnessContext): string {
-  return context.displayTitle;
 }
 
 export function selectAcpModel(models: Array<{ modelId: string }>, currentModelId: string | undefined, settings: AgentSettings): string | undefined {

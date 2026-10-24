@@ -35,10 +35,11 @@ export function GameGallery({games,onSelect,enabled=true}:{games:GalleryGame[];o
   const {reduced}=useEffectsPreference();
   useLayoutEffect(()=>{
     const panels=root.current?.querySelectorAll<HTMLElement>('.r-accordion-panel');if(!panels)return;
-    panels.forEach(panel=>{panel.dataset.expanded='false';});
     if(reduced)gsap.set(panels,{'--foil-rx':'0deg','--foil-ry':'0deg','--foil-x':'50%','--foil-y':'50%',overwrite:'auto'});
-    const animation=gsap.to(panels,{width:(_:number,panel:HTMLElement)=>panel.dataset.gameId===active?500:120,'--card-open':(_:number,panel:HTMLElement)=>panel.dataset.gameId===active?1:0,'--foil-camera':(_:number,panel:HTMLElement)=>{const card=panel.querySelector<HTMLElement>('.r-laser-card')!;return panel.dataset.gameId===active?cardPerspective(card.offsetWidth,card.offsetHeight,1.12):1000;},'--ag-gray':(_:number,panel:HTMLElement)=>panel.dataset.gameId===active?0:.7,duration:reduced?0:.88,ease:'power3.inOut',overwrite:'auto',onComplete:()=>{panels.forEach(panel=>{panel.dataset.expanded=String(panel.dataset.gameId===active);});}});
-    return()=>{animation.kill();};
+    // Open the hit area promptly; the foil turn can finish at its own pace.
+    const layout=gsap.to(panels,{width:(_:number,panel:HTMLElement)=>panel.dataset.gameId===active?500:120,'--ag-gray':(_:number,panel:HTMLElement)=>panel.dataset.gameId===active?0:.7,duration:reduced?0:.32,ease:'power3.out',overwrite:'auto'});
+    const artwork=gsap.to(panels,{'--card-open':(_:number,panel:HTMLElement)=>panel.dataset.gameId===active?1:0,'--foil-camera':(_:number,panel:HTMLElement)=>{const card=panel.querySelector<HTMLElement>('.r-laser-card')!;return panel.dataset.gameId===active?cardPerspective(card.offsetWidth,card.offsetHeight,1.12):1000;},duration:reduced?0:.7,ease:'power2.out',overwrite:'auto'});
+    return()=>{layout.kill();artwork.kill();};
   },[active,reduced]);
   useEffect(()=>{const element=root.current;return()=>{if(element)gsap.killTweensOf(element.querySelectorAll('.r-accordion-panel'));};},[]);
   const leave=(panel:HTMLElement)=>{
@@ -46,7 +47,7 @@ export function GameGallery({games,onSelect,enabled=true}:{games:GalleryGame[];o
     gsap.to(panel,{'--foil-rx':'0deg','--foil-ry':'0deg','--foil-x':'50%','--foil-y':'50%',duration:reduced?0:.55,overwrite:'auto'});
     if(enabled)setActive(focused.current);
   };
-  return <div ref={root} className="tz-gallery-scope" data-gallery-active={active!==null}><div className="r-accordion-viewport"><div className="accordion-gallery r-accordion-track" role="list" aria-label="游戏画廊">
+  return <div ref={root} className="tz-gallery-scope" data-gallery-active={active!==null} data-gallery-reduced={reduced}><div className="r-accordion-viewport"><div className="accordion-gallery r-accordion-track" role="list" aria-label="游戏画廊">
     {games.map((item,i)=>{
       const game={...item,tone:i%2?'cool' as const:'warm' as const};
       return <div key={game.id} role="listitem" data-game-id={game.id} data-tone={game.tone} className={'ag-panel r-accordion-panel'+(active===game.id?' ag-panel--active':'')}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyHoldemAction as act, assertHoldemChips, compareRanks, createHoldem, createPokerDeck, evaluateHoldem, getHoldemLegalActions, holdemBetting, nextHoldemHand, viewHoldem, type HoldemState } from './engine';
 import type { Card, PlayerConfig } from '@agent-game/core';
+import {holdemModule} from './definition';
 
 const players = (n: number): PlayerConfig[] => Array.from({ length: n }, (_, i) => ({ name: `P${i}`, kind: 'agent' }));
 const cards = (ids: string[]) => ids.map(id => ({ id, suit: id[0] as Card['suit'], rank: Number(id.slice(1)) }));
@@ -35,6 +36,57 @@ describe('德州扑克牌力', () => {
 });
 
 describe('无限注流程、底池与隔离', () => {
+  it('Agent 可读取本手完整下注与公共牌记录，隐藏暗牌且下一手重置记录', () => {
+    const meta={moduleId:'holdem',moduleVersion:'1.0.0',stateVersion:1,roomId:'history-room',runId:'history-run',index:1,config:{initialChips:1000,smallBlind:5,bigBlind:10},roster:Array.from({length:9},(_,i)=>({playerId:`p${i}`,name:`P${i}`,kind:'codex' as const}))};
+    const run={...meta,state:holdemModule.create(meta,seeded(5))};
+    run.state=act(run.state,run.state.turn,{type:'raise',amount:20});
+    while(run.state.events.length<=35){
+      const actions=getHoldemLegalActions(run.state,run.state.turn),choice=run.state.phase==='preflop'&&run.state.turn===0?actions.find(a=>a.id==='fold'):actions.find(a=>a.id==='check')??actions.find(a=>a.id==='call');
+      run.state=act(run.state,run.state.turn,choice!.action);
+    }
+    expect(run.state.phase).toBe('river');
+    const expected=structuredClone(run.state.events);
+    expect(expected.length).toBeGreaterThan(35);
+    expect(expected.map(e=>e.seq)).toEqual(Array.from({length:expected.length},(_,i)=>i+1));
+    expect(new Set(expected.map(e=>e.type))).toEqual(new Set(['deal','blind','raise','call','fold','street','check']));
+    expect(expected.flatMap(e=>e.cards??[])).toEqual(run.state.board);
+    for(const player of run.roster){
+      const view=holdemModule.handleTool(run,{id:'history',scopeId:run.runId,playerId:player.playerId,tool:'game_get_state',args:{}}).result.structuredContent as any;
+      expect(view.events).toEqual(expected);
+      expect(view.players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
+      expect('deck' in view).toBe(false);expect('burned' in view).toBe(false);
+      expect(JSON.parse(holdemModule.initializePrompt(run,player.playerId).split('初始观察：')[1]).events).toEqual(expected);
+    }
+    const decision=holdemModule.decisions(run)[0];
+    expect(JSON.parse(holdemModule.decisionPrompt(run,decision).split('当前观察：')[1]).events).toEqual(expected);
+    run.state=runOut(run.state);
+    const nextMeta={...meta,runId:'history-run-2',index:2},next={...nextMeta,state:holdemModule.next(run,nextMeta,seeded(6))};
+    const nextView=holdemModule.handleTool(next,{id:'new-history',scopeId:next.runId,playerId:'p1',tool:'game_get_state',args:{}}).result.structuredContent as any;
+    expect(nextView.round).toBe(2);expect(nextView.events.map((e:any)=>e.type)).toEqual(['deal','blind','blind']);
+    expect(nextView.events.map((e:any)=>e.seq)).toEqual([1,2,3]);
+  });
+  it('观战翻开全部底牌，但不披露牌库、烧牌或改变 Agent 的私有信息', () => {
+    const meta={moduleId:'holdem',moduleVersion:'1.0.0',stateVersion:1,roomId:'room',runId:'run',index:1,config:{initialChips:100,smallBlind:1,bigBlind:2},roster:Array.from({length:3},(_,i)=>({playerId:`p${i}`,name:`P${i}`,kind:'codex' as const}))};
+    const run={...meta,state:holdemModule.create(meta,seeded(1))},before=structuredClone(run.state);
+    const table=holdemModule.tableView(run,null,{revealHands:true});
+    expect(table.players.map((p:any)=>p.hand)).toEqual(run.state.players.map(p=>p.hand));
+    expect('deck' in table).toBe(false);expect('burned' in table).toBe(false);expect(table.legalActions).toEqual([]);expect(table.betting).toBe(null);
+    for(const player of run.roster){
+      expect(holdemModule.observe(run,player.playerId).players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
+      expect(JSON.parse(holdemModule.initializePrompt(run,player.playerId).split('初始观察：')[1]).players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
+      const result=holdemModule.handleTool(run,{id:'read',scopeId:'run',playerId:player.playerId,tool:'game_get_state',args:{}}).result.structuredContent as any;
+      expect(result.players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
+    }
+    expect(run.state).toEqual(before);
+  });
+  it('结算可显式翻开弃牌者和未摊牌赢家，关闭时维持正常摊牌范围', () => {
+    let folded=createHoldem('folded',players(3));folded=act(folded,0,{type:'fold'});folded=act(folded,1,{type:'fold'});
+    expect(viewHoldem(folded,null).players.every(p=>!p.hand)).toBe(true);
+    expect(viewHoldem(folded,null,true).players.map(p=>p.hand)).toEqual(folded.players.map(p=>p.hand));
+    let showdown=riverFixture();showdown.players[0].folded=true;showdown=act(showdown,1,{type:'check'});showdown=act(showdown,2,{type:'check'});
+    expect(viewHoldem(showdown,null,true).players.map(p=>p.hand)).toEqual(showdown.players.map(p=>p.hand));
+    expect(viewHoldem(showdown,null).players.filter(p=>p.hand).map(p=>p.seat)).toEqual([1,2]);
+  });
   it('2–9 人动态发牌，标准52张不重复；单挑按钮规则与多人不同', () => {
     for (let n = 2; n <= 9; n++) {
       const s = createHoldem('table', players(n));

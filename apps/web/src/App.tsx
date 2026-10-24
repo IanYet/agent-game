@@ -8,9 +8,12 @@ import {useEffectsPreference} from './visuals/preferences';
 import {EffectsControls} from './visuals/EffectsControls';
 import {controller} from './application';
 import {Modal} from './Modal';
+import {CuriosityToggle} from './CuriosityToggle';
+import {AgentConversationAccess,AgentConversationModal} from './AgentConversations';
 import {SetupModal,NextRunModal,createDraft,type SetupDraft} from './TableSetup';
 import {PlayerSettingsModal} from './PlayerSettingsModal';
 import {ConnectionPanel} from './ConnectionPanel';
+import {AppNotice} from './AppNotice';
 import {GameGallery,type GalleryGame} from './visuals/GameGallery';
 import {GameBackground} from './visuals/GameBackground';
 import {GameChrome} from './GameChrome';
@@ -27,7 +30,12 @@ export function App(){
   const currentModule=state.room?gameRegistry.get(state.room.moduleId):null,Table=currentModule?.ui?.Table;
   const [nextPlayers,setNextPlayers]=useState<PlayerConfig[]|null>(null);
   useEffect(()=>{setNextPlayers(null);},[state.room?.runId]);
-  const overlay=setup||connection||rules||players||next;
+  const [conversationPlayerId,setConversationPlayerId]=useState<string|null>(null);
+  const canViewConversations=!!state.room&&(state.curiosityMode||state.room.roster.every(p=>p.kind!=='human'));
+  const conversationPlayer=canViewConversations?state.room?.roster.find(p=>p.playerId===conversationPlayerId&&p.kind!=='human'):undefined;
+  useEffect(()=>{setConversationPlayerId(null);},[state.room?.runId,page]);
+  useEffect(()=>{if(!canViewConversations)setConversationPlayerId(null);},[canViewConversations]);
+  const overlay=setup||connection||rules||players||next||!!conversationPlayer;
   const gate=useRef(false);
   const run=async(action:()=>Promise<void>)=>{if(gate.current)return;gate.current=true;setBusy(true);try{await action();}catch(e){setToast((e as Error).message);}finally{gate.current=false;setBusy(false);}};
   const scrollTarget=useRef<'top'|'games'>('top');
@@ -43,8 +51,8 @@ export function App(){
   };
   useEffect(()=>{
     if(requestedPage!=='table'||state.connected)return;
-    setPage('lobby');setRules(false);setPlayers(false);setNext(false);
-    setConnectTarget('table');setConnection(true);
+    setPage('lobby');setRules(false);setPlayers(false);setNext(false);setConversationPlayerId(null);
+    setConnectTarget('table');
   },[requestedPage,state.connected]);
   const gallery=()=>{if(page!=='lobby'){scrollTarget.current='games';setPage('lobby');}else document.getElementById('games')?.scrollIntoView({behavior:effects.reduced?'instant':'smooth'});};
   const choose=(id:string)=>{setSelected(id);setDrafts(all=>all[id]?all:{...all,[id]:createDraft(state,gameRegistry.get(id))});setSetup(true);};
@@ -52,9 +60,10 @@ export function App(){
   useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(''),6000);return()=>clearTimeout(id);},[toast]);
   useEffect(()=>{const visibility=()=>document.documentElement.classList.toggle('page-hidden',document.hidden);visibility();document.addEventListener('visibilitychange',visibility);return()=>document.removeEventListener('visibilitychange',visibility);},[]);
   useEffect(()=>{document.documentElement.dataset.scene=page==='table'?'game':'public';return()=>{delete document.documentElement.dataset.scene;};},[page]);
+  useEffect(()=>{const flush=()=>controller.flushConversations();const hidden=()=>{if(document.hidden)flush();};window.addEventListener('pagehide',flush);document.addEventListener('visibilitychange',hidden);return()=>{window.removeEventListener('pagehide',flush);document.removeEventListener('visibilitychange',hidden);flush();};},[]);
   return <div className="app-shell">{page==='table'&&state.room&&<GameBackground enabled={!overlay} theme={state.room.moduleId==='holdem'?'holdem':'doudizhu'}/>}<div className="app-content" data-motion-paused={overlay}>
     <a className="skip-link" href="#main">跳到内容</a><header className="site-header"><button className="brand" onClick={()=>navigate('lobby')} aria-label="同桌，返回首页"><Logo/><strong>同桌</strong><small>TONGZHUO</small></button><nav aria-label="主导航"><button className="nav-roll" aria-label="游戏" onClick={gallery}><span aria-hidden="true" data-text="游戏">游戏</span></button>{state.room&&<button className={`nav-current ${page==='table'?'active':''}`} onClick={()=>navigate('table')}>当前桌<span className="nav-current-status" data-state={state.room.finished?'finished':state.paused?'paused':'playing'}><Dot on={!state.paused&&!state.room.finished}/>{state.room.finished?'已结束':state.paused?'已暂停':'进行中'}</span></button>}<button className={`nav-roll ${page==='history'?'active':''}`} aria-label="已完成记录" onClick={()=>navigate('history')}><span aria-hidden="true" data-text="已完成记录">已完成记录</span>{state.history.length>0&&<small>{state.history.length}</small>}</button></nav><button className="connect-button" onClick={()=>{setConnectTarget(null);setConnection(true);}}><Dot on={state.connected}/>{state.connected?'本机已连接':'连接本机'}<ArrowUpRight size={15}/></button></header>
-    <main id="main" tabIndex={-1}>{state.error&&<div className="error-banner" role="alert"><span>{state.error}</span>{!state.connected&&<button onClick={()=>{setConnectTarget(state.room?'table':null);setConnection(true);}}>连接与恢复 ↗</button>}<button className="icon-button" onClick={()=>controller.clearError()} aria-label="关闭提示"><X size={16}/></button></div>}
+    <main id="main" tabIndex={-1}>
       {page==='lobby'&&<Lobby onSelect={choose} onGallery={gallery} enabled={!overlay}/>}
       {page==='history'&&<HistoryPage state={state} onGallery={gallery} onError={setToast}/>}
       {page==='table'&&state.room&&currentModule&&Table&&<div className="game-page" data-game-scene="true">
@@ -63,16 +72,18 @@ export function App(){
           <button className="button outline" onClick={()=>setPlayers(true)}><Settings2 size={14}/>玩家与模型</button>
           <button className="text-button" onClick={gallery}>选择新桌 ↗</button>
         </>}/>
-        <Table state={state} controller={controller} onError={setToast} tableActions={<div className="game-actions">{state.room.finished?<PrimaryButton onClick={()=>setNext(true)}>准备下一{currentModule.runNoun}<ArrowUpRight size={18}/></PrimaryButton>:<PrimaryButton disabled={busy} onClick={()=>!state.connected?(setConnectTarget('table'),setConnection(true)):void run(()=>state.paused?controller.resume():controller.pause())}>{state.paused?<Play size={14}/>:<Pause size={14}/>} {state.paused?'继续游戏':'暂停'}</PrimaryButton>}</div>}/>
+        <AgentConversationAccess.Provider value={canViewConversations?seat=>{const player=state.room?.roster[seat];if(player&&player.kind!=='human')setConversationPlayerId(player.playerId);}:null}><Table state={state} controller={controller} onError={setToast} tableActions={<div className="game-actions">{state.room.finished?<PrimaryButton onClick={()=>setNext(true)}>准备下一{currentModule.runNoun}<ArrowUpRight size={18}/></PrimaryButton>:<PrimaryButton disabled={busy} onClick={()=>!state.connected?(setConnectTarget('table'),setConnection(true)):void run(()=>state.paused?controller.resume():controller.pause())}>{state.paused?<Play size={14}/>:<Pause size={14}/>} {state.paused?'继续游戏':'暂停'}</PrimaryButton>}</div>}/></AgentConversationAccess.Provider>
       </div>}
-    </main><footer className="site-footer"><span className="footer-build">LOCAL FIRST / v{WEB_VERSION}</span><EffectsControls/><a href={`${import.meta.env.BASE_URL}licenses/NOTICE.txt`} target="_blank" rel="noreferrer">来源与许可 ↗</a></footer>
+    </main><footer className="site-footer">{page==='table'&&<CuriosityToggle compact enabled={state.curiosityMode} onChange={enabled=>controller.setCuriosityMode(enabled)}/>}<span className="footer-build">LOCAL FIRST / v{WEB_VERSION}</span><EffectsControls/><a href={`${import.meta.env.BASE_URL}licenses/NOTICE.txt`} target="_blank" rel="noreferrer">来源与许可 ↗</a></footer>
     </div>
     {!effects.static&&<Suspense fallback={null}><VisualExperience enabled={!overlay} page={page}/></Suspense>}
     {connection&&<ConnectionPanel state={state} symbol={connectTarget==='setup'&&selected?gameRegistry.get(selected).presentation.symbol:connectTarget?currentModule?.presentation.symbol:undefined} selection={connectTarget==='setup'&&selected?gameRegistry.get(selected).name:connectTarget==='table'?currentModule?.name:undefined} onClose={()=>setConnection(false)} onConnect={()=>controller.connect()} onDisconnect={()=>controller.disconnect()} onContinue={connectTarget?()=>{if(!controller.getSnapshot().connected)return;setConnection(false);if(connectTarget==='setup'&&selected){setDrafts(all=>all[selected]?all:{...all,[selected]:createDraft(state,gameRegistry.get(selected))});setSetup(true);}else if(connectTarget==='next'){navigate('table');setNext(true);}else if(connectTarget==='table')navigate('table');}:undefined}/>}
-    {setup&&selected&&drafts[selected]&&<SetupModal state={state} gameId={selected} draft={drafts[selected]} onDraft={draft=>setDrafts(all=>({...all,[selected]:draft}))} onClose={closeSetup} onConnect={()=>{setSetup(false);setConnectTarget('setup');setConnection(true);}} onBack={()=>{closeSetup();gallery();}} onStart={async(players,persistConversations,gameId,config)=>{await controller.create(players,{persistConversations,gameId,config});setSetup(false);navigate('table');}}/>}
+    {setup&&selected&&drafts[selected]&&<SetupModal state={state} gameId={selected} draft={drafts[selected]} onDraft={draft=>setDrafts(all=>({...all,[selected]:draft}))} onClose={closeSetup} onConnect={()=>{setSetup(false);setConnectTarget('setup');setConnection(true);}} onBack={()=>{closeSetup();gallery();}} onStart={async(players,curiosityMode,gameId,config)=>{await controller.create(players,{curiosityMode,gameId,config});setSetup(false);navigate('table');}}/>}
     {rules&&<Modal symbol={currentModule?.presentation.symbol} title={`${currentModule?.name??'游戏'}规则`} subtitle="规则来自游戏模块" onClose={()=>setRules(false)}><div className="rules-copy">{controller.rules().split('\n').map((p,i)=><p key={i}>{p}</p>)}</div></Modal>}
-    {players&&<PlayerSettingsModal state={state} busy={busy} onClose={()=>setPlayers(false)} onConnect={()=>{setPlayers(false);setConnectTarget('table');setConnection(true);}} onPause={()=>controller.pause()} onSave={configs=>{controller.configurePlayers(configs);setPlayers(false);}}/>}
+    {players&&<PlayerSettingsModal onCuriosityModeChange={enabled=>controller.setCuriosityMode(enabled)} state={state} busy={busy} onClose={()=>setPlayers(false)} onConnect={()=>{setPlayers(false);setConnectTarget('table');setConnection(true);}} onPause={()=>controller.pause()} onSave={configs=>{controller.configurePlayers(configs);setPlayers(false);}}/>}
     {next&&<NextRunModal state={state} controller={controller} players={nextPlayers??state.room!.roster.map(p=>({...p}))} onPlayers={setNextPlayers} onClose={()=>setNext(false)} onConnect={()=>{setNext(false);setConnectTarget('next');setConnection(true);}} onStart={async configs=>{await controller.nextRound(configs);setNext(false);}}/>}
+    {conversationPlayer&&<AgentConversationModal state={state} playerId={conversationPlayer.playerId} onPlayer={setConversationPlayerId} onClose={()=>setConversationPlayerId(null)}/>}
+    {state.error&&<AppNotice message={state.error} hidden={overlay} onClose={()=>controller.clearError()} onConnect={!state.connected?()=>{setConnectTarget(state.room?'table':null);setConnection(true);}:undefined}/>}
     {toast&&<div className="toast" role="status"><span>{toast}</span><button className="icon-button" onClick={()=>setToast('')} aria-label="关闭消息"><X size={16}/></button></div>}
   </div>;
 }

@@ -10,8 +10,8 @@ using Windows.Graphics;
 
 [assembly: AssemblyTitle("同桌连接器")]
 [assembly: AssemblyProduct("同桌连接器")]
-[assembly: AssemblyVersion("0.4.3.0")]
-[assembly: AssemblyFileVersion("0.4.3.0")]
+[assembly: AssemblyVersion("0.5.0.0")]
+[assembly: AssemblyFileVersion("0.5.0.0")]
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("windows10.0.19041.0")]
 
 namespace TongZhuo;

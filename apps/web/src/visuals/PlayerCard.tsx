@@ -2,6 +2,7 @@ import {createContext,useContext} from 'react';
 import type {SeatRuntime} from '../runtime/types';
 import {FoilPanel,type FoilPanelProps} from './FoilPanel';
 import {AgentStrands} from './AgentStrands';
+import {AgentConversationAccess} from '../AgentConversations';
 import './player-card.css';
 
 export type PlayerCardState='waiting'|'connecting'|'thinking'|'acting'|'folded'|'paused'|'finished';
@@ -25,5 +26,7 @@ export function PlayerCard({state,children,...props}:Omit<FoilPanelProps,'illumi
 
 export function PlayerCardAvatar({kind,seat,showNumber=true}:{kind:string;seat:number;showNumber?:boolean}){
   const state=useContext(CardState);
-  return kind==='human'?<span className="participant-mark" aria-hidden="true">H</span>:<AgentStrands active={state==='thinking'} connecting={state==='connecting'} muted={state==='folded'} seat={seat} showNumber={showNumber}/>;
+  const openConversation=useContext(AgentConversationAccess);
+  if(kind==='human')return <span className="participant-mark" aria-hidden="true">H</span>;
+  return <span className="player-agent-avatar"><AgentStrands active={state==='thinking'} connecting={state==='connecting'} muted={state==='folded'} seat={seat} showNumber={showNumber}/>{openConversation&&<button type="button" className="agent-conversation-button" aria-label={`查看第 ${seat+1} 位 Agent 的对话`} title="查看这位 Agent 的完整对话" data-cursor-lens="off" onClick={()=>openConversation(seat)}/>}</span>;
 }

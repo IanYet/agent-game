@@ -2,13 +2,14 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { EventEmitter } from 'node:events';
-import { modelsForHarness, type AgentSettings, type BrowserToolRequest, type ConnectorEvent, type SessionRequest, type ToolResponse } from '@agent-game/protocol';
+import { modelsForHarness, type AgentSettings, type BrowserToolRequest, type ConnectorEvent, type ConversationUpdate, type SessionRequest, type ToolResponse } from '@agent-game/protocol';
 import { ToolRegistry } from '../../../packages/protocol/src/validation';
 import type { AgentSession, ConnectorInfo, HarnessAdapter } from './types';
 import { sessionInstructions } from './harness/instructions';
 import { resolveSettings } from './harness/settings';
+import { ConversationRecorder } from './harness/conversation';
 
-interface Capability { request: SessionRequest; registry: ToolRegistry; sessionId?: string }
+interface Capability { request: SessionRequest; registry: ToolRegistry; conversation: ConversationRecorder; sessionId?: string }
 interface PlayerSession { session: AgentSession; capability: Capability; token: string; cwd: string }
 interface ActiveDecision { decisionId: string; controller: AbortController; done: Promise<void> }
 export class LocalBridge extends EventEmitter {
@@ -41,16 +42,20 @@ export class LocalBridge extends EventEmitter {
   async dispatchTool(scopeId: string, token: string, tool: string, args: Record<string, unknown>): Promise<ToolResponse> {
     if (!this.owner?.attached) throw new Error('游戏网页已断开');
     const capability = this.mcpPlayer(scopeId, token); if (!capability) throw new Error('玩家凭据已过期');
-    const definition = capability.registry.definition(tool); capability.registry.validateInput(tool, args);
-    const decision = capability.sessionId ? this.active.get(capability.sessionId) : undefined;
-    if (definition.requiresDecision && (!decision || decision.controller.signal.aborted)) throw new Error('当前没有此玩家的有效决策授权');
-    const id = randomUUID();
-    const request: BrowserToolRequest = { id, scopeId, playerId: capability.request.playerId, ...(decision ? { decisionId: decision.decisionId } : {}), tool, args };
-    const result = await new Promise<ToolResponse>((resolve, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('游戏网页没有响应，请保持网页打开')); }, 20_000);
-      this.pending.set(id, { capability, resolve, reject, timer }); this.emitEvent({ type: 'tool', request });
-    });
-    capability.registry.validateOutput(tool, result); return result;
+    capability.conversation.record('tool-call', tool, args);
+    try {
+      const definition = capability.registry.definition(tool); capability.registry.validateInput(tool, args);
+      const decision = capability.sessionId ? this.active.get(capability.sessionId) : undefined;
+      if (definition.requiresDecision && (!decision || decision.controller.signal.aborted)) throw new Error('当前没有此玩家的有效决策授权');
+      const id = randomUUID();
+      const request: BrowserToolRequest = { id, scopeId, playerId: capability.request.playerId, ...(decision ? { decisionId: decision.decisionId } : {}), tool, args };
+      const result = await new Promise<ToolResponse>((resolve, reject) => {
+        const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('游戏网页没有响应，请保持网页打开')); }, 20_000);
+        this.pending.set(id, { capability, resolve, reject, timer }); this.emitEvent({ type: 'tool', request });
+      });
+      capability.conversation.record('tool-result', tool, result);
+      capability.registry.validateOutput(tool, result); return result;
+    } catch (error) { capability.conversation.record('error', `${tool} 调用失败`, (error as Error).message); throw error; }
   }
   toolResult(id: string, response: ToolResponse): void {
     const pending = this.pending.get(id); if (!pending) throw new Error('工具请求已过期');
@@ -62,20 +67,30 @@ export class LocalBridge extends EventEmitter {
     if (this.creating.has(key) || [...this.sessions.values()].some(s => s.capability.request.scopeId === request.scopeId && s.capability.request.playerId === request.playerId)) throw new Error('该玩家已有会话或正在创建');
     const adapter = this.adapters.get(request.kind); if (!adapter) throw new Error('所选 Harness 不可用');
     request = structuredClone({ ...request, ...resolveSettings(modelsForHarness(this.info, request.kind), request) });
-    const registry = new ToolRegistry(request.tools), capability: Capability = { request, registry };
+    const owner = this.owner, token = randomBytes(24).toString('hex');
+    const mcpUrl = `http://127.0.0.1:${this.info.port}/mcp/${encodeURIComponent(request.scopeId)}/${token}`;
+    const onConversation = (update: ConversationUpdate) => {
+      if (this.owner === owner) this.emitEvent({ type: 'conversation', scopeId: request.scopeId, playerId: request.playerId, ...update,
+        entry: { ...update.entry, text: update.entry.text.replaceAll(mcpUrl, '[本玩家游戏工具地址]').replaceAll(token, '[玩家凭据]').replaceAll(owner.token, '[网页凭据]') } });
+    };
+    const conversation = new ConversationRecorder(onConversation);
+    const registry = new ToolRegistry(request.tools), capability: Capability = { request, registry, conversation };
     this.creating.add(key); const generation = this.generation;
-    const token = randomBytes(24).toString('hex'); this.capabilities.set(token, capability);
+    this.capabilities.set(token, capability);
     const cwd = join(this.dataDirectory, 'sessions', randomUUID());
     try {
+      conversation.record('instructions', '连接器初始化指令', sessionInstructions(request));
+      conversation.record('instructions', '本玩家可用的游戏工具', registry.definitions);
       await mkdir(cwd, { recursive: true }); await writeFile(join(cwd, 'AGENTS.md'), sessionInstructions(request), 'utf8');
-      const session = await adapter.createSession({ ...request, cwd, mcpUrl: `http://127.0.0.1:${this.info.port}/mcp/${encodeURIComponent(request.scopeId)}/${token}`,
+      const session = await adapter.createSession({ ...request, cwd, mcpUrl,
+        onConversation,
         onActivity: (text, tool) => { if(this.capabilities.get(token)===capability)this.emitEvent({ type: 'activity', playerId: request.playerId, text, tool }); },
         onUsage: tokens => { if(this.capabilities.get(token)===capability)this.emitEvent({ type: 'usage', playerId: request.playerId, tokens }); },
       });
       if (generation !== this.generation || !this.owner?.attached) { await session.close(); throw new Error('连接已结束'); }
       if (this.sessions.has(session.sessionId)) { await session.close(); throw new Error('Harness 返回重复的会话 ID'); }
       capability.sessionId = session.sessionId; this.sessions.set(session.sessionId, { session, capability, token, cwd }); return { sessionId: session.sessionId };
-    } catch (error) { this.capabilities.delete(token); if (!request.persistConversation) await this.removeTemporaryWorkspace(cwd); throw error; }
+    } catch (error) { conversation.record('error', '创建玩家会话失败', (error as Error).message); this.capabilities.delete(token); await this.removeTemporaryWorkspace(cwd); throw error; }
     finally { this.creating.delete(key); }
   }
   async playTurn(sessionId: string, prompt: string, decisionId: string, settings?: AgentSettings): Promise<{ completed: boolean }> {
@@ -85,7 +100,8 @@ export class LocalBridge extends EventEmitter {
     const controller = new AbortController();
     const active: ActiveDecision = { decisionId, controller, done: Promise.resolve() }; this.active.set(sessionId, active);
     active.done = player.session.playTurn(prompt, controller.signal, resolved);
-    try { await active.done; return { completed: true }; }
+    try { await active.done; player.capability.conversation.record('event', '本次决策结束', 'Agent 已结束本次任务。'); return { completed: true }; }
+    catch (error) { player.capability.conversation.record(controller.signal.aborted ? 'event' : 'error', controller.signal.aborted ? '推理已暂停' : '推理失败', (error as Error).message); throw error; }
     finally { if (this.active.get(sessionId) === active) this.active.delete(sessionId); }
   }
   async pauseTurn(): Promise<void> {
@@ -99,7 +115,7 @@ export class LocalBridge extends EventEmitter {
     if (!ids) this.capabilities.clear();
     const revoked = new Set(selected.map(([,s])=>s.capability));
     for (const [id,pending] of this.pending) if (!ids || revoked.has(pending.capability)) { clearTimeout(pending.timer); pending.reject(new Error('会话已结束')); this.pending.delete(id); }
-    await Promise.allSettled(selected.map(async ([, s]) => { try { await s.session.close(); } finally { if (!s.capability.request.persistConversation) await this.removeTemporaryWorkspace(s.cwd); } }));
+    await Promise.allSettled(selected.map(async ([, s]) => { try { await s.session.close(); } finally { s.capability.conversation.record('event', '玩家会话结束', '本机临时会话已关闭，对话保存在游戏网页的浏览器中。'); await this.removeTemporaryWorkspace(s.cwd); } }));
   }
   private async removeTemporaryWorkspace(cwd: string) {
     const root = resolve(this.dataDirectory, 'sessions'), target = resolve(cwd);

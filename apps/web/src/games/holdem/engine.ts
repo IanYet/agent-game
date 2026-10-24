@@ -200,9 +200,9 @@ export function assertHoldemChips(state: HoldemState): void {
   if (!Number.isSafeInteger(state.totalChips) || state.totalChips <= 0 || state.players.some(p => !Number.isSafeInteger(p.chips) || p.chips < 0 || !Number.isSafeInteger(p.committed) || p.committed < 0) || state.players.reduce((s, p) => s + p.chips + p.committed, 0) !== state.totalChips) throw new RuleError('筹码守恒检查失败');
   if (state.ledger.reduce((sum, e) => sum + (e.type === 'buy-in' ? e.amount : -e.amount), 0) !== state.totalChips) throw new RuleError('牌桌买入与离桌账本不平衡');
 }
-export function viewHoldem(state: HoldemState, viewer: Seat | null): HoldemView {
+export function viewHoldem(state: HoldemState, viewer: Seat | null, revealHands = false): HoldemView {
   const { deck: _deck, burned: _burned, players, ...publicState } = structuredClone(state);
-  return { ...publicState, viewer, players: players.map(({ hand, actedAtBet: _acted, ...p }) => ({ ...p, count: hand.length, ...(p.seat === viewer || (state.result?.showdown && !p.folded) ? { hand } : {}) })), legalActions: viewer === null ? [] : getHoldemLegalActions(state, viewer), betting: viewer === null ? null : holdemBetting(state, viewer), pot: players.reduce((s, p) => s + p.committed, 0) };
+  return { ...publicState, viewer, players: players.map(({ hand, actedAtBet: _acted, ...p }) => ({ ...p, count: hand.length, ...(p.seat === viewer || revealHands || (state.result?.showdown && !p.folded) ? { hand } : {}) })), legalActions: viewer === null ? [] : getHoldemLegalActions(state, viewer), betting: viewer === null ? null : holdemBetting(state, viewer), pot: players.reduce((s, p) => s + p.committed, 0) };
 }
 export function nextHoldemHand(previous: HoldemState, configs: HoldemPlayerConfig[], settings: { random?: () => number; handId?: string } = {}): HoldemState {
   if (previous.phase !== 'finished') throw new RuleError('一手牌进行中不能变更阵容');

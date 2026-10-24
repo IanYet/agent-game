@@ -8,6 +8,7 @@ import type { AgentSession, HarnessAdapter, HarnessContext } from '../types';
 import { executableCommand, inspectCommand } from './discovery';
 import { sessionInstructions } from './instructions';
 import { JsonRpcProcess, abortError, type ProcessCommand } from './rpc';
+import { captureConversation } from './conversation';
 
 export interface AcpChoice { value: string; name?: string; description?: string; options?: AcpChoice[] }
 export interface AcpConfigOption { id: string; category?: string; type?: string; currentValue: string; options?: AcpChoice[] }
@@ -49,24 +50,22 @@ export class ExternalAcpAdapter implements HarnessAdapter {
         { id: 'hmr', disabled: true },
         { id: 'session-telemetry-otel', disabled: true },
         { insert: [{ id: 'agent-arcade-game-guard', name: guard.replaceAll('\\', '/') }] },
-      ];
-      if (!context.persistConversation) patches.push(
         { id: 'session-persistence-jsonl', config: { root: join(context.cwd, 'dsh-history') } },
         { id: 'session-projection-cache', disabled: true },
         { id: 'session-query-sqlite', config: { path: ':memory:', openAt: 'never' } },
-      );
+      ];
       await writeFile(patch, JSON.stringify(patches), 'utf8');
       const command = await executableCommand(this.path, ['--profile', process.env.DSH_PROFILE ?? 'acp', '--patch', patch]);
       return { ...command, env: { ...process.env, ...command.env, DSH_PERMISSION_MODE: 'read-only' } };
     }
     for (const flag of ['--acp', '--tools', '--allowedTools', '--strict-mcp-config', '--mcp-config', '--settings']) if (!this.help.includes(flag)) throw new Error(`此 WorkBuddy CLI 未提供 ${flag}，请升级或使用 WORKBUDDY_PATH 指定支持公开 ACP 的 CLI`);
-    if (!context.persistConversation && !this.help.includes('--no-session-persistence')) throw new Error('此 WorkBuddy CLI 不支持关闭历史保存，请升级，或主动开启保留玩家对话');
+    if (!this.help.includes('--no-session-persistence')) throw new Error('此 WorkBuddy CLI 不支持关闭历史保存，请升级或指定支持临时会话的 CLI');
     // The official desktop lite bundle exposes stdio ACP together with --serve.
     // Keep its incidental gateway on a random loopback port with a per-process
     // password, supplied via env so it neither appears in args nor changes login/settings.
     const base = await executableCommand(this.path);
     const lite = /(?:^|[\\/])codebuddy-lite-wb\.mjs$/i.test(this.path) || base.env?.CODEBUDDY_FORCE_LITE_WB_BUNDLE === '1';
-    const command = { ...base, args: [...base.args, ...(lite ? ['--serve'] : []), '--acp', '--tools', '', '--allowedTools', context.tools.map(t => `mcp__agent_game__${t.name}`).join(','), '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--settings', JSON.stringify({ disableAllHooks: true, enableAllProjectMcpServers: false }), ...(!context.persistConversation ? ['--no-session-persistence'] : [])] };
+    const command = { ...base, args: [...base.args, ...(lite ? ['--serve'] : []), '--acp', '--tools', '', '--allowedTools', context.tools.map(t => `mcp__agent_game__${t.name}`).join(','), '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--settings', JSON.stringify({ disableAllHooks: true, enableAllProjectMcpServers: false }), '--no-session-persistence'] };
     return { ...command, env: { ...process.env, ...command.env,
       CODEBUDDY_CODE_DISABLE_AUTO_MEMORY: '1', CODEBUDDY_DISABLE_BACKGROUND_TASKS: '1',
       CODEBUDDY_CHANNEL_AUTO_CONNECT: '0', CODEBUDDY_WECOM_AUTO_CONNECT: '0', CODEBUDDY_WECHAT_AUTO_CONNECT: '0',
@@ -75,6 +74,7 @@ export class ExternalAcpAdapter implements HarnessAdapter {
   }
   private async open(context: HarnessContext, mountGame: boolean) {
     const rpc = new JsonRpcProcess(await this.command(context), context.cwd);
+    if (mountGame) captureConversation(rpc, context);
     let agentText = '';
     rpc.onRequest = async (method, params) => {
       if (method === 'session/request_permission') {
@@ -130,7 +130,7 @@ export class ExternalAcpAdapter implements HarnessAdapter {
     const cwd = await mkdtemp(join(tmpdir(), 'agent-arcade-probe-'));
     let rpc: JsonRpcProcess | undefined;
     try {
-      const opened = await this.open({ cwd, scopeId:'interface-probe', playerId:'probe', kind:this.id, name:'接口检测', displayTitle:'接口检测', instructions:'仅检测原生模型目录，不调用推理。', tools:[{name:'interface_probe',description:'Interface probe',inputSchema:{type:'object',additionalProperties:false}}], mcpUrl: '', persistConversation: false, onActivity: () => {}, onUsage: () => {} }, false); rpc = opened.rpc;
+      const opened = await this.open({ cwd, scopeId:'interface-probe', playerId:'probe', kind:this.id, name:'接口检测', instructions:'仅检测原生模型目录，不调用推理。', tools:[{name:'interface_probe',description:'Interface probe',inputSchema:{type:'object',additionalProperties:false}}], mcpUrl: '', onActivity: () => {}, onUsage: () => {}, onConversation: () => {} }, false); rpc = opened.rpc;
       const { result, init } = opened;
       let options: AcpConfigOption[] = result.configOptions ?? [];
       const models = modelsFromAcp(options, result.models);
@@ -187,10 +187,6 @@ export class ExternalAcpAdapter implements HarnessAdapter {
         close: async () => {
           if (init.agentCapabilities?.sessionCapabilities?.close) await rpc.call('session/close', { sessionId }, 3000).catch(() => {});
           await rpc.close();
-          if (this.id === 'dsh' && !context.persistConversation) {
-            const target = resolve(context.cwd, 'dsh-history');
-            if (target.startsWith(resolve(context.cwd) + sep)) await rm(target, { recursive: true, force: true });
-          }
         },
       };
     } catch (error) { await rpc.close(); throw error; }

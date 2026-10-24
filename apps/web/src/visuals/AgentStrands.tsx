@@ -8,5 +8,5 @@ export function AgentStrands({active,connecting,muted,seat,showNumber=true}:{act
   const state:StrandsState={active,connecting,muted,reduced};
   useEffect(()=>{control.current=attachStrands(canvas.current!,state);return()=>{control.current?.dispose();control.current=undefined;};},[]);
   useEffect(()=>{control.current?.update(state);},[active,connecting,muted,reduced]);
-  return <span className="player-agent-avatar" data-agent-activity={active?'thinking':connecting?'connecting':'rest'} aria-hidden="true"><canvas ref={canvas}/>{showNumber&&<span className="player-agent-number">{String(seat+1).padStart(2,'0')}</span>}</span>;
+  return <span className="agent-strands" data-agent-activity={active?'thinking':connecting?'connecting':'rest'} aria-hidden="true"><canvas ref={canvas}/>{showNumber&&<span className="player-agent-number">{String(seat+1).padStart(2,'0')}</span>}</span>;
 }

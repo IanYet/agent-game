@@ -103,11 +103,11 @@ export function applyAction(current: DoudizhuState, seat: Seat, action: GameActi
   return state;
 }
 
-export function viewGame(state: DoudizhuState, viewer: Seat | null): GameView {
+export function viewGame(state: DoudizhuState, viewer: Seat | null, revealHands = false): GameView {
   const { highBidder: _highBidder, ...publicState } = state;
   return {
     ...publicState,
-    players: state.players.map(({ hand, plays: _plays, ...player }) => ({ ...player, count: hand.length, role: state.landlord === null ? null : state.landlord === player.seat ? 'landlord' : 'farmer', ...(viewer === player.seat || state.phase === 'finished' ? { hand: [...hand] } : {}) })),
+    players: state.players.map(({ hand, plays: _plays, ...player }) => ({ ...player, count: hand.length, role: state.landlord === null ? null : state.landlord === player.seat ? 'landlord' : 'farmer', ...(viewer === player.seat || revealHands ? { hand: [...hand] } : {}) })),
     bottom: state.phase === 'bidding' ? [] : [...state.bottom],
     viewer,
     legalActions: viewer === null ? [] : getLegalActions(state, viewer),
