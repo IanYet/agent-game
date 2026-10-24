@@ -2,9 +2,10 @@ import {useEffect,useRef} from 'react';
 import {useEffectsPreference} from './preferences';
 import type {TableTheme} from './table-models';
 import type {TablePhysics} from './table-physics';
+import {SplendorFallback} from '../games/splendor/gem';
 import {TILE_IMAGES} from '../games/azul/artwork';
 import {CITADELS_OBJECTS} from '../games/citadels/table-models';
-const fallbackSymbols:Record<TableTheme,string[]>={doudizhu:['♠','♥','♦','♣'],holdem:['♠','♥','♦','♣'],baohuang:['♛','⛨','♟','⚔'],chess:['♔','♕','♖','♗','♘','♙'],azul:[''],citadels:CITADELS_OBJECTS};
+const fallbackSymbols:Record<Exclude<TableTheme,'splendor'>,string[]>={doudizhu:['♠','♥','♦','♣'],holdem:['♠','♥','♦','♣'],baohuang:['♛','⛨','♟','⚔'],chess:['♔','♕','♖','♗','♘','♙'],azul:[''],citadels:CITADELS_OBJECTS};
 
 export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme}){
   const effects=useEffectsPreference();
@@ -64,7 +65,7 @@ export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme
   },[theme]);
   useEffect(()=>{window.dispatchEvent(new Event('tongzhuo:table-motion'));},[enabled,effects.reduced]);
   return <div className="game-background" data-table-theme={theme} aria-hidden="true">
-    <div className="table-object-fallback">{Array.from({length:theme==='citadels'?16:12},(_,i)=><span key={i} style={theme==='azul'?{backgroundImage:`url("${TILE_IMAGES[i%6]}")`}:undefined}>{fallbackSymbols[theme]?.[i%fallbackSymbols[theme].length]}</span>)}</div>
+    <div className="table-object-fallback">{theme==='splendor'?<SplendorFallback/>:Array.from({length:theme==='citadels'?16:12},(_,i)=><span key={i} style={theme==='azul'?{backgroundImage:`url("${TILE_IMAGES[i%6]}")`}:undefined}>{fallbackSymbols[theme][i%fallbackSymbols[theme].length]}</span>)}</div>
     <div ref={surface} className="table-object-surface"/>
   </div>;
 }
