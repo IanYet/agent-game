@@ -10,7 +10,7 @@
 games/my-game/
   definition.ts   元数据、纯引擎边界、观察、工具与提示词
   engine.ts       领域规则和状态转换
-  ui.tsx          Table、ConfigFields、Replay、Cover
+  ui.tsx          Table、ConfigFields、Replay
   index.ts        导出完整模块
   engine.test.ts  有实际约束意义的规则测试
 ```
@@ -26,7 +26,7 @@ import {game as myGame} from './my-game';
 export const gameRegistry = new GameRegistry([existingGame, myGame]);
 ```
 
-生产模块应提供 `ui.Table` 与 `ui.Replay`。设置栏 `ConfigFields`、大厅 `Cover` 可选。中央界面会从模块读取名称、人数范围、默认人数、描述、tagline 和 runNoun。不要修改 App/controller/protocol/Harness 来增加游戏分支。
+生产模块应提供 `ui.Table` 与 `ui.Replay`，设置栏 `ConfigFields` 可选。中央界面从模块读取名称、人数范围、默认人数、描述、tagline、runNoun 与 `presentation` 的英文名、抽象字标和材质色调。`Table` 仅挂载具体游戏场景与行动；导航、暂停、玩家查看和下一局确认由公共框架负责。不要修改 App/controller/protocol/Harness 来增加游戏分支。
 
 ## 模块 API
 
@@ -36,6 +36,9 @@ export const gameRegistry = new GameRegistry([existingGame, myGame]);
 | --- | --- |
 | `id/version/stateVersion` | 稳定模块 ID、模块发行版本、当前状态格式版本 |
 | `minPlayers/maxPlayers/defaultPlayers/defaultConfig` | 平台用于设置界面和基本人数校验；队伍、配置及其他业务约束在 create/next 校验 |
+| `presentation` | 大厅抽象画廊的英文名、字标和暖／冷色调；副本复用同一模块 ID |
+| `validateConfig?(config)` | 设置时提供持续可见的参数校验，仍在 create 中执行规则校验 |
+| `activity(run)` | 当前阶段与说明；需要行动的参与者从 decisions 的 actorId 集合读取 |
 | `create(meta,random)` | 创建新桌初始领域状态 |
 | `next(previous,meta,random)` | 同桌新一局；按稳定 playerId 决定继承、离桌或买入 |
 | `finished(state)` | 判断整局结束 |
@@ -48,7 +51,7 @@ export const gameRegistry = new GameRegistry([existingGame, myGame]);
 | `timeout?(run,decision)` | 可选超时规则，返回新状态 |
 | `restore(data,stateVersion)` | 校验当前格式的浏览器状态；不进行旧格式迁移 |
 | `summary(run)` | 为通用历史页返回标题、说明、条目和日期 |
-| `planning?(run)` | 下一轮设置文案、按玩家 ID 的余额及新玩家说明 |
+| `planning?(run)` | 下一轮设置文案、按玩家 ID 的余额、新玩家说明及不能继续的玩家原因；公共层不判断筹码等领域条件 |
 | `rules(run?)` | 规则说明，可使用当前房间配置 |
 
 `StoredRun<S>` 封装 `moduleId/moduleVersion/stateVersion/roomId/runId/index/roster/config/state`。规则只消费需要的领域数据；从 roster 转成引擎玩家时不要把 Harness 模型设置当作规则枚举。
@@ -100,6 +103,33 @@ decisions: run => run.roster
 平台只读 `agent-arcade.games.v3`，保存当前 run、最近 20 局和历史保留偏好。原生会话和令牌不存入浏览器。
 
 当前没有旧用户数据，不提供旧格式兼容、迁移器或恢复导出。修改状态结构时递增 stateVersion；版本不匹配会拒绝载入并提示新建游戏。开发时可在浏览器开发者工具清除该键后重开。moduleVersion 用于标识模块发行，不替代 stateVersion 或连接器协议。
+
+## 玩家卡与状态动效
+
+游戏里的玩家身份、手牌与操作区域使用公共 `PlayerCard`，不要各自实现思考光效、弃牌滤镜或单独的倾斜参数。侧栏积分、动态等普通信息继续使用 `FoilPanel`。
+
+```tsx
+import {PlayerCard, PlayerCardAvatar, playerCardState} from '../../visuals/PlayerCard';
+
+const visualState = playerCardState({
+  active: currentActorIds.includes(player.playerId),
+  paused: snapshot.paused,
+  finished: game.finished,
+  folded: player.folded, // 不存在弃牌规则时省略
+  runtime: snapshot.seats.find(seat => seat.playerId === player.playerId),
+});
+
+<PlayerCard state={visualState} className="my-game-player">
+  <PlayerCardAvatar kind={player.kind} seat={player.seat} />
+  <strong>{player.name}</strong>
+  <span data-player-status>{statusText}</span>
+  {/* 游戏自己的公开信息与状态文案 */}
+</PlayerCard>
+```
+
+`PlayerCardState` 包含 `waiting`、`connecting`、`thinking`、`acting`、`folded`、`paused`、`finished`。也可直接传入其中一个状态，适配同时行动的游戏。弃牌优先级最高，其后是结束和暂停；等待回合不因 Agent 上次任务尚未收尾而显示思考。头像必须放在对应的 `PlayerCard` 内，才能取得正确状态；不要给每位玩家单独创建 WebGL 绘制器。将光球放在独立区域，避免挤进姓名行；若编号已在姓名旁显示，给 `PlayerCardAvatar` 传入 `showNumber={false}`，关闭光球下方的重复编号。
+
+真人主卡使用 `primary`，并传入 `data-player-surface` 和 `data-cursor-lens="off"`；出牌／下注按钮与输入放进主卡内部。`tableActions` 提供暂停／继续或准备下一局的控制；规则、玩家与模型、选择新桌由公共 `GameChrome` 放在游戏标题右侧。所有卡片共用 20 CSS px 的最大屏幕边缘位移。状态光效、静态偏好、透镜画布同步由公共层处理，状态文案仍由游戏提供。
 
 ## 验证与发布
 

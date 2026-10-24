@@ -80,7 +80,7 @@ export class GameController {
   private refresh(){
     const run=this.data.current,viewer=run?.roster.find(p=>p.kind==='human')?.playerId??null;
     const {state:_state,...room}=run??({} as StoredRun);
-    this.snapshot={connector:this.info,connected:this.connected,connectorUpdateRequired:this.connectorUpdateRequired,game:run?this.module().observe(run,viewer):null,room:run?{...room,finished:this.module().finished(run.state)}:null,seats:structuredClone(this.seats),paused:this.paused,persistConversations:this.data.persistConversations===true,error:this.error,history:[...this.data.archives].reverse().map(r=>this.registry.get(r.moduleId).summary(r))};
+    this.snapshot={connector:this.info,connected:this.connected,connectorUpdateRequired:this.connectorUpdateRequired,game:run?this.module().observe(run,viewer):null,room:run?{...room,finished:this.module().finished(run.state)}:null,seats:structuredClone(this.seats),paused:this.paused,persistConversations:this.data.persistConversations===true,error:this.error,activity:run?{...this.module().activity(run),actors:[...new Set(this.pending().map(d=>d.actorId))]}:null,history:[...this.data.archives].reverse().map(r=>this.registry.get(r.moduleId).summary(r))};
     this.listeners.forEach(listener=>listener());
   }
   private save(){
@@ -88,6 +88,7 @@ export class GameController {
     catch{this.error='浏览器存储空间不足；本次变更可能无法恢复，请导出记录或释放空间。';}
   }
   async connect(){
+    if(this.connected){this.info=await this.client.inspect();this.refresh();return;}
     try{this.info=await this.client.connect();this.connected=true;this.connectorUpdateRequired=false;this.error=null;this.refresh();}
     catch(e){if(e instanceof ConnectorVersionError){this.info=e.connector;this.connected=false;this.connectorUpdateRequired=true;this.error=e.message;this.refresh();}throw e;}
   }
@@ -95,9 +96,11 @@ export class GameController {
   async create(players:PlayerConfig[],options:CreateOptions={}){
     const module=this.registry.get(options.gameId??this.registry.list()[0].id);
     const meta={moduleId:module.id,moduleVersion:module.version,stateVersion:module.stateVersion,roomId:crypto.randomUUID(),runId:crypto.randomUUID(),index:1,roster:this.normalizePlayers(players,module.minPlayers,module.maxPlayers),config:structuredClone(options.config??module.defaultConfig)};
+    module.validateConfig?.(meta.config);
     const run:StoredRun={...meta,state:module.create(meta,secureRandom)};
     if(!this.connected)throw new Error('请先启动并连接本地连接器');
     await this.pause();await this.client.stopSessions();this.bindings.clear();
+    if(!this.connected)throw new Error('连接已断开，请重新连接本机后开始');
     this.data.current=run;this.data.persistConversations=options.persistConversations===true;this.paused=false;this.error=null;this.resetSeats();this.recordFinish();this.save();this.refresh();this.schedule();
   }
   async nextRound(configs?:PlayerConfig[]){
@@ -113,10 +116,12 @@ export class GameController {
     }):[];
     const closing=this.seats.filter(s=>!preserved.includes(s)&&s.sessionId).map(s=>s.sessionId!);
     if(closing.length)await this.client.stopSessions(closing);
+    if(!this.connected)throw new Error('连接已断开，请重新连接本机后继续');
     for(const s of this.seats)if(!preserved.includes(s))this.bindings.delete(s.playerId);
     this.data.current=next;this.paused=false;this.error=null;this.resetSeats(preserved);this.recordFinish();this.save();this.refresh();this.schedule();
   }
   humanAction(input:unknown){
+    if(!this.connected)throw new Error('请先连接本地连接器');
     const run=this.data.current,player=run?.roster.find(p=>p.kind==='human');
     if(!run||!player||this.paused||this.module().finished(run.state))throw new Error('当前不能操作');
     if(!this.pending().some(d=>d.actorId===player.playerId))throw new Error('当前没有你的决策');

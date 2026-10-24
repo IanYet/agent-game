@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { AgentSettings, BrowserToolRequest, ConnectorInfo, PlayerKind, ToolDefinition, ToolResponse } from '@agent-game/protocol';
 import type { GameController } from '../controller';
 
@@ -12,13 +12,16 @@ export interface StoredRun<S = any> {
 export interface PendingDecision { decisionId: string; actorId: string; allowedTools?: string[]; deadline?: number }
 export interface MatchSummary { id: string; gameId: string; round: number; endedAt: string; title: string; subtitle: string; entries: Array<{ label: string; value: string; positive?: boolean }> }
 export interface SeatRuntime { playerId: string; seat: number; kind: PlayerKind; status: 'idle'|'connecting'|'ready'|'thinking'|'error'|'paused'; sessionId?:string; conversationId?:string; message?:string; lastTool?:string; turns:number; tokens:number }
-export interface AppSnapshot<V = any> { connector:ConnectorInfo|null; connected:boolean; connectorUpdateRequired:boolean; game:V|null; room:Omit<StoredRun,'state'> & {finished:boolean} | null; seats:SeatRuntime[]; paused:boolean; persistConversations:boolean; error:string|null; history:MatchSummary[] }
+export interface AppSnapshot<V = any> { connector:ConnectorInfo|null; connected:boolean; connectorUpdateRequired:boolean; game:V|null; room:Omit<StoredRun,'state'> & {finished:boolean} | null; seats:SeatRuntime[]; paused:boolean; persistConversations:boolean; error:string|null; history:MatchSummary[]; activity:{phase:string;detail?:string;actors:string[]} | null }
 export interface CreateOptions { gameId?:string; config?:any; persistConversations?:boolean }
-export interface GameUiProps { state:AppSnapshot; controller:GameController; busy:boolean; onRules:()=>void; onSetup:()=>void; onBack:()=>void; onError:(message:string)=>void; run:(action:()=>Promise<void>)=>Promise<void> }
+export interface GameUiProps { state:AppSnapshot; controller:GameController; onError:(message:string)=>void; tableActions?:ReactNode }
 export interface GameModule<S = any,V = any> {
   id:string; version:string; stateVersion:number; name:string; description:string; tagline:string;
+  presentation:{english:string;symbol:string;tone:'warm'|'cool'};
   minPlayers:number; maxPlayers:number; defaultPlayers:number; defaultConfig:any; runNoun:string;
   rules:(run?:StoredRun<S>)=>string;
+  validateConfig?:(config:any)=>void;
+  activity:(run:StoredRun<S>)=>{phase:string;detail?:string};
   lifecycle:{sessionScope:'run'|'room';eagerAgents:boolean};
   create:(run:Omit<StoredRun<S>,'state'>,random:()=>number)=>S;
   next:(previous:StoredRun<S>,run:Omit<StoredRun<S>,'state'>,random:()=>number)=>S;
@@ -33,8 +36,8 @@ export interface GameModule<S = any,V = any> {
   timeout?:(run:StoredRun<S>,decision:PendingDecision)=>S;
   restore:(data:unknown,version:number)=>S;
   summary:(run:StoredRun<S>)=>MatchSummary;
-  planning?:(run:StoredRun<S>)=>{subtitle:string;balances?:Map<string,number>;newPlayerLabel?:string};
-  ui?:{Table:ComponentType<GameUiProps>;ConfigFields?:ComponentType<{value:any;onChange:(value:any)=>void}>;Replay:ComponentType<{run:StoredRun<S>}>;Cover?:ComponentType;cardClass?:string};
+  planning?:(run:StoredRun<S>)=>{subtitle:string;balances?:Map<string,number>;newPlayerLabel?:string;blockedPlayers?:Array<{playerId:string;reason:string}>};
+  ui?:{Table:ComponentType<GameUiProps>;ConfigFields?:ComponentType<{value:any;onChange:(value:any)=>void}>;Replay:ComponentType<{run:StoredRun<S>}>};
 }
 export class GameRegistry {
   private modules=new Map<string,GameModule>();

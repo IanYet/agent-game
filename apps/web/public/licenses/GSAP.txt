@@ -1,0 +1,7 @@
+GSAP 3.13.0 / GreenSock, a Webflow product.
+Downloaded from the published gsap@3.13.0 npm package via jsDelivr.
+Files: index.js, gsap-core.js, CSSPlugin.js, package.json.
+The original copyright and license links remain in the source headers.
+License: GSAP Standard License (not MIT).
+https://gsap.com/standard-license/
+https://gsap.com/docs/v3/Installation/

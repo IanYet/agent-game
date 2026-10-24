@@ -1,4 +1,4 @@
-import {applyHoldemAction,createHoldem,nextHoldemHand,viewHoldem,getHoldemLegalActions,holdemBetting,assertHoldemChips,HOLDEM_RULES,DEFAULT_HOLDEM_OPTIONS,type HoldemState,type HoldemAction} from './engine';
+import {applyHoldemAction,createHoldem,nextHoldemHand,viewHoldem,getHoldemLegalActions,holdemBetting,assertHoldemChips,validateHoldemOptions,HOLDEM_RULES,DEFAULT_HOLDEM_OPTIONS,type HoldemState,type HoldemAction} from './engine';
 import {toolResult} from '@agent-game/protocol';
 import type {GameModule,StoredRun} from '../../runtime/types';
 import {enginePlayers,seatFor,decorateView,emptySchema,readOnly,agentObservation,decisionKey,checkRevision} from '../shared';
@@ -10,7 +10,10 @@ const descriptors=[
 ];
 const observe=(run:StoredRun<HoldemState>,actor:string|null)=>decorateView(viewHoldem(run.state,actor===null?null:seatFor(run,actor)),run.roster);
 export const holdemModule:GameModule<HoldemState>={
+ presentation:{english:'TEXAS HOLD’EM',symbol:'♠',tone:'cool'},
  id:'holdem',version:'1.0.0',stateVersion:1,name:'德州扑克',description:'读牌、下注、全下。筹码留在桌上，下一手重新思考。',tagline:'无限注',minPlayers:2,maxPlayers:9,defaultPlayers:4,defaultConfig:DEFAULT_HOLDEM_OPTIONS,runNoun:'手',
+ validateConfig:validateHoldemOptions,
+ activity:run=>({phase:({preflop:'翻牌前',flop:'翻牌',turn:'转牌',river:'河牌',finished:'本手已结算'})[run.state.phase],detail:`第 ${run.index} 手 · 盲注 ${run.state.options.smallBlind}/${run.state.options.bigBlind}`}),
  rules:()=>HOLDEM_RULES,lifecycle:{sessionScope:'run',eagerAgents:true},
  create:(run,random)=>createHoldem(run.roomId,enginePlayers(run.roster),{...run.config,handId:run.runId,random,round:run.index}),
  next:(previous,run,random)=>nextHoldemHand(previous.state,enginePlayers(run.roster),{handId:run.runId,random}),
@@ -35,5 +38,5 @@ export const holdemModule:GameModule<HoldemState>={
  humanAction:(run,actor,input)=>applyHoldemAction(run.state,seatFor(run,actor),input as HoldemAction),
  restore:(data:any,version)=>{if(version!==1||data?.gameId!=='holdem'||!Array.isArray(data.deck)||!Array.isArray(data.ledger)||data.players?.length<2||data.players?.length>9)throw new Error('德州存档格式或版本不受支持');assertHoldemChips(data);return data;},
  summary:run=>({id:run.roomId,gameId:'holdem',round:run.index,endedAt:run.state.events.at(-1)?.time??run.state.createdAt,title:`德州扑克 · ${run.state.result?.winners.map(s=>run.roster[s].name).join('、')}赢得底池`,subtitle:`第 ${run.index} 手 · 盲注 ${run.state.options.smallBlind}/${run.state.options.bigBlind}`,entries:run.roster.map((p,i)=>({label:p.name,value:String(run.state.result?.deltas[i]??0),positive:(run.state.result?.deltas[i]??0)>0}))}),
- planning:run=>({subtitle:`同一牌桌 · 盲注 ${run.state.options.smallBlind}/${run.state.options.bigBlind} · 新玩家买入 ${run.state.options.initialChips}`,balances:new Map(run.state.players.map(p=>[p.playerId,p.chips])),newPlayerLabel:'按本桌初始筹码买入'}),
+ planning:run=>({subtitle:`同一牌桌 · 盲注 ${run.state.options.smallBlind}/${run.state.options.bigBlind} · 新玩家买入 ${run.state.options.initialChips}`,balances:new Map(run.state.players.map(p=>[p.playerId,p.chips])),newPlayerLabel:'按本桌初始筹码买入',blockedPlayers:run.state.players.filter(p=>p.chips===0).map(p=>({playerId:p.playerId,reason:'筹码已用完，请明确移除后再开始'}))}),
 };

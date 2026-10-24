@@ -7,7 +7,7 @@ export default defineConfig({
   base: process.env.PAGES_BASE_PATH ?? './',
   plugins: [react()],
   resolve: { alias: { '@agent-game/core': fileURLToPath(new URL('./packages/game-core/src/index.ts', import.meta.url)), '@agent-game/protocol': fileURLToPath(new URL('./packages/protocol/src/index.ts', import.meta.url)) } },
-  build: { outDir: '../../dist/client', emptyOutDir: true },
+  build: { outDir: '../../dist/client', emptyOutDir: true, rollupOptions:{output:{manualChunks(id){if(id.includes('/node_modules/three/'))return 'webgl';if(id.includes('/node_modules/gsap/'))return 'motion';}}} },
   server: {
     host: '127.0.0.1',
     port: 5173,
