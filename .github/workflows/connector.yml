@@ -82,7 +82,12 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-      - run: npm test
+      - name: Run game rule tests
+        if: matrix.os != 'macos-15-intel'
+        run: npm test
+      - name: Run game rule tests without worker contention on Intel
+        if: matrix.os == 'macos-15-intel'
+        run: npm test -- --maxWorkers=1
       - run: npm run typecheck
       - run: npm run build:web
       - run: npm run build:connector

@@ -50,7 +50,7 @@ gh run list --repo IanYet/agent-game --workflow connector.yml
 
 若三个平台的构建已成功，只有发布作业失败，可勾选 `publish_release`，在 `build_run_id` 填写原构建的运行 ID。工作流直接复用该次产物，发布器从 GitHub 核对原运行所属仓库、工作流和源提交；产物过期后需要重新构建。留空时仍构建三个平台。
 
-工作流分别在 Windows x64、macOS Apple Silicon 和 macOS Intel 上构建，使用 Node.js 24.19.0。各作业运行游戏规则测试、类型检查和构建，再生成原生安装包；不运行连接器、界面、协议或发布器自动测试。
+工作流分别在 Windows x64、macOS Apple Silicon 和 macOS Intel 上构建，使用 Node.js 24.19.0。各作业运行游戏规则测试、类型检查和构建，再生成原生安装包；Intel runner 串行运行同一套规则测试，避免多个进程争抢 CPU 导致长对局测试超时。不运行连接器、界面、协议或发布器自动测试。
 
 安装包名称和 Release 显示名统一放在 [connector-assets.mjs](../scripts/connector-assets.mjs)。Actions 下载产物与 Release 显示名会写明「同桌连接器」、系统和芯片。底层文件使用 ASCII 名称：
 
