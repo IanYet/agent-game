@@ -50,7 +50,7 @@ gh run list --repo IanYet/agent-game --workflow connector.yml
 
 若三个平台的构建已成功，只有发布作业失败，可勾选 `publish_release`，在 `build_run_id` 填写原构建的运行 ID。工作流直接复用该次产物，发布器从 GitHub 核对原运行所属仓库、工作流和源提交；产物过期后需要重新构建。留空时仍构建三个平台。
 
-工作流分别在 Windows x64、macOS Apple Silicon 和 macOS Intel 上构建，使用 Node.js 24.19.0。各作业运行游戏规则测试、类型检查和构建，再生成原生安装包；不运行连接器、界面、协议或发布器自动测试。
+工作流分别在 Windows x64、macOS Apple Silicon 和 macOS Intel 上构建，使用 Node.js 24.19.0。各作业运行游戏规则测试、类型检查和构建，再生成原生安装包；Intel runner 串行运行同一套规则测试，避免多个进程争抢 CPU 导致长对局测试超时。不运行连接器、界面、协议或发布器自动测试。
 
 安装包名称和 Release 显示名统一放在 [connector-assets.mjs](../scripts/connector-assets.mjs)。Actions 下载产物与 Release 显示名会写明「同桌连接器」、系统和芯片。底层文件使用 ASCII 名称：
 
@@ -115,6 +115,7 @@ macOS 包只有 ad-hoc 本地签名，没有 Developer ID 身份签名，未经�
 | 提示协议或能力不符 | 下载当前网页要求的连接器，退出旧进程后启动 |
 | 能选模型但推理失败 | 在对应 Harness 中检查登录、模型权限与网络 |
 | Agent 未完成决策 | 查看错误信息，处理原因后继续牌局 |
+| 决策超过 180 秒 | 连接器会取消上游任务并暂停牌局；5 秒内仍未结束则关闭该玩家会话，点击继续时重建。180 秒也包含 Harness 的限流重试等待；遇到 429 时先等待上游限制恢复 |
 | 刷新后暂停 | 点击继续，会建立新的原生会话 |
 | 存档格式不匹配 | 新建游戏，开发期不迁移旧存档 |
 

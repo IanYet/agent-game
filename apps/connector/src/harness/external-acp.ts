@@ -175,7 +175,7 @@ export class ExternalAcpAdapter implements HarnessAdapter {
           const abort = () => rpc.notify('session/cancel', { sessionId }); signal.addEventListener('abort', abort, { once: true });
           try {
             resetText();
-            const response = await rpc.call('session/prompt', { sessionId, prompt: [{ type: 'text', text: prompted ? prompt : `${sessionInstructions(context)}\n\n${prompt}` }] }, 180_000);
+            const response = await rpc.call('session/prompt', { sessionId, prompt: [{ type: 'text', text: prompted ? prompt : `${sessionInstructions(context)}\n\n${prompt}` }] }, 0);
             prompted = true;
             if (signal.aborted) throw abortError();
             if (response.stopReason && !['end_turn', 'stop_sequence'].includes(response.stopReason)) {

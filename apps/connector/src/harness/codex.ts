@@ -95,13 +95,12 @@ export class CodexAdapter implements HarnessAdapter {
           turnId = null; gameCalls.clear(); activeSignal = signal;
           await new Promise<void>((resolve, reject) => {
             let settled = false;
-            const finish = (error?: Error) => { if (settled) return; settled = true; clearTimeout(timer); signal.removeEventListener('abort', abort); activeDone = null; activeSignal = undefined; gameCalls.clear(); error ? reject(error) : resolve(); };
+            const finish = (error?: Error) => { if (settled) return; settled = true; signal.removeEventListener('abort', abort); activeDone = null; activeSignal = undefined; gameCalls.clear(); error ? reject(error) : resolve(); };
             // Wait for turn/completed before allowing resume to send a new turn.
             // The abort may arrive while turn/start is still being acknowledged.
             let interrupting = false;
             const interrupt = () => { if (turnId && !interrupting) { interrupting = true; void rpc.call('turn/interrupt', { threadId: sessionId, turnId }).catch(finish); } };
             const abort = () => { interrupt(); };
-            const timer = setTimeout(() => { interrupt(); finish(new Error('Codex 回合超时')); }, 180_000);
             activeDone = error => finish(signal.aborted ? abortError() : error); signal.addEventListener('abort', abort, { once: true });
             rpc.call('turn/start', { threadId: sessionId, input: [{ type: 'text', text: prompt }], model: settings?.model ?? context.model ?? result.model, effort: settings?.reasoningEffort ?? context.reasoningEffort ?? result.reasoningEffort }).then(result => {
               if (settled) return;

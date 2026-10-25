@@ -8,9 +8,10 @@ import type { AgentSession, ConnectorInfo, HarnessAdapter } from './types';
 import { sessionInstructions } from './harness/instructions';
 import { resolveSettings } from './harness/settings';
 import { ConversationRecorder } from './harness/conversation';
+import { abortError } from './harness/rpc';
 
-interface Capability { request: SessionRequest; registry: ToolRegistry; conversation: ConversationRecorder; sessionId?: string }
-interface PlayerSession { session: AgentSession; capability: Capability; token: string; cwd: string }
+interface Capability { request: SessionRequest; registry: ToolRegistry; conversation: ConversationRecorder; sessionId?: string; discarded?: boolean }
+interface PlayerSession { session: AgentSession | null; capability: Capability; token: string; cwd: string }
 interface ActiveDecision { decisionId: string; controller: AbortController; done: Promise<void> }
 export class LocalBridge extends EventEmitter {
   private owner: { token: string; origin: string; attached: boolean } | null = null;
@@ -62,9 +63,12 @@ export class LocalBridge extends EventEmitter {
     this.pending.delete(id); clearTimeout(pending.timer); pending.resolve(response);
   }
   async createSession(request: SessionRequest): Promise<{ sessionId: string }> {
+    return this.startSession(request, randomUUID());
+  }
+  private async startSession(request: SessionRequest, sessionId: string, signal?: AbortSignal): Promise<{ sessionId: string }> {
     if (!this.owner?.attached) throw new Error('请先连接游戏网页');
     const key = JSON.stringify([request.scopeId, request.playerId]);
-    if (this.creating.has(key) || [...this.sessions.values()].some(s => s.capability.request.scopeId === request.scopeId && s.capability.request.playerId === request.playerId)) throw new Error('该玩家已有会话或正在创建');
+    if (this.creating.has(key) || [...this.sessions].some(([id, s]) => id !== sessionId && s.capability.request.scopeId === request.scopeId && s.capability.request.playerId === request.playerId)) throw new Error('该玩家已有会话或正在创建');
     const adapter = this.adapters.get(request.kind); if (!adapter) throw new Error('所选 Harness 不可用');
     request = structuredClone({ ...request, ...resolveSettings(modelsForHarness(this.info, request.kind), request) });
     const owner = this.owner, token = randomBytes(24).toString('hex');
@@ -83,13 +87,14 @@ export class LocalBridge extends EventEmitter {
       conversation.record('instructions', '本玩家可用的游戏工具', registry.definitions);
       await mkdir(cwd, { recursive: true }); await writeFile(join(cwd, 'AGENTS.md'), sessionInstructions(request), 'utf8');
       const session = await adapter.createSession({ ...request, cwd, mcpUrl,
-        onConversation,
+        onConversation: update => { if (!capability.discarded) onConversation(update); },
         onActivity: (text, tool) => { if(this.capabilities.get(token)===capability)this.emitEvent({ type: 'activity', playerId: request.playerId, text, tool }); },
         onUsage: tokens => { if(this.capabilities.get(token)===capability)this.emitEvent({ type: 'usage', playerId: request.playerId, tokens }); },
       });
-      if (generation !== this.generation || !this.owner?.attached) { await session.close(); throw new Error('连接已结束'); }
-      if (this.sessions.has(session.sessionId)) { await session.close(); throw new Error('Harness 返回重复的会话 ID'); }
-      capability.sessionId = session.sessionId; this.sessions.set(session.sessionId, { session, capability, token, cwd }); return { sessionId: session.sessionId };
+      if (signal?.aborted || generation !== this.generation || this.owner !== owner || !this.owner.attached) { await session.close(); throw signal?.aborted ? abortError() : new Error('连接已结束'); }
+      // The browser keeps this logical handle when an unresponsive native
+      // session is replaced. Each replacement gets fresh MCP credentials.
+      capability.sessionId = sessionId; this.sessions.set(sessionId, { session, capability, token, cwd }); return { sessionId };
     } catch (error) { conversation.record('error', '创建玩家会话失败', (error as Error).message); this.capabilities.delete(token); await this.removeTemporaryWorkspace(cwd); throw error; }
     finally { this.creating.delete(key); }
   }
@@ -99,10 +104,52 @@ export class LocalBridge extends EventEmitter {
     const resolved = resolveSettings(modelsForHarness(this.info, player.capability.request.kind), settings ?? player.capability.request);
     const controller = new AbortController();
     const active: ActiveDecision = { decisionId, controller, done: Promise.resolve() }; this.active.set(sessionId, active);
-    active.done = player.session.playTurn(prompt, controller.signal, resolved);
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 180_000);
+    active.done = this.runDecision(sessionId, player, prompt, controller.signal, resolved);
     try { await active.done; player.capability.conversation.record('event', '本次决策结束', 'Agent 已结束本次任务。'); return { completed: true }; }
-    catch (error) { player.capability.conversation.record(controller.signal.aborted ? 'event' : 'error', controller.signal.aborted ? '推理已暂停' : '推理失败', (error as Error).message); throw error; }
-    finally { if (this.active.get(sessionId) === active) this.active.delete(sessionId); }
+    catch (error) {
+      const failure = timedOut ? new Error('本次决策超过 180 秒，已取消上游任务。点击继续可重试。') : error as Error;
+      const paused = controller.signal.aborted && !timedOut;
+      player.capability.conversation.record(paused ? 'event' : 'error', paused ? '推理已暂停' : '推理失败', failure.message); throw failure;
+    }
+    finally { clearTimeout(timer); if (this.active.get(sessionId) === active) this.active.delete(sessionId); }
+  }
+  private async runDecision(sessionId: string, player: PlayerSession, prompt: string, signal: AbortSignal, settings: AgentSettings): Promise<void> {
+    let onAbort!: () => void;
+    const cancelled = new Promise<{ cancelled: true }>(resolve => { onAbort = () => resolve({ cancelled: true }); signal.addEventListener('abort', onAbort, { once: true }); });
+    const task = (async () => {
+      if (!player.session) {
+        player.capability.conversation.record('event', '重建玩家会话', '上次会话已关闭，正在根据当前决策建立新会话。');
+        await this.startSession({ ...player.capability.request, ...settings }, sessionId, signal);
+        player = this.sessions.get(sessionId)!;
+      }
+      if (signal.aborted) throw abortError();
+      await player.session!.playTurn(prompt, signal, settings);
+    })();
+    // Keep the original task observed while cancellation is acknowledged. An
+    // RPC timeout must never leave an upstream turn running behind a retry.
+    const settled = task.then(() => ({ error: undefined }), (error: unknown) => ({ error }));
+    let grace: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const outcome = await Promise.race([settled, cancelled]);
+      if ('cancelled' in outcome || signal.aborted) {
+        const completion = await Promise.race([settled, new Promise<null>(resolve => { grace = setTimeout(() => resolve(null), 5000); })]);
+        if (!completion || (completion.error !== undefined && (completion.error as Error)?.name !== 'AbortError')) await this.discardSession(sessionId);
+        throw abortError();
+      }
+      if (outcome.error !== undefined) { await this.discardSession(sessionId); throw outcome.error; }
+    } finally { clearTimeout(grace); signal.removeEventListener('abort', onAbort); }
+  }
+  private async discardSession(sessionId: string): Promise<void> {
+    const player = this.sessions.get(sessionId); if (!player?.session) return;
+    const session = player.session; player.session = null; player.capability.discarded = true; this.capabilities.delete(player.token);
+    for (const [id, pending] of this.pending) if (pending.capability === player.capability) { clearTimeout(pending.timer); pending.reject(new Error('玩家会话已关闭')); this.pending.delete(id); }
+    try { await session.close(); }
+    finally {
+      await this.removeTemporaryWorkspace(player.cwd);
+      player.capability.conversation.record('event', '玩家会话已关闭', '旧会话的工具凭据已撤销；点击继续时会重建该玩家会话。');
+    }
   }
   async pauseTurn(): Promise<void> {
     const active = [...this.active.values()]; for (const task of active) task.controller.abort();
@@ -115,7 +162,7 @@ export class LocalBridge extends EventEmitter {
     if (!ids) this.capabilities.clear();
     const revoked = new Set(selected.map(([,s])=>s.capability));
     for (const [id,pending] of this.pending) if (!ids || revoked.has(pending.capability)) { clearTimeout(pending.timer); pending.reject(new Error('会话已结束')); this.pending.delete(id); }
-    await Promise.allSettled(selected.map(async ([, s]) => { try { await s.session.close(); } finally { s.capability.conversation.record('event', '玩家会话结束', '本机临时会话已关闭，对话保存在游戏网页的浏览器中。'); await this.removeTemporaryWorkspace(s.cwd); } }));
+    await Promise.allSettled(selected.map(async ([, s]) => { try { await s.session?.close(); } finally { s.capability.conversation.record('event', '玩家会话结束', '本机临时会话已关闭，对话保存在游戏网页的浏览器中。'); await this.removeTemporaryWorkspace(s.cwd); } }));
   }
   private async removeTemporaryWorkspace(cwd: string) {
     const root = resolve(this.dataDirectory, 'sessions'), target = resolve(cwd);

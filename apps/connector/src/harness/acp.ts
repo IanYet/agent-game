@@ -72,7 +72,7 @@ export class AcpAdapter implements HarnessAdapter {
           signal.addEventListener('abort', abort, { once: true });
           gameCalls.clear(); activeSignal = signal;
           try {
-            const response = await rpc.call('session/prompt', { sessionId, prompt: [{ type: 'text', text: prompt }] }, 180_000);
+            const response = await rpc.call('session/prompt', { sessionId, prompt: [{ type: 'text', text: prompt }] }, 0);
             if (signal.aborted) throw abortError();
             if (response.stopReason && !['end_turn', 'stop_sequence'].includes(response.stopReason)) throw new Error(`ACP 回合停止：${response.stopReason}`);
           } finally { activeSignal = undefined; gameCalls.clear(); signal.removeEventListener('abort', abort); }

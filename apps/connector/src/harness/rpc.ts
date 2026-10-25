@@ -6,7 +6,7 @@ export interface ProcessCommand { command: string; args: string[]; env?: NodeJS.
 export class JsonRpcProcess extends EventEmitter {
   private child: ChildProcessWithoutNullStreams;
   private sequence = 0;
-  private pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  private pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void; timer?: ReturnType<typeof setTimeout> }>();
   private exited = false;
   private stderr = '';
   onRequest?: (method: string, params: any) => Promise<unknown>;
@@ -59,7 +59,9 @@ export class JsonRpcProcess extends EventEmitter {
     if (this.exited) return Promise.reject(new Error('Agent 进程已经关闭'));
     const id = ++this.sequence;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error(`${method} 请求超时`)); }, timeoutMs);
+      // A zero timeout leaves turn cancellation to LocalBridge, which waits for
+      // the upstream response before allowing another decision on this session.
+      const timer = timeoutMs > 0 ? setTimeout(() => { this.pending.delete(id); reject(new Error(`${method} 请求超时`)); }, timeoutMs) : undefined;
       this.pending.set(id, { resolve, reject, timer });
       this.write({ jsonrpc: '2.0', id, method, params });
     });
