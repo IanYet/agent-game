@@ -1,9 +1,10 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {Chess,type Color,type PieceSymbol,type Square} from 'chess.js';
 import {ArrowUpRight} from 'lucide-react';
 import {Switch} from '../../Switch';
 import type {ControlledView,GameUiProps,StoredRun} from '../../runtime/types';
 import {playerCardState} from '../../visuals/PlayerCard';
+import {useEffectsPreference} from '../../visuals/preferences';
 import {AgentPlayerCard} from '../AgentPlayerCard';
 import {HumanPlayerCard} from '../HumanPlayerCard';
 import {StatusTag} from '../../UiBits';
@@ -14,13 +15,43 @@ import './chess.css';
 
 const GLYPHS:Record<Color,Record<PieceSymbol,string>>={w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 type BoardPiece={square:Square;type:PieceSymbol;color:Color};
+type PieceMotion={square:HTMLButtonElement;animation:Animation};
+function stopPieceMotions(motions:PieceMotion[]){
+  for(const {square,animation} of motions.splice(0)){animation.onfinish=null;animation.cancel();delete square.dataset.pieceMoving;}
+}
 function Piece({color,type}:{color:Color;type:PieceSymbol}){return <span className={`chess-piece chess-piece-${color}`} aria-hidden="true">{GLYPHS[color][type]+'\uFE0E'}</span>;}
-function Board({pieces,black=false,selected=null,destination=null,targets=[],lastMove,checkSquare,onSquare,interactive=false}:{pieces:BoardPiece[];black?:boolean;selected?:Square|null;destination?:Square|null;targets?:Square[];lastMove?:Pick<ChessMove,'from'|'to'>;checkSquare?:Square|null;onSquare?:(square:Square)=>void;interactive?:boolean}){
+function Board({pieces,black=false,selected=null,destination=null,targets=[],lastMove,checkSquare,onSquare,interactive=false}:{pieces:BoardPiece[];black?:boolean;selected?:Square|null;destination?:Square|null;targets?:Square[];lastMove?:ChessMove;checkSquare?:Square|null;onSquare?:(square:Square)=>void;interactive?:boolean}){
+  const {reduced}=useEffectsPreference(),squares=useRef(new Map<Square,HTMLButtonElement>()),motions=useRef<PieceMotion[]>([]);
+  const position=pieces.map(piece=>`${piece.square}${piece.color}${piece.type}`).join(''),previous=useRef({pieces,position,black,reduced,lastMove});
+  useLayoutEffect(()=>{
+    const before=previous.current;previous.current={pieces,position,black,reduced,lastMove};
+    if(before.position===position&&before.black===black&&before.reduced===reduced)return;
+    stopPieceMotions(motions.current);
+    if(reduced||before.black!==black||before.position===position)return;
+    const delta=(lastMove?.ply??0)-(before.lastMove?.ply??0),reverse=delta===-1,move=reverse?before.lastMove:lastMove;
+    if(Math.abs(delta)!==1||!move)return;
+    const animate=(from:Square,to:Square)=>{
+      const source=squares.current.get(from),destination=squares.current.get(to),piece=destination?.querySelector<HTMLElement>('.chess-piece');
+      const oldPiece=before.pieces.find(value=>value.square===from),newPiece=pieces.find(value=>value.square===to);
+      if(!source||!destination||!piece||!oldPiece||!newPiece||oldPiece.color!==newPiece.color)return;
+      const x=source.offsetLeft+source.offsetWidth/2-destination.offsetLeft-destination.offsetWidth/2,y=source.offsetTop+source.offsetHeight/2-destination.offsetTop-destination.offsetHeight/2;
+      destination.dataset.pieceMoving='true';
+      const animation=piece.animate([{transform:`translate(${x}px,${y}px)`},{transform:'translate(0,0)'}],{duration:240,easing:'cubic-bezier(.22,.61,.36,1)'}),motion={square:destination,animation};
+      motions.current.push(motion);
+      animation.onfinish=()=>{delete destination.dataset.pieceMoving;const index=motions.current.indexOf(motion);if(index>=0)motions.current.splice(index,1);};
+    };
+    animate(reverse?move.to:move.from,reverse?move.from:move.to);
+    if(move.castle){
+      const rank=move.from[1],kingSide=move.to[0]==='g',from=`${kingSide?'h':'a'}${rank}` as Square,to=`${kingSide?'f':'d'}${rank}` as Square;
+      animate(reverse?to:from,reverse?from:to);
+    }
+  },[pieces,position,black,reduced,lastMove]);
+  useEffect(()=>()=>stopPieceMotions(motions.current),[]);
   const ranks=black?[1,2,3,4,5,6,7,8]:[8,7,6,5,4,3,2,1],files=(black?'hgfedcba':'abcdefgh').split('');
   return <FoilPanel className="chess-board" radialGlare role="group" aria-label={`国际象棋棋盘 · ${black?'黑方':'白方'}视角`} data-cursor-lens="off">
     {ranks.flatMap((rank,row)=>files.map((file,col)=>{
       const square=`${file}${rank}` as Square,piece=pieces.find(p=>p.square===square),target=targets.includes(square),light=(file.charCodeAt(0)+rank)%2===1,source=square===selected,chosenDestination=square===destination;
-      return <button type="button" key={square} className={`chess-square ${light?'light':'dark'} ${source?'selected-piece':''} ${chosenDestination?'chosen-destination':''} ${target?'legal-target':''} ${lastMove&&(square===lastMove.from||square===lastMove.to)?'last-move':''} ${checkSquare===square?'in-check':''}`} aria-label={`${square}${piece?` ${COLOR_NAMES[piece.color]}${PIECE_NAMES[piece.type]}`:' 空格'}${target?' · 合法落点':''}${source?' · 已选棋子':''}${chosenDestination?' · 已选落点':''}`} aria-pressed={source||chosenDestination} disabled={!interactive} onClick={()=>onSquare?.(square)}>
+      return <button type="button" key={square} ref={element=>{if(element)squares.current.set(square,element);else squares.current.delete(square);}} className={`chess-square ${light?'light':'dark'} ${source?'selected-piece':''} ${chosenDestination?'chosen-destination':''} ${target?'legal-target':''} ${lastMove&&(square===lastMove.from||square===lastMove.to)?'last-move':''} ${checkSquare===square?'in-check':''}`} aria-label={`${square}${piece?` ${COLOR_NAMES[piece.color]}${PIECE_NAMES[piece.type]}`:' 空格'}${target?' · 合法落点':''}${source?' · 已选棋子':''}${chosenDestination?' · 已选落点':''}`} aria-pressed={source||chosenDestination} disabled={!interactive} onClick={()=>onSquare?.(square)}>
         {col===0&&<small className="chess-rank" aria-hidden="true">{rank}</small>}{row===7&&<small className="chess-file" aria-hidden="true">{file}</small>}{source&&<i className="chess-selection-frame" aria-hidden="true"/>}{chosenDestination?<i className={`chess-destination-mark${piece?' chess-destination-capture':''}`} aria-hidden="true"/>:target&&<i className={`chess-move-ring${piece?' chess-capture-ring':''}`} aria-hidden="true"/>}{piece&&<Piece color={piece.color} type={piece.type}/>}
       </button>;
     }))}
@@ -65,7 +96,7 @@ export function Table({state,controller,onError,tableActions}:GameUiProps){
     </>}
   </div>;
   const promotion=humanTurn&&candidates.length>1&&<fieldset className="chess-promotion"><legend>升变选择</legend>{candidates.map(m=><button type="button" aria-label={`升变为${PIECE_NAMES[m.promotion!]}`} aria-pressed={chosen?.uci===m.uci} className={chosen?.uci===m.uci?'active':''} key={m.uci} onClick={()=>setChosen(m)}><Piece color={own!.color} type={m.promotion!}/><small>{PIECE_NAMES[m.promotion!]}</small></button>)}</fieldset>;
-  const board=<div className="chess-board-stage"><Board pieces={game.board} black={black} selected={selected} destination={candidates[0]?.to} targets={game.legalMoves.filter(m=>m.from===selected).map(m=>m.to)} lastMove={game.moves.at(-1)} checkSquare={game.checkSquare} interactive={humanTurn||(!own&&!finished)} onSquare={squareClick}/><div className="chess-board-foot"><span>第 {game.moveNumber} 回合 · 已行 {game.moves.length} 步</span><button type="button" className="text-button" onClick={()=>setFlip(v=>!v)}>翻转棋盘 ↕</button></div>{promotion}</div>;
+  const board=<div className="chess-board-stage"><Board key={game.id} pieces={game.board} black={black} selected={selected} destination={candidates[0]?.to} targets={game.legalMoves.filter(m=>m.from===selected).map(m=>m.to)} lastMove={game.moves.at(-1)} checkSquare={game.checkSquare} interactive={humanTurn||(!own&&!finished)} onSquare={squareClick}/><div className="chess-board-foot"><span>第 {game.moveNumber} 回合 · 已行 {game.moves.length} 步</span><button type="button" className="text-button" onClick={()=>setFlip(v=>!v)}>翻转棋盘 ↕</button></div>{promotion}</div>;
   return <GameLayout gameId="chess" label="国际象棋棋桌" className="chess-layout" surfaceClassName="chess-main" toolbar={<> <span>第 {game.round} 局 · 标准对弈</span><span>{finished?'本局结束':state.paused?'棋局已暂停':`${COLOR_NAMES[game.players[game.turn].color]}行棋${game.check?' · 将军':''}`} · 不计时</span> </>} score={<FoilPanel className="score-card chess-standings"><h3>本桌积分 <span>累计</span></h3>{game.players.map(p=><div key={p.playerId}><span><strong>{p.name}</strong><small>{COLOR_NAMES[p.color]} · {p.wins} 胜 · {p.draws} 和 · {p.losses} 负</small></span><b>{p.score}</b></div>)}{finished&&<div className="chess-score-result"><strong>{game.result?.outcome}</strong><p>{game.result?.description}</p>{game.players.map(p=><small key={p.playerId}>{p.name} +{game.result?.deltas[p.seat]} · 累计 {p.score}</small>)}</div>}</FoilPanel>} events={game.events}>
     <GameTable className="chess-table">{board}</GameTable>
     <PlayerCardGrid className="chess-players" count={2} columns={own?'minmax(0,2fr) minmax(0,1fr)':'repeat(2,minmax(0,1fr))'}>
@@ -80,5 +111,5 @@ export function Replay({run}:{run:StoredRun<ChessState>}){
   const chess=new Chess(move?.after??run.state.initialFen),pieces=chess.board().flat().filter(p=>p!==null),king=pieces.find(p=>p.type==='k'&&p.color===chess.turn());
   useEffect(()=>setIndex(0),[run.runId]);
   const download=()=>{const v=new Chess(run.state.initialFen);for(const m of run.state.moves)v.move({from:m.from,to:m.to,...(m.promotion?{promotion:m.promotion}:{})});v.setHeader('White',run.state.players.find(p=>p.color==='w')!.name);v.setHeader('Black',run.state.players.find(p=>p.color==='b')!.name);v.setHeader('Result',run.state.result?.outcome??'*');const url=URL.createObjectURL(new Blob([v.pgn()],{type:'application/x-chess-pgn;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=`TongZhuo-Chess-${run.index}.pgn`;a.click();URL.revokeObjectURL(url);};
-  return <div className="chess-replay" data-cursor-lens="off"><div className="chess-replay-board"><Board pieces={pieces} black={flip} lastMove={move} checkSquare={chess.isCheck()?king?.square:null}/><div className="chess-replay-controls"><button className="button outline" disabled={index===0} onClick={()=>setIndex(0)}>开局</button><button className="button outline" disabled={index===0} onClick={()=>setIndex(i=>i-1)}>上一步</button><span>{index+1} / {events.length}</span><button className="button outline" disabled={index===events.length-1} onClick={()=>setIndex(i=>i+1)}>下一步</button><button className="button outline" disabled={index===events.length-1} onClick={()=>setIndex(events.length-1)}>终局</button></div><input aria-label="回放进度" type="range" min="0" max={events.length-1} value={index} onChange={e=>setIndex(Number(e.target.value))}/><p className="chess-replay-event">{event?.seat!==undefined?run.roster[event.seat].name+' · ':''}{event?.text}</p><div className="chess-replay-bottom"><button className="text-button" onClick={()=>setFlip(v=>!v)}>翻转棋盘 ↕</button><button className="text-button" onClick={download}>下载 PGN ↗</button></div></div><div><MoveList moves={run.state.moves} selected={ply} onSelect={p=>setIndex(events.findIndex(e=>e.type==='move'&&e.ply===p))}/><p>{run.state.result?.description}</p></div></div>;
+  return <div className="chess-replay" data-cursor-lens="off"><div className="chess-replay-board"><Board key={run.runId} pieces={pieces} black={flip} lastMove={move} checkSquare={chess.isCheck()?king?.square:null}/><div className="chess-replay-controls"><button className="button outline" disabled={index===0} onClick={()=>setIndex(0)}>开局</button><button className="button outline" disabled={index===0} onClick={()=>setIndex(i=>i-1)}>上一步</button><span>{index+1} / {events.length}</span><button className="button outline" disabled={index===events.length-1} onClick={()=>setIndex(i=>i+1)}>下一步</button><button className="button outline" disabled={index===events.length-1} onClick={()=>setIndex(events.length-1)}>终局</button></div><input aria-label="回放进度" type="range" min="0" max={events.length-1} value={index} onChange={e=>setIndex(Number(e.target.value))}/><p className="chess-replay-event">{event?.seat!==undefined?run.roster[event.seat].name+' · ':''}{event?.text}</p><div className="chess-replay-bottom"><button className="text-button" onClick={()=>setFlip(v=>!v)}>翻转棋盘 ↕</button><button className="text-button" onClick={download}>下载 PGN ↗</button></div></div><div><MoveList moves={run.state.moves} selected={ply} onSelect={p=>setIndex(events.findIndex(e=>e.type==='move'&&e.ply===p))}/><p>{run.state.result?.description}</p></div></div>;
 }

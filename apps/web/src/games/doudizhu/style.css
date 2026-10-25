@@ -1,0 +1,84 @@
+.doudizhu-main {
+  --doudizhu-agent-card-width: calc(19 * 24px + var(--playing-card-small-width) + 32px);
+  --doudizhu-human-card-width: calc(20 * var(--playing-card-large-width) - 19 * 24px + 42px);
+  container-type: inline-size;
+}
+
+.doudizhu-player-cards {
+  justify-items: start;
+}
+
+.doudizhu-player-cards[data-mode="spectator"] {
+  width: min(100%, calc(3 * var(--doudizhu-agent-card-width) + 28px));
+}
+
+.doudizhu-player-cards > .identity-shell {
+  width: min(100%, var(--doudizhu-agent-card-width));
+}
+
+.doudizhu-player-cards[data-mode="player"] > .identity-shell:last-child {
+  justify-self: end;
+}
+
+.doudizhu-main .agent-player-card {
+  padding-bottom: 8px;
+}
+
+.doudizhu-main .agent-player-heading {
+  grid-template-columns: minmax(0, 1fr) auto 48px;
+  gap: 3px 10px;
+  padding: 6px 15px;
+}
+
+.doudizhu-main .agent-player-name {
+  grid-column: 1;
+}
+
+.doudizhu-main .agent-player-metrics {
+  grid-row: 2 / 4;
+  align-self: center;
+}
+
+.doudizhu-main .agent-player-heading > .player-agent-avatar {
+  width: 48px;
+  height: 48px;
+}
+
+.doudizhu-main .agent-player-body {
+  padding-bottom: 6px;
+}
+
+/* 地主最多 20 张，预留最后一张的完整宽度，其余牌按可用空间重叠。 */
+.doudizhu-main .agent-player-hand[data-short-hand] {
+  display: grid;
+  grid-template-columns: repeat(19, minmax(0, 24px)) var(--playing-card-small-width);
+  gap: 0;
+  min-height: calc(var(--playing-card-small-height) + 30px);
+  padding: 26px 0 4px;
+}
+
+.doudizhu-main .agent-player-note {
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+
+.doudizhu-main .agent-player-card > .player-card-footer {
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+}
+
+.doudizhu-main > .identity-shell:has(> .human-player-card) {
+  width: min(100%, var(--doudizhu-human-card-width));
+  align-self: center;
+}
+
+.doudizhu-main .human-player-card {
+  padding: 16px 20px 12px;
+}
+
+@container (max-width: 653px) {
+  .doudizhu-player-cards[data-mode="player"] > .identity-shell:last-child {
+    justify-self: start;
+  }
+}

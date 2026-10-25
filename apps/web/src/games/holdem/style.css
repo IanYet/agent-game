@@ -1,0 +1,180 @@
+.holdem-main {
+  --holdem-human-card-width: 360px;
+  /* 底栏为「本轮下注 + 16 位筹码」和「跟注 + 16 位筹码 + 全下」预留单行空间。 */
+  --holdem-agent-card-width: 320px;
+  --holdem-seat-gap: 14px;
+  container-type: inline-size;
+}
+
+.holdem-main > .holdem-player-area {
+  display: grid;
+  grid-template-columns: var(--holdem-human-card-width) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 18px;
+  width: min(100%, calc(var(--holdem-human-card-width) + 18px + 4 * var(--holdem-agent-card-width) + 3 * var(--holdem-seat-gap)));
+  min-width: 0;
+}
+
+/* 固定四列两排；空席位保留位置，玩家卡不随人数或窗口宽度拉伸。 */
+.holdem-agent-seats {
+  display: grid;
+  grid-template-columns: repeat(4, var(--holdem-agent-card-width));
+  grid-template-rows: repeat(2, minmax(232px, max-content));
+  align-content: start;
+  align-items: stretch;
+  gap: var(--holdem-seat-gap);
+  min-width: 0;
+  padding: 8px;
+  margin: -8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.holdem-spectator-seats {
+  min-width: 0;
+  padding: 8px;
+  margin: -8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* 下排先放满，再向上换行；至少容纳半数玩家的宽度保证最多两排。 */
+.holdem-agent-seats[data-mode="spectator"] {
+  display: flex;
+  flex-wrap: wrap-reverse;
+  align-content: flex-start;
+  min-width: calc(var(--holdem-min-columns) * (var(--holdem-agent-card-width) + var(--holdem-seat-gap)) - var(--holdem-seat-gap));
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+}
+
+.holdem-agent-seats[data-mode="spectator"] > .identity-shell {
+  flex: 0 0 var(--holdem-agent-card-width);
+  min-height: 232px;
+}
+
+.holdem-agent-seats .agent-player-card {
+  padding-bottom: 8px;
+}
+
+.holdem-agent-seats .agent-player-heading {
+  gap: 3px 8px;
+  padding: 8px 12px;
+}
+
+.holdem-agent-seats .agent-player-heading > .player-agent-avatar {
+  height: 80px;
+}
+
+.holdem-agent-seats .agent-strands {
+  height: 64px;
+}
+
+.holdem-agent-seats .player-agent-number {
+  top: 68px;
+  bottom: auto;
+}
+
+.holdem-agent-seats .agent-player-body {
+  padding: 0 12px 8px;
+}
+
+.holdem-agent-seats .agent-player-hand[data-short-hand="true"] {
+  min-height: 0;
+  padding: 26px 0 4px;
+}
+
+.holdem-agent-seats .agent-player-note {
+  display: inline;
+  margin: 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.holdem-agent-seats .agent-player-note + .agent-player-note::before {
+  content: ' · ';
+}
+
+.holdem-agent-seats .agent-player-card > .player-card-footer {
+  grid-template-columns: minmax(0, 1fr) max-content;
+  margin: auto 12px 0;
+}
+
+.holdem-player-area > .identity-shell > .human-player-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 18px;
+}
+
+.holdem-player-area .human-player-content {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  justify-content: center;
+  padding-top: 8px;
+}
+
+.holdem-player-area .human-player-note {
+  text-align: center;
+}
+
+.holdem-player-area .human-player-actions {
+  margin-top: 14px;
+}
+
+.holdem-player-area .action-area {
+  display: block;
+  padding: 0;
+}
+
+.holdem-player-area .poker-controls {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 0;
+}
+
+.holdem-player-area .poker-basic-actions {
+  align-self: stretch;
+}
+
+.holdem-player-area .poker-basic-actions > .button {
+  flex: 1;
+}
+
+.holdem-player-area .poker-raise {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.holdem-player-area .poker-raise label {
+  max-width: none;
+}
+
+.holdem-player-area .poker-raise > .raise-presets,
+.holdem-player-area .poker-raise > small {
+  grid-column: 1 / -1;
+  line-height: 1.7;
+}
+
+.holdem-player-area .poker-waiting {
+  padding: 0;
+  line-height: 1.8;
+}
+
+.holdem-player-area .player-table-controls .game-actions {
+  flex-wrap: nowrap;
+}
+
+@container (max-width: 700px) {
+  .holdem-main > .holdem-player-area {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .holdem-player-area > .identity-shell {
+    width: min(100%, var(--holdem-human-card-width));
+  }
+}

@@ -1,5 +1,8 @@
 .gd-level-pill{color:#e7b99b!important}
 .gd-level-pill b{font-size:22px!important;color:#f4ccb0!important}
+.gd-agent-player-cards .agent-player-hand[data-short-hand="false"]{grid-template-columns:repeat(17,minmax(0,24px)) var(--playing-card-small-width)}
+/* 受贡时最多 28 张，预留完整手牌和卡片最大左右内边距。 */
+[data-game-surface="guandan"]>.identity-shell:has(>.human-player-card){width:min(100%,calc(28 * var(--playing-card-large-width) - 27 * 24px + 58px));align-self:center}
 .gd-team-0{--gd-team:#e9ba99}
 .gd-team-1{--gd-team:#b3cee7}
 .gd-score{padding:20px}

@@ -7,6 +7,7 @@
 .chess-square.light{background:#d7dae28a;color:#272b33}.chess-square.dark{background:#070a1459;color:#d6d9e0}.chess-square:disabled{opacity:1;cursor:default}
 .chess-square.last-move::before{content:'';position:absolute;inset:0;background:#ffffff15;box-shadow:inset 0 0 0 2px #f0f2f67a;pointer-events:none}
 .chess-square.in-check{box-shadow:inset 0 0 0 3px #fff,inset 0 0 18px #fff9}.chess-square.legal-target:hover{background:#ffffff12}.chess-square:focus-visible{outline:3px solid #fff;outline-offset:-4px;z-index:3}
+.chess-board .chess-square[data-piece-moving]{z-index:4}
 .chess-rank,.chess-file{position:absolute;font:9px/1 Arial,sans-serif;z-index:2;pointer-events:none}.chess-rank{top:4px;left:4px}.chess-file{bottom:3px;right:4px}
 .chess-piece{font-family:'Segoe UI Symbol','Noto Sans Symbols 2','Apple Symbols',serif;font-size:clamp(26px,3.45vw,61px);line-height:1;display:inline-block;pointer-events:none;z-index:1;filter:drop-shadow(0 2px 1px #0005)}.chess-board .chess-piece{font-size:clamp(22px,10cqw,68px)}.chess-piece-w{color:#f5f6f8;-webkit-text-stroke:.7px #454851;text-shadow:0 1px #44464c}.chess-piece-b{color:#14171e;-webkit-text-stroke:.6px #c8cbd2;text-shadow:0 1px #a9adb6}
 

@@ -65,7 +65,7 @@ export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme
   },[theme]);
   useEffect(()=>{window.dispatchEvent(new Event('tongzhuo:table-motion'));},[enabled,effects.reduced]);
   return <div className="game-background" data-table-theme={theme} aria-hidden="true">
-    <div className="table-object-fallback">{theme==='splendor'?<SplendorFallback/>:Array.from({length:theme==='citadels'?16:12},(_,i)=><span key={i} style={theme==='azul'?{backgroundImage:`url("${TILE_IMAGES[i%6]}")`}:undefined}>{fallbackSymbols[theme][i%fallbackSymbols[theme].length]}</span>)}</div>
+    <div className="table-object-fallback">{theme==='splendor'?<SplendorFallback/>:Array.from({length:theme==='citadels'?16:12},(_,i)=><span key={i} style={theme==='azul'?{backgroundImage:`url("${TILE_IMAGES[i%5]}")`}:undefined}>{fallbackSymbols[theme][i%fallbackSymbols[theme].length]}</span>)}</div>
     <div ref={surface} className="table-object-surface"/>
   </div>;
 }
