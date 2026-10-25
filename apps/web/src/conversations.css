@@ -1,7 +1,10 @@
 .curiosity-setting{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
 .curiosity-setting.compact{margin:0;padding:0;border:0}
 .curiosity-setting p{margin-top:8px;color:var(--muted);font-size:11px;line-height:1.9}
-.modal.conversation-modal:not(.branded){width:min(960px,100%);height:min(780px,calc(100svh - 52px))}
+.modal.conversation-modal:not(.branded){position:fixed;z-index:90;width:min(960px,calc(100vw - 32px));height:min(780px,calc(100svh - 32px));animation:none}
+.conversation-modal .modal-heading,.conversation-modal .modal-footer{cursor:grab;touch-action:none}
+.conversation-modal .modal-heading{user-select:none}
+.conversation-modal[data-dragging="true"],.conversation-modal[data-dragging="true"] .modal-heading,.conversation-modal[data-dragging="true"] .modal-footer{cursor:grabbing;user-select:none}
 .conversation-modal .modal-panel{height:100%}
 .conversation-modal .modal-scroll{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
 .conversation-players{display:flex;gap:8px;overflow-x:auto;flex:none;padding-bottom:16px;border-bottom:1px solid var(--line)}
