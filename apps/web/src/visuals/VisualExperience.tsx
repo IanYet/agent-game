@@ -89,6 +89,8 @@ export function VisualExperience({enabled,page}:{enabled:boolean;page:string}){
     let alive=true;document.fonts.ready.then(()=>{if(alive){drawGlyph();heroDirty=true;schedule();}});
     const title=material(titleFragment,{u_glyph:{value:glyphTexture},u_paint:{value:paintTexture},u_res:{value:new Vector2()},u_time:{value:0},u_progress:{value:0}});
     const compositor=new LensCompositor(),pageTexture=texture(compositor.canvas);
+    pageTexture.minFilter=LinearMipmapLinearFilter;pageTexture.generateMipmaps=true;
+    pageTexture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
     const lensExclusions=Array.from({length:lensExclusionLimit},()=>new Vector4());
     const lensMaterial=material(lensFragment,{u_page:{value:pageTexture},u_pointer:{value:new Vector2()},u_exclusions:{value:lensExclusions},u_exclusionCount:{value:0}});
     const dimensions=(canvas:HTMLCanvasElement)=>{
@@ -200,7 +202,10 @@ export function VisualExperience({enabled,page}:{enabled:boolean;page:string}){
       if(lens.current&&allowed()&&(lensDirty||animated||Math.hypot(pointer.targetX-pointer.x,pointer.targetY-pointer.y)>.15)){
         const lensStarted=performance.now();
         pointer.x+=(pointer.targetX-pointer.x)*.42;pointer.y+=(pointer.targetY-pointer.y)*.42;
-        const paintStarted=performance.now();compositor.paint(pointer.x,pointer.y);pageTexture.needsUpdate=true;
+        // The dome magnifies almost 2x. Preserve that detail before distortion,
+        // then supersample the output too; cap both local surfaces at 4x CSS size.
+        const pixelRatio=Math.min(4,Math.max(2,(devicePixelRatio||1)*2)),lensPixels=Math.ceil(200*pixelRatio);
+        const paintStarted=performance.now();compositor.paint(pointer.x,pointer.y,pixelRatio);pageTexture.needsUpdate=true;
         profiler?.record('canvasSample',compositor.sampleMs);profiler?.record('domPaint',performance.now()-paintStarted-compositor.sampleMs);
         (lensMaterial.uniforms.u_pointer.value as Vector2).set(pointer.x,pointer.y);
         let exclusionCount=0;
@@ -214,8 +219,8 @@ export function VisualExperience({enabled,page}:{enabled:boolean;page:string}){
         lensMaterial.uniforms.u_exclusionCount.value=exclusionCount;
         lens.current.style.transform='translate3d('+(pointer.x-100)+'px,'+(pointer.y-100)+'px,0)';
         lens.current.style.opacity='1';
-        profiler?.beginGpu();const submitStarted=performance.now();render(lensMaterial,256,256);profiler?.endGpu();profiler?.record('renderSubmit',performance.now()-submitStarted);
-        const copyStarted=performance.now();copy(lens.current,256,256);profiler?.record('frameCopy',performance.now()-copyStarted);lensDirty=false;
+        profiler?.beginGpu();const submitStarted=performance.now();render(lensMaterial,lensPixels,lensPixels);profiler?.endGpu();profiler?.record('renderSubmit',performance.now()-submitStarted);
+        const copyStarted=performance.now();copy(lens.current,lensPixels,lensPixels);profiler?.record('frameCopy',performance.now()-copyStarted);lensDirty=false;
         profiler?.record('lensCpu',performance.now()-lensStarted);profiler?.publish();
         if(import.meta.env.DEV)lens.current.dataset.renderMs=(performance.now()-lensStarted).toFixed(2);
         animated=animated||Math.hypot(pointer.targetX-pointer.x,pointer.targetY-pointer.y)>.15;

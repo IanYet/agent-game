@@ -1,0 +1,23 @@
+.holographic-card{
+  position:relative;isolation:isolate;display:flex;flex-direction:column;flex:none;
+  box-sizing:border-box;height:auto;min-width:0;padding:0;border:0;
+  background:transparent;color:#c5cad2;text-align:left;outline:none;
+}
+.holographic-card:is(:hover,:focus-within){z-index:1}
+.holographic-card-face{
+  position:relative;isolation:isolate;display:flex;flex-direction:column;flex:1;
+  box-sizing:border-box;width:100%;min-width:0;min-height:0;padding:12px;
+  border:2px solid #454c57;border-radius:var(--holographic-radius);
+  background:#111318;transform-origin:center;
+  overflow:hidden;box-shadow:0 3px 8px #0003;
+  transition:border-color .18s,box-shadow .18s;
+}
+.holographic-card-face::after{content:'';position:absolute;inset:7px;z-index:2;border:1px solid var(--holographic-trim);border-radius:calc(var(--holographic-radius) * .875);opacity:0;transition:opacity .18s;pointer-events:none}
+.holographic-card:is(:hover,:focus-visible)>.holographic-card-face::after{opacity:1}
+.holographic-card:is(:hover,:focus-visible)>.holographic-card-face,.holographic-card[data-holographic-selected]>.holographic-card-face{border-color:var(--holographic-highlight)}
+.holographic-card:hover>.holographic-card-face{box-shadow:0 5px 14px #0005}
+.holographic-card:focus-visible>.holographic-card-face{outline:2px solid #f1dec0;outline-offset:3px}
+.holographic-card[data-holographic-selected]:focus-visible>.holographic-card-face{outline:none}
+.holographic-card-material{position:absolute;inset:0;z-index:0;width:100%;height:100%;border-radius:calc(var(--holographic-radius) - 2px);pointer-events:none}
+.holographic-card-face>:where(:not(.holographic-card-material)){position:relative;z-index:1}
+[data-holographic-ink] [data-holographic-color]{opacity:var(--holographic-ink-light,0)}

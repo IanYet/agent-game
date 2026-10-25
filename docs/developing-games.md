@@ -134,6 +134,10 @@ const visualState = playerCardState({
 
 真人主卡使用 `primary`，并传入 `data-player-surface` 和 `data-cursor-lens="off"`；出牌／下注按钮与输入放进主卡内部。`tableActions` 提供暂停／继续或准备下一局的控制；规则、玩家与模型、选择新桌由公共 `GameChrome` 放在游戏标题右侧。所有卡片共用 20 CSS px 的最大屏幕边缘位移。状态光效、静态偏好、透镜画布同步由公共层处理，状态文案仍由游戏提供。
 
+## 建筑牌与贵族牌
+
+需要暗色镭射牌面时，复用 `apps/web/src/visuals/HolographicCard.tsx`。它统一处理卡面纹路、指针光照、圆角饰圈、选中边框和透镜显示；游戏提供内容与语义。可配置光色、彩虹效果、等高线或王冠纹路、尺寸和静止光点位置。属性、调用示例与受光图标的接法见[公共镭射卡组件](holographic-card.md)。
+
 ## 验证与发布
 
 1. 在游戏目录写规则测试，覆盖合法与非法行动、回合推进、结束条件、结算、资源守恒和信息可见范围。

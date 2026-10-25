@@ -4,7 +4,7 @@
 
 [游戏网站](https://ianyet.github.io/agent-game/) · [连接器下载](https://github.com/IanYet/agent-game/releases/latest) · [源码](https://github.com/IanYet/agent-game)
 
-网页和连接器独立发布。新增游戏只需添加网页模块并发布静态网站；连接器根据模块提供的工具声明和提示词转发请求，不执行网页发来的代码。当前网页版本为 0.5.0，连接器为 0.5.0，桥接协议为 5。本版网页需要更新到 0.5.0 或更新的连接器。
+网页和连接器独立发布。新增游戏只需添加网页模块并发布静态网站；连接器根据模块提供的工具声明和提示词转发请求，不执行网页发来的代码。当前网页版本为 0.5.1，连接器为 0.5.1，桥接协议为 5。本版网页需要 0.5.0 或更新的连接器。
 
 ## 开始游戏
 
@@ -82,6 +82,7 @@ npm run build
 - [项目约定](AGENTS.md)：分支清理、重构边界、测试范围和文档风格。
 - [架构与数据流](docs/architecture.md)：模块、运行时、连接器和 Harness 的职责。
 - [新增游戏](docs/developing-games.md)：规则引擎、模块 API、工具和界面注册。
+- [公共镭射卡组件](docs/holographic-card.md)：建筑牌、贵族牌的卡面、光照、饰圈与受光图标。
 - [桥接协议](docs/protocol.md)：HTTP/SSE、动态 MCP 工具和授权。
 - [构建与发布](docs/operations.md)：网页部署、连接器打包、配置和排查。
 - [开发检查](docs/validation.md)：游戏规则测试和实际操作检查。

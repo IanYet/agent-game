@@ -1,0 +1,59 @@
+:root{font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif;color:#e5e9ee;background:#090b11;font-synthesis:none;color-scheme:dark;font-size:14px}
+*{box-sizing:border-box}
+body{margin:0}
+button,input,textarea{font:inherit}
+button{color:#c3cad5;border:1px solid #2b303b;background:#171b24;border-radius:7px;min-height:36px;padding:8px 13px;cursor:pointer;transition:background .15s,border-color .15s}
+button:hover{background:#222833;border-color:#4b5566}
+button:focus-visible,input:focus-visible,summary:focus-visible,textarea:focus-visible{outline:2px solid #9ccab8;outline-offset:3px}
+.color-studio{display:grid;grid-template-columns:minmax(0,1fr) 330px;min-height:100dvh}
+.preview-panel{height:100dvh;min-height:550px;display:flex;flex-direction:column;min-width:0;padding:32px 36px 24px}
+.studio-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:32px}
+.eyebrow{font-size:12px;letter-spacing:.12em;color:#7e8999;margin:0 0 10px}
+h1{font-size:28px;letter-spacing:.04em;font-weight:550;margin:0}
+.shared-settings{font-size:12px;color:#8caf9f;border:1px solid #233a31;padding:7px 11px;border-radius:20px;white-space:nowrap}
+.shared-settings::before{content:"";display:inline-block;width:5px;height:5px;background:#8caf9f;border-radius:50%;margin:0 7px 2px 0}
+.preview-toolbar{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.view-toggle{display:flex;background:#12151e;border:1px solid #252b36;border-radius:8px;padding:3px}
+.view-toggle button{border:0;min-height:32px;background:transparent;color:#7f8999;padding:6px 16px}
+.view-toggle button[aria-pressed=true]{background:#2a313d;color:#edf2f8;box-shadow:0 1px 3px #0004}
+.motion-tools{display:flex;align-items:center;gap:8px}
+.motion-tools button{background:transparent;border-color:transparent;font-size:13px;color:#97a2b2}
+.motion-tools button:hover{background:#171c26;color:#e5e9ee}
+.preview-stage{position:relative;flex:1;min-height:0;margin:18px 0}
+.preview-stage canvas{display:block;width:100%;height:100%;position:absolute;inset:0;cursor:grab;touch-action:none;border-radius:8px}
+.preview-stage canvas:active{cursor:grabbing}
+.preview-stage canvas:focus-visible{outline:1px solid #677f75;outline-offset:3px}
+.gem-labels{position:absolute;inset:0;pointer-events:none}
+.gem-labels>div{position:absolute;transform:translate(-50%,0);text-align:center;white-space:nowrap}
+.gem-labels span{display:block;color:#a1aab7;font-size:13px;letter-spacing:.12em}
+.gem-labels code{display:block;font-size:11px;color:#596474;margin-top:7px;letter-spacing:.06em}
+.preview-caption{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:#677284;font-size:12px;line-height:1.8}
+.preview-error{position:absolute;inset:35% 10% auto;text-align:center;color:#e4bcb6;background:#20191eea;border:1px solid #644847;padding:18px;border-radius:8px}
+.palette-panel{border-left:1px solid #252b35;background:#11151d;padding:34px 26px;max-height:100dvh;overflow-y:auto}
+h2{font-size:17px;font-weight:550;margin:0 0 10px}
+.palette-heading p{font-size:12px;line-height:1.8;color:#8590a1;margin:0}
+.palette-controls{display:grid;gap:22px;margin:29px 0 30px}
+.color-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.color-heading label{font-size:13px;font-weight:500;cursor:pointer}
+.text-button{min-height:24px;padding:2px 0;background:transparent;border:0;font-size:11px;color:#747f90}
+.text-button:hover{background:transparent;color:#e4e9ee}
+.color-inputs{display:grid;grid-template-columns:51px minmax(0,1fr);gap:10px}
+input[type=color]{width:51px;height:40px;display:block;appearance:none;-webkit-appearance:none;padding:4px;border:1px solid #35404d;border-radius:7px;background:#1a202b;cursor:pointer}
+input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
+input[type=color]::-moz-color-swatch{border:0;border-radius:3px}
+.hex-input{min-width:0;width:100%;height:40px;background:#0c1017;border:1px solid #2b3340;color:#c6cfda;border-radius:7px;padding:9px 13px;font-family:Consolas,monospace;letter-spacing:.06em}
+.hex-input[aria-invalid=true]{border-color:#ac6d65}
+.field-error{display:block;margin-top:7px;font-size:11px;color:#db9d94}
+.palette-actions{display:grid;gap:9px}
+.palette-actions button{min-height:40px;font-size:13px}
+.primary-button{background:#a2c5b4;border-color:#a2c5b4;color:#101b18;font-weight:600}
+.primary-button:hover{background:#b9d5c8;border-color:#b9d5c8}
+.palette-status{font-size:11px;line-height:1.8;min-height:40px;color:#8c9c9b;margin:13px 0 17px}
+details{border-top:1px solid #252d38;padding-top:17px;font-size:12px;color:#8190a1}
+summary{cursor:pointer;width:fit-content}
+textarea{display:block;resize:vertical;width:100%;min-height:166px;background:#090d14;border:1px solid #2b3340;border-radius:6px;padding:12px;color:#b1c3c2;font:12px/1.8 Consolas,monospace;margin-top:14px;white-space:pre}
+.palette-note{color:#5f6c7c;font-size:11px;line-height:1.8;margin:21px 0 0}
+@media(min-width:1900px){.color-studio{grid-template-columns:minmax(0,1fr) 370px}.palette-panel{padding:40px 34px}.preview-panel{padding:40px 48px 30px}.palette-controls{gap:26px}}
+@media(max-width:1000px){.color-studio{grid-template-columns:minmax(0,1fr) 280px}.preview-panel{padding:24px 22px 18px}.palette-panel{padding:28px 20px}.shared-settings{display:none}.preview-caption span:last-child{display:none}}
+@media(max-width:700px){.color-studio{display:block}.preview-panel{height:70dvh;min-height:520px;padding:24px 18px 16px}.studio-heading{margin-bottom:22px}h1{font-size:24px}.preview-toolbar{gap:6px}.view-toggle button{padding:6px 12px}.motion-tools button{padding:6px 8px;font-size:12px}.palette-panel{max-height:none;border-left:0;border-top:1px solid #252b35;padding:26px 22px}.palette-controls{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 18px}.color-inputs{grid-template-columns:42px minmax(0,1fr);gap:7px}input[type=color]{width:42px}.hex-input{padding:9px 8px}.palette-actions{grid-template-columns:1fr 1fr}.palette-status{min-height:0}.palette-note{margin-bottom:4px}}

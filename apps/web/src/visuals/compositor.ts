@@ -1,9 +1,16 @@
-import {cardProjection,compositeFoil,compositePlane} from './foil-card';
+import {compositeFoil,compositePlane} from './foil-card';
+import {cardProjection} from './card-projection';
+import {paintSvgInLens} from './lens-svg';
 // A local paint surface, rebuilt from current viewport geometry on every lens frame.
 // DOM remains the interactive source of truth. No page screenshots, SVG filters,
 // retained scroll offsets, foreignObject snapshots or private input values are used.
 const SIZE=256;
 const intersects=(a:DOMRect,b:{left:number;top:number;right:number;bottom:number})=>a.right>b.left&&a.left<b.right&&a.bottom>b.top&&a.top<b.bottom;
+type Radius={x:number;y:number};
+function paintUniformBorder(ctx:CanvasRenderingContext2D,rect:DOMRect,width:number,color:string,corners:Radius[]){
+  const half=width/2;ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();
+  ctx.roundRect(rect.x+half,rect.y+half,Math.max(0,rect.width-width),Math.max(0,rect.height-width),corners.map(r=>({x:Math.max(0,r.x-half),y:Math.max(0,r.y-half)})));ctx.stroke();
+}
 const splitLayers=(value:string)=>{
   let depth=0,start=0;const parts:string[]=[];
   for(let i=0;i<value.length;i++){if(value[i]==='(')depth++;else if(value[i]===')')depth--;else if(value[i]===','&&depth===0){parts.push(value.slice(start,i).trim());start=i+1;}}
@@ -37,11 +44,15 @@ export class LensCompositor {
   private context:CanvasRenderingContext2D;
   private planes=new WeakMap<HTMLElement,HTMLCanvasElement>();
   constructor(){this.canvas.width=SIZE;this.canvas.height=SIZE;this.context=this.canvas.getContext('2d')!;}
-  paint(x:number,y:number){
+  paint(x:number,y:number,pixelRatio:number){
     this.sampleMs=0;
     let ctx=this.context;
+    const pixels=Math.ceil(SIZE*pixelRatio);
+    if(this.canvas.width!==pixels||this.canvas.height!==pixels){this.canvas.width=pixels;this.canvas.height=pixels;}
+    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
     const box={left:x-SIZE/2,top:y-SIZE/2,right:x+SIZE/2,bottom:y+SIZE/2};
-    let plane:{root:HTMLElement;projection:ReturnType<typeof cardProjection>}|undefined;
+    type Plane={root:HTMLElement;fromScreen:(x:number,y:number)=>{x:number;y:number}};
+    let plane:Plane|undefined;
     const bounds=(el:Element)=>{
       if(!plane)return el.getBoundingClientRect();
       const root=plane.root;
@@ -59,22 +70,32 @@ export class LensCompositor {
         for(let parent=el.parentElement;parent&&parent!==root;parent=parent.parentElement){left-=parent.scrollLeft;top-=parent.scrollTop;}
         return new DOMRect(left-root.scrollLeft,top-root.scrollTop,el.offsetWidth,el.offsetHeight);
       }
-      const r=el.getBoundingClientRect(),p=plane.projection.inverse(r.left+r.width/2,r.top+r.height/2);
-      return new DOMRect(p.x-r.width/2,p.y-r.height/2,r.width,r.height);
+      const r=el.getBoundingClientRect(),p=plane.fromScreen(r.left+r.width/2,r.top+r.height/2),style=getComputedStyle(el);
+      const width=parseFloat(style.width)||r.width,height=parseFloat(style.height)||r.height;
+      return new DOMRect(p.x-width/2,p.y-height/2,width,height);
     };
-    ctx.setTransform(1,0,0,1,-box.left,-box.top);ctx.globalAlpha=1;ctx.fillStyle='#090a0d';ctx.fillRect(box.left,box.top,SIZE,SIZE);
+    // Keep layout and crop coordinates in CSS pixels; rasterize before refraction
+    // at the same density as the lens so its magnification retains glyph edges.
+    ctx.setTransform(pixelRatio,0,0,pixelRatio,-box.left*pixelRatio,-box.top*pixelRatio);ctx.globalAlpha=1;ctx.fillStyle='#090a0d';ctx.fillRect(box.left,box.top,SIZE,SIZE);
     const range=document.createRange();
     const draw=(el:Element,alpha:number)=>{
       if(el.matches('[data-lens-ignore],[data-cursor-lens="off"],.cursor-lens,script,style,input,textarea,select,.glass-fallback,.hero-title-fallback'))return;
       const style=getComputedStyle(el);if(style.display==='none'||style.visibility==='hidden')return;
-      const rect=bounds(el),foil=el.matches('.r-laser-card');if(!plane&&!intersects(foil?new DOMRect(rect.x-80,rect.y-80,rect.width+160,rect.height+160):rect,box))return;
+      const rect=bounds(el),reach=el.matches('.r-laser-card')?80:el.matches('.holographic-card')?40:0;
+      if(!plane&&!intersects(reach?new DOMRect(rect.x-reach,rect.y-reach,rect.width+reach*2,rect.height+reach*2):rect,box))return;
       const opacity=alpha*Number(style.opacity);if(opacity<.001)return;
-      if(!plane&&el instanceof HTMLElement&&el.matches('.identity-card')){
+      if(el instanceof HTMLElement&&el!==plane?.root&&el.matches('.identity-card,[data-lens-plane]')){
+        if(!el.offsetWidth||!el.offsetHeight||!intersects(el.getBoundingClientRect(),box))return;
         let surface=this.planes.get(el);if(!surface){surface=document.createElement('canvas');this.planes.set(el,surface);}
-        if(surface.width!==el.offsetWidth||surface.height!==el.offsetHeight){surface.width=el.offsetWidth;surface.height=el.offsetHeight;}
-        const parentContext=ctx;ctx=surface.getContext('2d')!;ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,surface.width,surface.height);
-        plane={root:el,projection:cardProjection(el)};draw(el,1);plane=undefined;ctx=parentContext;
-        ctx.save();ctx.globalAlpha=alpha;compositePlane(ctx,el,surface);ctx.restore();return;
+        const width=Math.ceil(el.offsetWidth*pixelRatio),height=Math.ceil(el.offsetHeight*pixelRatio);
+        if(surface.width!==width||surface.height!==height){surface.width=width;surface.height=height;}
+        const parentContext=ctx,parentPlane=plane,translation=new DOMMatrixReadOnly(style.transform);
+        const projection=cardProjection(el,parentPlane?{x:rect.x-translation.m41,y:rect.y-translation.m42}:undefined);
+        ctx=surface.getContext('2d')!;ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,surface.width,surface.height);
+        ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+        plane={root:el,fromScreen:(x,y)=>{const p=parentPlane?parentPlane.fromScreen(x,y):{x,y};return projection.inverse(p.x,p.y);}};
+        draw(el,1);plane=parentPlane;ctx=parentContext;
+        ctx.save();ctx.globalAlpha=alpha;compositePlane(ctx,el,surface,projection);ctx.restore();return;
       }
       ctx.save();ctx.globalAlpha=opacity;
       if(el instanceof HTMLElement&&el.matches('.r-laser-card')){ctx.filter=getComputedStyle(el.parentElement!).filter;compositeFoil(ctx,el);ctx.restore();return;}
@@ -86,7 +107,7 @@ export class LensCompositor {
         if(el.matches('.r-accordion-panel')){const a=155*Math.PI/180,dx=Math.sin(a),dy=-Math.cos(a),length=Math.abs(rect.width*dx)+Math.abs(rect.height*dy),x=rect.x+rect.width/2,y=rect.y+rect.height/2,gradient=ctx.createLinearGradient(x-dx*length/2,y-dy*length/2,x+dx*length/2,y+dy*length/2);gradient.addColorStop(0,'#171923');gradient.addColorStop(.7,'#0d1017');gradient.addColorStop(1,'#0d1017');ctx.fillStyle=gradient;}
         ctx.beginPath();ctx.roundRect(rect.x,rect.y,rect.width,rect.height,corners);ctx.fill();
       }
-      const boardAsset=!!el.closest('.board-game-layout')&&el.matches('.azul-factory,.azul-center,.sp-card,.sp-deck,.sp-noble,.ct-building');
+      const boardAsset=el.matches('.holographic-card-face')||!!el.closest('.board-game-layout')&&el.matches('.azul-factory,.azul-center,.sp-deck,.ct-building');
       if(boardAsset&&style.backgroundImage!=='none'){
         ctx.save();ctx.beginPath();ctx.roundRect(rect.x,rect.y,rect.width,rect.height,corners);ctx.clip();paintBoardGameGradients(ctx,style.backgroundImage,rect);ctx.restore();
       }
@@ -103,9 +124,9 @@ export class LensCompositor {
       }
       const borders=(['Top','Right','Bottom','Left'] as const).map(side=>({side,width:parseFloat(style[`border${side}Width`])||0,color:style[`border${side}Color`],kind:style[`border${side}Style`]}));
       const border=borders[0],uniform=borders.every(b=>b.width===border.width&&b.color===border.color&&b.kind===border.kind);
-      if(uniform&&border.width&&border.kind!=='none'){
-        const half=border.width/2;ctx.strokeStyle=border.color;ctx.lineWidth=border.width;ctx.beginPath();
-        ctx.roundRect(rect.x+half,rect.y+half,Math.max(0,rect.width-border.width),Math.max(0,rect.height-border.width),corners.map(r=>({x:Math.max(0,r.x-half),y:Math.max(0,r.y-half)})));ctx.stroke();
+      const framedCard=el.hasAttribute('data-lens-card-frame');
+      if(uniform&&border.width&&border.kind!=='none'&&!framedCard){
+        paintUniformBorder(ctx,rect,border.width,border.color,corners);
       }else if(!uniform){
         // Side-specific accents still clip to the same outer contour as their DOM box.
         ctx.save();ctx.beginPath();ctx.roundRect(rect.x,rect.y,rect.width,rect.height,corners);ctx.clip();
@@ -120,6 +141,9 @@ export class LensCompositor {
         if(el.complete&&el.naturalWidth){ctx.filter=style.filter==='none'?'none':style.filter;ctx.drawImage(el,rect.x,rect.y,rect.width,rect.height);ctx.filter='none';}
       }else if(el instanceof HTMLCanvasElement){
         if(el.width&&el.height){
+          if(el.matches('.holographic-card-material')){
+            ctx.beginPath();ctx.roundRect(rect.x,rect.y,rect.width,rect.height,corners);ctx.clip();
+          }
           const sampleStarted=performance.now();
           ctx.filter=style.filter==='none'?'none':style.filter;if(style.mixBlendMode==='screen')ctx.globalCompositeOperation='screen';
           if(plane)ctx.drawImage(el,rect.x,rect.y,rect.width,rect.height);
@@ -130,9 +154,11 @@ export class LensCompositor {
           ctx.filter='none';
           if(import.meta.env.DEV)this.sampleMs+=performance.now()-sampleStarted;
         }
+      }else if(el instanceof SVGSVGElement&&el.hasAttribute('data-lens-svg')){
+        ctx.filter=style.filter==='none'?'none':style.filter;paintSvgInLens(ctx,el,rect);ctx.filter='none';
       }else if(el instanceof SVGSVGElement){
         const view=el.viewBox.baseVal;ctx.translate(rect.x,rect.y);ctx.scale(rect.width/(view.width||24),rect.height/(view.height||24));ctx.translate(-view.x,-view.y);ctx.strokeStyle=style.stroke==='none'?style.color:style.stroke;ctx.lineWidth=Number(el.getAttribute('stroke-width')??2);ctx.lineCap='round';ctx.lineJoin='round';
-        for(const shape of el.children){let path:Path2D|undefined;const n=(name:string)=>Number(shape.getAttribute(name)??0);ctx.save();const transforms=(shape as SVGGraphicsElement).transform?.baseVal;if(transforms)for(let i=0;i<transforms.numberOfItems;i++){const m=transforms.getItem(i).matrix;ctx.transform(m.a,m.b,m.c,m.d,m.e,m.f);}if(shape.tagName==='ellipse'){path=new Path2D();path.ellipse(n('cx'),n('cy'),n('rx'),n('ry'),0,0,Math.PI*2);}else if(shape.tagName==='path')path=new Path2D(shape.getAttribute('d')??'');else if(shape.tagName==='line'){path=new Path2D();path.moveTo(n('x1'),n('y1'));path.lineTo(n('x2'),n('y2'));}else if(shape.tagName==='circle'){path=new Path2D();path.arc(n('cx'),n('cy'),n('r'),0,Math.PI*2);}else if(shape.tagName==='polyline'||shape.tagName==='polygon'){const points=(shape.getAttribute('points')??'').trim().split(/[ ,]+/).map(Number);path=new Path2D();for(let i=0;i<points.length;i+=2)i?path.lineTo(points[i],points[i+1]):path.moveTo(points[i],points[i+1]);if(shape.tagName==='polygon')path.closePath();}else if(shape.tagName==='rect'){path=new Path2D();path.roundRect(n('x'),n('y'),n('width'),n('height'),n('rx'));}if(path){if(el.matches('.sp-gem,.sp-card-scene')){const paint=getComputedStyle(shape);ctx.globalAlpha=opacity*Number(paint.opacity);if(paint.fill!=='none'){ctx.fillStyle=paint.fill;ctx.fill(path,paint.fillRule==='evenodd'?'evenodd':'nonzero');}if(paint.stroke!=='none'){ctx.strokeStyle=paint.stroke;ctx.lineWidth=parseFloat(paint.strokeWidth)||1;ctx.stroke(path);}}else ctx.stroke(path);}ctx.restore();}
+        for(const shape of el.children){let path:Path2D|undefined;const n=(name:string)=>Number(shape.getAttribute(name)??0);ctx.save();const transforms=(shape as SVGGraphicsElement).transform?.baseVal;if(transforms)for(let i=0;i<transforms.numberOfItems;i++){const m=transforms.getItem(i).matrix;ctx.transform(m.a,m.b,m.c,m.d,m.e,m.f);}if(shape.tagName==='ellipse'){path=new Path2D();path.ellipse(n('cx'),n('cy'),n('rx'),n('ry'),0,0,Math.PI*2);}else if(shape.tagName==='path')path=new Path2D(shape.getAttribute('d')??'');else if(shape.tagName==='line'){path=new Path2D();path.moveTo(n('x1'),n('y1'));path.lineTo(n('x2'),n('y2'));}else if(shape.tagName==='circle'){path=new Path2D();path.arc(n('cx'),n('cy'),n('r'),0,Math.PI*2);}else if(shape.tagName==='polyline'||shape.tagName==='polygon'){const points=(shape.getAttribute('points')??'').trim().split(/[ ,]+/).map(Number);path=new Path2D();for(let i=0;i<points.length;i+=2)i?path.lineTo(points[i],points[i+1]):path.moveTo(points[i],points[i+1]);if(shape.tagName==='polygon')path.closePath();}else if(shape.tagName==='rect'){path=new Path2D();path.roundRect(n('x'),n('y'),n('width'),n('height'),n('rx'));}if(path)ctx.stroke(path);ctx.restore();}
       }else{
         const children=Array.from(el.childNodes).sort((a,b)=>{const z=(n:Node)=>n instanceof Element?Number.parseInt(getComputedStyle(n).zIndex)||0:0;return z(a)-z(b);});
         for(const child of children){
@@ -144,8 +170,17 @@ export class LensCompositor {
           // letter spacing and the current transform. Drawing a glyph at its own
           // measured rectangle avoids estimating line breaks or fixed positions.
           for(let i=0;i<text.length;){const code=text.codePointAt(i)!,length=code>0xffff?2:1;range.setStart(child,i);range.setEnd(child,i+length);let r=range.getBoundingClientRect();const char=text.slice(i,i+length);i+=length;if(!char.trim())continue;
-            if(plane){const center=plane.projection.inverse(r.x+r.width/2,r.y+r.height/2),m=ctx.measureText(char),height=(m.fontBoundingBoxAscent??size*.8)+(m.fontBoundingBoxDescent??size*.2);r=new DOMRect(center.x-m.width/2,center.y-height/2,m.width,height);}
+            if(plane){const center=plane.fromScreen(r.x+r.width/2,r.y+r.height/2),m=ctx.measureText(char),height=(m.fontBoundingBoxAscent??size*.8)+(m.fontBoundingBoxDescent??size*.2);r=new DOMRect(center.x-m.width/2,center.y-height/2,m.width,height);}
             for(const offset of el.matches('.nav-roll>span')?[0,rect.height]:[0]){const destination=new DOMRect(r.x,r.y+offset,r.width,r.height);if(plane||intersects(destination,box))ctx.fillText(style.textTransform==='uppercase'?char.toUpperCase():char,r.left,r.bottom+offset-descent);}}
+        }
+      }
+      if(framedCard){
+        if(uniform&&border.width&&border.kind!=='none')paintUniformBorder(ctx,rect,border.width,border.color,corners);
+        const trim=getComputedStyle(el,'::after'),trimOpacity=Number(trim.opacity),width=parseFloat(trim.borderTopWidth)||0;
+        if(trim.content!=='none'&&trim.display!=='none'&&trimOpacity>.001&&width){
+          const inset=(side:'Left'|'Top'|'Right'|'Bottom')=>(parseFloat(style[`border${side}Width`])||0)+(parseFloat(trim[side.toLowerCase() as 'left'|'top'|'right'|'bottom'])||0);
+          const left=inset('Left'),top=inset('Top'),right=inset('Right'),bottom=inset('Bottom'),radius=parseFloat(trim.borderTopLeftRadius)||0;
+          ctx.save();ctx.globalAlpha=opacity*trimOpacity;paintUniformBorder(ctx,new DOMRect(rect.x+left,rect.y+top,Math.max(0,rect.width-left-right),Math.max(0,rect.height-top-bottom)),width,trim.borderTopColor,Array.from({length:4},()=>({x:radius,y:radius})));ctx.restore();
         }
       }
       ctx.restore();

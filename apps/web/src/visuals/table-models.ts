@@ -1,19 +1,20 @@
 import {
-  BufferGeometry, CanvasTexture, CircleGeometry, Color, ExtrudeGeometry,
-  Float32BufferAttribute, Group, LatheGeometry, Mesh, MeshPhysicalMaterial,
-  Shape, ShapeUtils, SRGBColorSpace, Vector2, Vector3,
+  Box3, BufferGeometry, CanvasTexture, CircleGeometry, ExtrudeGeometry,
+  Group, LatheGeometry, Mesh, MeshMatcapMaterial,
+  RepeatWrapping, Shape, SRGBColorSpace, Vector2, Vector3,type Light,
 } from 'three';
-import {ConvexPolyhedron, Cylinder, Vec3, type Shape as CollisionShape} from 'cannon-es';
+import {Box,Vec3} from 'cannon-es';
 import {ChessTableModels} from '../games/chess/table-models';
-import {SplendorModels} from '../games/splendor/table-models';
 import {AzulTableModels} from '../games/azul/table-models';
-import {CitadelsModels} from '../games/citadels/table-models';
+import {SplendorTableModels} from '../games/splendor/table-models';
+import {PlainChipModels} from './plain-chip-models';
+import type {TableSurfaces} from './table-surfaces';
+import {POKER_CHIP_COLORS,CARD_SUIT_COLORS,CITADELS_CHIP_COLORS} from './table-palette';
 
 export type TableTheme='holdem'|'doudizhu'|'chess'|'azul'|'citadels'|'splendor';
-type Collider={shape:CollisionShape;offset?:Vec3};
-interface GameModelSet {create:(index:number,scale:number)=>{mesh:Group;colliders:Collider[]};dispose:()=>void}
+interface GameModelSet {create:(index:number,scale:number)=>Group;dispose:()=>void;lights?:readonly Light[];pixelBudget?:number}
 
-// One outline supplies both the visible suit and its collision geometry.
+// The same suit outlines supply the floating models and chip artwork.
 function suitShape(index:number){
   const s=new Shape();
   if(index===0){
@@ -43,131 +44,113 @@ function suitShape(index:number){
   s.closePath();return s;
 }
 
-function convexHull(points:Vector2[]){
-  const sorted=points.slice().sort((a,b)=>a.x-b.x||a.y-b.y);
-  const cross=(a:Vector2,b:Vector2,c:Vector2)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
-  const half=(vertices:Vector2[])=>{
-    const result:Vector2[]=[];
-    for(const p of vertices){while(result.length>1&&cross(result.at(-2)!,result.at(-1)!,p)<=1e-7)result.pop();result.push(p);}
-    result.pop();return result;
-  };
-  return [...half(sorted),...half(sorted.slice().reverse())];
-}
-
-// Describe each lobe and stem with a few convex pieces, preserving the notches.
-function collisionProfiles(shape:Shape,index:number){
-  const outline=shape.getPoints(4);outline.pop();
-  const polygon=(points:number[][])=>points.map(([x,y])=>new Vector2(x,y));
-  const stem=polygon([[-.11,-.34],[-.38,-.87],[.38,-.87],[.11,-.34]]);
-  if(index===0)return [
-    convexHull([...outline.filter(p=>p.x<=0&&p.y>=-.61),new Vector2(0,-.34)]),
-    convexHull([...outline.filter(p=>p.x>=0&&p.y>=-.61),new Vector2(0,-.34)]),stem,
-  ];
-  if(index===1)return [-1,1].map(side=>convexHull(outline.filter(p=>p.x*side>=0)));
-  if(index===2)return [convexHull(outline)];
-  const lobe=(x:number,y:number,rx:number,ry:number)=>Array.from({length:12},(_,i)=>{
-    const angle=i*Math.PI/6;return new Vector2(x+Math.cos(angle)*rx,y+Math.sin(angle)*ry);
-  });
-  return [lobe(0,.49,.42,.43),lobe(-.49,-.15,.4,.43),lobe(.49,-.15,.4,.43),stem];
-}
-
-function prism(points:Vector2[],scale:number){
-  const count=points.length,depth=.21*scale;
-  const center=points.reduce((sum,p)=>sum.add(p),new Vector2()).multiplyScalar(1/count);
-  const vertices=[-depth,depth].flatMap(z=>points.map(p=>new Vec3((p.x-center.x)*scale,(p.y-center.y)*scale,z)));
-  const faces=[points.map((_,i)=>count-1-i),points.map((_,i)=>count+i)];
-  for(let i=0;i<count;i++){const next=(i+1)%count;faces.push([i,next,next+count,i+count]);}
-  return {shape:new ConvexPolyhedron({vertices,faces}),offset:new Vec3(center.x*scale,center.y*scale,0)};
-}
-
-const chipColors=['#b94b51','#497eac','#d6c9aa','#4f9188','#8d71ad','#cf9450'];
-const suitColors=['#597697','#c45760','#cf865d','#b8c5d2'];
+const chipColors=POKER_CHIP_COLORS,suitColors=CARD_SUIT_COLORS;
+const chipIvory=chipColors[2],chipInk='#382f36',chipMark='#f2e8d7';
 
 export class TableModels{
   private gameModels?:GameModelSet;
   private geometries:BufferGeometry[]=[];
-  private materials:MeshPhysicalMaterial[]=[];
+  private materials:MeshMatcapMaterial[]=[];
   private textures:CanvasTexture[]=[];
   private outlines=[0,1,2,3].map(suitShape);
-  private pieces:Vector2[][][]=[];
   private suits:ExtrudeGeometry[]=[];
   private chips:LatheGeometry[]=[];
-  private faces:MeshPhysicalMaterial[]=[];
-  private suitMaterials:MeshPhysicalMaterial[]=[];
-  private chipMaterial!:MeshPhysicalMaterial;
+  private faces:MeshMatcapMaterial[]=[];
+  private chipBodies:MeshMatcapMaterial[]=[];
+  private suitMaterials:MeshMatcapMaterial[]=[];
   private disc!:CircleGeometry;
 
-  constructor(private theme:TableTheme){
+  constructor(private theme:TableTheme,private surfaces:TableSurfaces){
     if(theme==='chess'){this.gameModels=new ChessTableModels();return;}
-    if(theme==='splendor'){this.gameModels=new SplendorModels();return;}
+    if(theme==='splendor'){this.gameModels=new SplendorTableModels();return;}
     if(theme==='azul'){this.gameModels=new AzulTableModels();return;}
-    if(theme==='citadels'){this.gameModels=new CitadelsModels();return;}
+    if(theme==='citadels'){this.gameModels=new PlainChipModels(CITADELS_CHIP_COLORS);return;}
     if(theme!=='holdem'&&theme!=='doudizhu')throw new Error(`未注册的牌桌物件主题：${theme}`);
     this.disc=new CircleGeometry(.704,64);this.geometries.push(this.disc);
-    this.chipMaterial=this.material({vertexColors:true,roughness:.32,metalness:.22,clearcoat:.6});
+    if(theme==='doudizhu')this.suitMaterials=suitColors.map(color=>this.material({color}));
     if(theme==='holdem')chipColors.forEach((hex,index)=>{
       const profile=[[0,-.15],[.66,-.15],[.724,-.135],[.75,-.105],[.75,.105],[.724,.135],[.66,.15],[0,.15]];
-      const geometry=new LatheGeometry(profile.map(([x,y])=>new Vector2(x,y)),64);
-      const position=geometry.getAttribute('position'),colors:number[]=[],base=new Color(hex),stripe=new Color('#e3dac4');
-      for(let i=0;i<position.count;i++){
-        const angle=Math.atan2(position.getX(i),position.getZ(i))+Math.PI;
-        const color=Math.hypot(position.getX(i),position.getZ(i))>.71&&(angle/(Math.PI*2)*12)%1<.28?stripe:base;
-        colors.push(color.r,color.g,color.b);
-      }
-      geometry.setAttribute('color',new Float32BufferAttribute(colors,3));
+      const geometry=new LatheGeometry(profile.map(([x,y])=>new Vector2(x,y)),96);
       this.chips.push(geometry);this.geometries.push(geometry);
+      const side=this.chipSideTexture(hex);this.textures.push(side);
+      this.chipBodies.push(this.material({map:side}));
       const face=this.chipTexture(hex,index);this.textures.push(face);
-      this.faces.push(this.material({map:face,roughness:.42,metalness:.12,clearcoat:.45}));
+      this.faces.push(this.material({map:face}));
     });
-    else this.outlines.forEach((shape,index)=>{
+    else this.outlines.forEach(shape=>{
       const geometry=new ExtrudeGeometry(shape,{depth:.28,bevelEnabled:true,bevelThickness:.065,bevelSize:.065,bevelSegments:3,steps:1,curveSegments:10});
       geometry.computeBoundingBox();const center=geometry.boundingBox!.getCenter(new Vector3());
       geometry.translate(-center.x,-center.y,-center.z);
       this.suits.push(geometry);this.geometries.push(geometry);
-      this.pieces.push(collisionProfiles(shape,index).map(points=>{
-        if(ShapeUtils.isClockWise(points))points.reverse();
-        return points.map(p=>p.clone().sub(new Vector2(center.x,center.y)).multiplyScalar(1.045));
-      }));
-      this.suitMaterials.push(this.material({color:suitColors[index],roughness:.27,metalness:.28,clearcoat:.75,clearcoatRoughness:.2}));
     });
   }
 
-  private material(options:ConstructorParameters<typeof MeshPhysicalMaterial>[0]){
-    const m=new MeshPhysicalMaterial(options);this.materials.push(m);return m;
+  private material(options:ConstructorParameters<typeof MeshMatcapMaterial>[0]){
+    const m=new MeshMatcapMaterial(options);this.materials.push(m);return m;
+  }
+
+  private chipSideTexture(color:string){
+    const canvas=document.createElement('canvas');canvas.width=2048;canvas.height=256;
+    const ctx=canvas.getContext('2d')!;
+    ctx.fillStyle=color;ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle=color===chipIvory?chipInk:chipMark;
+    // Lathe UVs follow the eight profile rings; markings cover the curved outer band.
+    const top=Math.round(canvas.height*2/7),bottom=Math.round(canvas.height*5/7);
+    for(let i=0;i<12;i++){
+      const left=Math.round(i*canvas.width/12),right=Math.round((i+.28)*canvas.width/12);
+      ctx.fillRect(left,top,right-left,bottom-top);
+    }
+    const texture=new CanvasTexture(canvas);texture.colorSpace=SRGBColorSpace;texture.wrapS=RepeatWrapping;texture.anisotropy=8;return texture;
   }
 
   private chipTexture(color:string,index:number){
     const canvas=document.createElement('canvas');canvas.width=512;canvas.height=512;
-    const ctx=canvas.getContext('2d')!;
+    const ctx=canvas.getContext('2d')!,ink=color===chipIvory?chipInk:chipMark;
     ctx.fillStyle=color;ctx.fillRect(0,0,512,512);
-    ctx.fillStyle='#111a2533';ctx.beginPath();ctx.arc(256,256,202,0,Math.PI*2);ctx.fill();
-    for(const [radius,alpha] of [[230,.65],[217,.25],[199,.5],[182,.16]] as const){
-      ctx.strokeStyle=`rgba(244,232,204,${alpha})`;ctx.lineWidth=radius===230?4:2;
+    ctx.fillStyle='#10141b12';ctx.beginPath();ctx.arc(256,256,202,0,Math.PI*2);ctx.fill();
+    for(const [radius,alpha] of [[230,.48],[217,.14],[199,.28],[182,.08]] as const){
+      ctx.strokeStyle=ink;ctx.globalAlpha=alpha;ctx.lineWidth=radius===230?4:2;
       ctx.beginPath();ctx.arc(256,256,radius,0,Math.PI*2);ctx.stroke();
     }
+    ctx.globalAlpha=1;
     const pip=(suit:number,x:number,y:number,size:number)=>{
       ctx.save();ctx.translate(x,y);ctx.scale(size,-size);
       ctx.beginPath();this.outlines[suit].getPoints(20).forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
-      ctx.closePath();ctx.fillStyle='#f2e6cf';ctx.shadowColor='#080d1599';ctx.shadowBlur=3/size;ctx.shadowOffsetY=2/size;ctx.fill();ctx.restore();
+      ctx.closePath();ctx.fillStyle=ink;ctx.fill();ctx.restore();
     };
     pip(index%4,256,256,115);
     [0,1,2,3].forEach(suit=>{const angle=suit*Math.PI/2-Math.PI/2;pip(suit,256+Math.cos(angle)*164,256+Math.sin(angle)*164,23);});
-    const texture=new CanvasTexture(canvas);texture.colorSpace=SRGBColorSpace;texture.anisotropy=4;return texture;
+    const texture=new CanvasTexture(canvas);texture.colorSpace=SRGBColorSpace;texture.anisotropy=8;return texture;
   }
 
-  create(index:number,scale:number):{mesh:Group;colliders:Collider[]}{
+  create(index:number,scale:number){
+    const mesh=this.createModel(index,scale);this.surfaces.apply(mesh,index);
+    // Models are still at the body origin here. Include every child transform,
+    // bevel and protrusion, then leave a little room for the contact solver.
+    const bounds=new Box3().setFromObject(mesh).expandByScalar(.04*scale);
+    const center=bounds.getCenter(new Vector3()),half=bounds.getSize(new Vector3()).multiplyScalar(.5);
+    const shape=new Box(new Vec3(half.x,half.y,half.z));
+    // Opposite edges describe the same separation direction.
+    shape.convexPolyhedronRepresentation.uniqueEdges=[new Vec3(1,0,0),new Vec3(0,1,0),new Vec3(0,0,1)];
+    return {mesh,collider:{shape,offset:new Vec3(center.x,center.y,center.z)},radius:center.length()+half.length()};
+  }
+
+  get lights(){return this.gameModels?.lights??[];}
+  get pixelBudget(){return this.gameModels?.pixelBudget??1.25e6;}
+
+  private createModel(index:number,scale:number):Group{
     if(this.gameModels)return this.gameModels.create(index,scale);
     const mesh=new Group();mesh.scale.setScalar(scale);
     if(this.theme==='holdem'){
       const color=index%chipColors.length;
-      mesh.add(new Mesh(this.chips[color],this.chipMaterial));
+      mesh.add(new Mesh(this.chips[color],this.chipBodies[color]));
       for(const side of [-1,1]){
         const face=new Mesh(this.disc,this.faces[color]);face.position.y=side*.151;face.rotation.x=-side*Math.PI/2;mesh.add(face);
       }
-      return {mesh,colliders:[{shape:new Cylinder(.75*scale,.75*scale,.30*scale,20)}]};
+      return mesh;
     }
-    const suit=index%4;mesh.add(new Mesh(this.suits[suit],this.suitMaterials[suit]));
-    return {mesh,colliders:this.pieces[suit].map(points=>prism(points,scale))};
+    const suit=index%4;mesh.add(new Mesh(this.suits[suit],this.suitMaterials[index%this.suitMaterials.length]));
+    return mesh;
   }
 
   dispose(){this.gameModels?.dispose();this.geometries.forEach(g=>g.dispose());this.materials.forEach(m=>m.dispose());this.textures.forEach(t=>t.dispose());}

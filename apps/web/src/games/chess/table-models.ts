@@ -1,14 +1,13 @@
-import {BoxGeometry,BufferGeometry,ExtrudeGeometry,Group,LatheGeometry,Mesh,MeshPhysicalMaterial,Shape,SphereGeometry,TorusGeometry,Vector2} from 'three';
-import {Box,Cylinder,Sphere,Vec3,type Shape as CollisionShape} from 'cannon-es';
+import {BoxGeometry,BufferGeometry,ExtrudeGeometry,Group,LatheGeometry,Mesh,MeshMatcapMaterial,Shape,SphereGeometry,TorusGeometry,Vector2} from 'three';
+import {CHESS_COLORS} from '../../visuals/table-palette';
 
 type Part={geometry:BufferGeometry;position:[number,number,number];rotation?:[number,number,number]};
-type Collider={shape:CollisionShape;offset?:Vec3};
 // Shared geometry, separate rigid bodies: king, queen, rook, bishop, knight and pawn.
 export class ChessTableModels{
   private geometries:BufferGeometry[]=[];
   private materials=[
-    new MeshPhysicalMaterial({color:'#e0d4b7',roughness:.28,metalness:.24,clearcoat:.8,clearcoatRoughness:.18}),
-    new MeshPhysicalMaterial({color:'#374b68',roughness:.25,metalness:.48,clearcoat:.85,clearcoatRoughness:.16}),
+    new MeshMatcapMaterial({color:CHESS_COLORS[0]}),
+    new MeshMatcapMaterial({color:CHESS_COLORS[1]}),
   ];
   private parts:Part[][]=[];
   constructor(){
@@ -36,14 +35,10 @@ export class ChessTableModels{
   }
   private keep<T extends BufferGeometry>(g:T):T{this.geometries.push(g);return g;}
   private extrude(shape:Shape,depth:number){const g=new ExtrudeGeometry(shape,{depth,bevelEnabled:true,bevelThickness:.035,bevelSize:.035,bevelSegments:3,curveSegments:12});g.translate(0,0,-depth/2);return this.keep(g);}
-  create(index:number,scale:number):{mesh:Group;colliders:Collider[]}{
+  create(index:number,scale:number){
     const type=index%6,mesh=new Group(),material=this.materials[Math.floor(index/6)%2];mesh.scale.setScalar(scale);
     for(const part of this.parts[type]){const m=new Mesh(part.geometry,material);m.position.set(...part.position);if(part.rotation)m.rotation.set(...part.rotation);mesh.add(m);}
-    const colliders:Collider[]=[{shape:new Cylinder((type===5?.48:.53)*scale,(type===5?.48:.53)*scale,.21*scale,16),offset:new Vec3(0,(type===5?-.69:-.83)*scale,0)},{shape:new Cylinder(.23*scale,.32*scale,.85*scale,12),offset:new Vec3(0,-.24*scale,0)}];
-    if(type===0)colliders.push({shape:new Sphere(.24*scale),offset:new Vec3(0,.5*scale,0)},{shape:new Box(new Vec3(.2*scale,.23*scale,.08*scale)),offset:new Vec3(0,.9*scale,0)});
-    else if(type===4)colliders.push({shape:new Box(new Vec3(.29*scale,.3*scale,.18*scale)),offset:new Vec3(.04*scale,.54*scale,0)});
-    else colliders.push({shape:new Sphere((type===5?.29:.35)*scale),offset:new Vec3(0,(type===5?.37:type===3?.68:.62)*scale,0)});
-    return {mesh,colliders};
+    return mesh;
   }
   dispose(){this.geometries.forEach(g=>g.dispose());this.materials.forEach(m=>m.dispose());}
 }

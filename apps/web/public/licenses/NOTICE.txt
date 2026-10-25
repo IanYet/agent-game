@@ -20,8 +20,13 @@ GSAP 3.13.0：手风琴布局与时间线。GSAP Standard License，完整许可
 https://gsap.com/standard-license/
 
 vgpu / Vercel Labs：玻璃环光束剖面的高斯算法参考。MIT，完整许可见 vgpu.txt。造型与光学着色器为同桌原创。
+公共 HolographicCard 的镭射材质改编自 vgpu Holographic Card，将波纹刻线、衍射与珠光反射移植到 WebGL，卡面饰圈、王冠与游戏信息由本项目实现。璀璨宝石发展牌与贵族卡复用此组件。MIT，完整许可见 vgpu.txt。
+https://vgpu.sh/examples/holographic-card
 Lusion About：仅研究字形填充、边缘、指针绘制与滚动机制，未使用其脚本、品牌或素材。
-Lusion 首页：牌桌背景参考其立体物件碰撞的视觉方向，未使用其脚本或模型。
+Lusion 首页：牌桌背景的亮光、哑光材质依据 HomeBalloons 的公开实现，使用粗糙度 0.1／0.8、三通道 Matcap 光照和 filmic 输出参数。物品不投射阴影，保留自身受光的明暗与高光。随网页打包其 512×512 EXR 光照贴图，文件为 apps/web/src/visuals/assets/lusion-home-matcap.exr，资源来源及原作者为 Lusion。游戏模型、物理、配色和适配着色器由本项目实现。
+https://lusion.co/
+实现来源：https://lusion.co/_astro/hoisted.CUO_IjfL.js
+光照资源：https://lusion.co/assets/textures/home/matcap.exr
 
 Anton / Vernon Adams；Noto Sans SC / Adobe、Google：SIL OFL，完整许可见 OFL-Anton.txt、OFL-NotoSansSC.txt。
 React、React DOM、scheduler：MIT，完整许可见 react.txt、react-dom.txt、scheduler.txt。

@@ -1,14 +1,13 @@
-import {BufferGeometry,CanvasTexture,ExtrudeGeometry,Float32BufferAttribute,Group,Mesh,MeshPhysicalMaterial,Shape,SRGBColorSpace} from 'three';
+import {BufferGeometry,CanvasTexture,ExtrudeGeometry,Float32BufferAttribute,Group,Mesh,MeshMatcapMaterial,Shape,SRGBColorSpace} from 'three';
 import {mergeVertices} from 'three/addons/utils/BufferGeometryUtils.js';
-import {Box,Vec3} from 'cannon-es';
 import {paintTile,TILE_COLORS} from './artwork';
 
 const HALF_SIZE=.66,CORNER_RADIUS=.18,DEPTH=.23,BEVEL=.045,DOME=.05,CAP_RINGS=12;
 
 export class AzulTableModels {
   private body:BufferGeometry;
-  private materials:MeshPhysicalMaterial[]=[];
-  private faces:MeshPhysicalMaterial[]=[];
+  private materials:MeshMatcapMaterial[]=[];
+  private faces:MeshMatcapMaterial[]=[];
   private textures:CanvasTexture[]=[];
   constructor(){
     const shape=new Shape();const a=HALF_SIZE,r=CORNER_RADIUS;
@@ -36,16 +35,16 @@ export class AzulTableModels {
     // Both faces rise gently from the rounded rim; the artwork follows the same surface.
     this.body=mergeVertices(body);this.body.computeVertexNormals();body.dispose();sides.dispose();
     for(let i=0;i<5;i++){
-      this.materials.push(new MeshPhysicalMaterial({color:TILE_COLORS[i],roughness:.08,metalness:0,ior:1.52,clearcoat:1,clearcoatRoughness:.025,envMapIntensity:1.65}));
+      this.materials.push(new MeshMatcapMaterial({color:TILE_COLORS[i]}));
       const canvas=document.createElement('canvas');canvas.width=512;canvas.height=512;
       const ctx=canvas.getContext('2d')!;ctx.fillStyle=TILE_COLORS[i];ctx.fillRect(0,0,512,512);paintTile(ctx,i,0,0,512);
       const texture=new CanvasTexture(canvas);texture.colorSpace=SRGBColorSpace;texture.anisotropy=4;this.textures.push(texture);
-      this.faces.push(new MeshPhysicalMaterial({map:texture,roughness:.055,metalness:0,ior:1.52,clearcoat:1,clearcoatRoughness:.018,envMapIntensity:1.8}));
+      this.faces.push(new MeshMatcapMaterial({map:texture}));
     }
   }
   create(index:number,scale:number){
     const mesh=new Group(),i=index%this.faces.length;mesh.scale.setScalar(scale);mesh.add(new Mesh(this.body,[this.faces[i],this.materials[i]]));
-    return {mesh,colliders:[{shape:new Box(new Vec3((HALF_SIZE+BEVEL)*scale,(HALF_SIZE+BEVEL)*scale,(DEPTH/2+BEVEL+DOME)*scale))}]};
+    return mesh;
   }
   dispose(){this.body.dispose();this.materials.forEach(m=>m.dispose());this.faces.forEach(m=>m.dispose());this.textures.forEach(t=>t.dispose());}
 }

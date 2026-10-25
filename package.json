@@ -1,6 +1,6 @@
 {
   "name": "agent-arcade",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "description": "A local game table for humans and their agents.",

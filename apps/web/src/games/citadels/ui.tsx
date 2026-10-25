@@ -8,6 +8,7 @@ import {GameLayout,GameTable,SpectatorTableActions,type BoardGamePanel} from '..
 import {BoardGamePlayers} from '../BoardGamePlayers';
 import {Modal} from '../../Modal';
 import {Select} from '../../Select';
+import {StatusTag} from '../../UiBits';
 import {useEffectsPreference} from '../../visuals/preferences';
 import {COLORS,ROLES,cardName,district,roleName,type Color,type District} from './cards';
 import type {Action,CitadelsState,CitadelsView} from './engine';
@@ -21,6 +22,10 @@ function Building({card,selected,onClick,compact=false}:{card:District;selected?
 }
 function City({cards}:{cards:District[]}){return <div className="ct-city">{cards.length?cards.map(c=><Building key={c.id} card={c} compact/>):<span className="ct-empty">城区尚待奠基</span>}</div>;}
 function CitySummary({cards}:{cards:District[]}){return <div className="ct-city-summary" aria-label="城区建筑数量">{(Object.keys(COLORS) as Color[]).map(color=><span key={color} data-color={color}>{COLORS[color]}<b>{cards.filter(card=>district(card).color===color).length}</b></span>)}</div>;}
+function RoleBadges({player}:{player:Pick<CitadelsView['players'][number],'roles'|'roleCount'>}){
+  const hidden=player.roleCount-player.roles.length;
+  return <>{player.roles.map(rank=><StatusTag key={rank}>{roleName(rank)}</StatusTag>)}{hidden>0?<StatusTag>{hidden===1?'身份未公开':`${hidden} 个隐藏身份`}</StatusTag>:!player.roles.length&&<StatusTag>待选身份</StatusTag>}</>;
+}
 function Results({game}:{game:Pick<CitadelsView,'scores'|'winners'>&{players:Array<{name:string}>}}){return <section className="ct-results"><span className="identity-caption">MASTER BUILDERS.</span><h3>{game.winners.map(i=>game.players[i].name).join('、')}{game.winners.length>1?' 共享胜利':' 获胜'}</h3><table><thead><tr><th>玩家</th><th>建筑</th><th>五色</th><th>完工</th><th>特殊</th><th>总分</th></tr></thead><tbody>{game.scores?.map(s=><tr key={s.seat}><th>{game.players[s.seat].name}</th><td>{s.districts}</td><td>{s.colors}</td><td>{s.completion}</td><td>{s.special}</td><td><b>{s.total}</b></td></tr>)}</tbody></table><p>同分比较建筑费用，再比较金币；仍相同则共享胜利。</p></section>;}
 export function Table({state,controller,onError,tableActions}:GameUiProps){
   const game=state.game as ControlledView<CitadelsView>,own=game.viewer===null?undefined:game.players[game.viewer];
@@ -70,15 +75,15 @@ export function Table({state,controller,onError,tableActions}:GameUiProps){
       </PlayerCard>
     </Modal>} </>}><GameTable className="ct-public-table"><div className="ct-public">
       <div className="ct-banner"><div><h2>{PHASES[game.phase]}</h2><p>{game.phase==='finished'?game.winners.map(seat=>game.players[seat].name).join('、')+' 获胜':game.phase==='draft'?`${game.players[game.turn].name} · 第 ${game.draftIndex+1}/${game.draftTotal} 次 · 暗弃 ${game.faceDownCount} · 明弃 ${game.faceUp.length?game.faceUp.map(roleName).join('、'):'无'}`:`${game.players[game.turn].name} · ${game.called} 号 ${roleName(game.called)}${game.phase==='graveyard'?' · 墓地收回建筑':''}`}</p></div><div className="ct-crown"><span>👑</span><div><small>王冠</small><b>{game.players[game.crown].name}</b></div></div></div>
-      <div className="ct-call-track" aria-label="身份叫号顺序">{ROLES.map(r=>{
-        const revealed=game.players.find(p=>p.revealed.includes(r.rank)),removed=game.faceUp.includes(r.rank);
-        return <div key={r.rank} data-current={game.phase!=='draft'&&game.phase!=='finished'&&game.called===r.rank} data-called={game.phase!=='draft'&&game.called>=r.rank} title={r.text}><span>{r.symbol}</span><b>{r.rank} {r.name}</b><small>{removed?'明弃':game.assassinated===r.rank?'被刺杀':revealed?.name??(game.phase==='draft'?'未公开':game.called>=r.rank?'无人应答':'等待叫号')}</small></div>;
+      <div className="ct-call-track" role="list" aria-label="身份叫号顺序">{ROLES.map(r=>{
+        const revealed=game.players.find(p=>p.revealed.includes(r.rank)),removed=game.faceUp.includes(r.rank),current=game.phase!=='draft'&&game.phase!=='finished'&&game.called===r.rank;
+        return <FoilPanel key={r.rank} className="ct-role-card" illumination={current?(state.paused ? .4 : 1.85):0} interactive={current} role="listitem" aria-current={current?'step':undefined} data-current={current} data-called={game.phase!=='draft'&&game.called>=r.rank} title={r.text}><span>{r.symbol}</span><b>{r.rank} {r.name}</b><small>{removed?'明弃':game.assassinated===r.rank?'被刺杀':revealed?.name??(game.phase==='draft'?'未公开':game.called>=r.rank?'无人应答':'等待叫号')}</small></FoilPanel>;
       })}</div>
-      </div></GameTable><BoardGamePlayers className="ct-opponents" minCardWidth={185} activeIndex={opponents.findIndex(p=>p.seat===game.turn)} activeName={game.players[game.turn].name}>{opponents.map(p=><AgentPlayerCard key={p.playerId} player={p} state={visual(p)} caption={`${game.crown===p.seat?'王冠 · ':''}手牌 ${p.handCount}`} metrics={[{label:'金币',value:p.gold}]} status={status(p)} action={game.events.filter(e=>e.seat===p.seat&&e.round===game.round).at(-1)?.text??''}>
-        <div className="ct-role-label">{p.roles.length?p.roles.map(r=>`${ROLES[r-1].symbol} ${roleName(r)}`).join(' / '):'身份未公开'}{p.roleCount>p.roles.length?` · ${p.roleCount-p.roles.length} 个隐藏身份`:''}<span>{p.city.length}/8 座</span></div><CitySummary cards={p.city}/><div className="ct-city-value"><span>建筑费用 {p.city.reduce((sum,card)=>sum+district(card).cost,0)}</span><span>特殊建筑 {p.city.filter(card=>district(card).color==='purple').length}</span></div>
+      </div></GameTable><BoardGamePlayers className="ct-opponents" minCardWidth={185} activeIndex={opponents.findIndex(p=>p.seat===game.turn)} activeName={game.players[game.turn].name}>{opponents.map(p=><AgentPlayerCard key={p.playerId} player={p} state={visual(p)} caption={`${game.crown===p.seat?'王冠 · ':''}手牌 ${p.handCount}`} badges={<RoleBadges player={p}/>} metrics={[{label:'金币',value:p.gold}]} status={status(p)} action={game.events.filter(e=>e.seat===p.seat&&e.round===game.round).at(-1)?.text??''}>
+        <CitySummary cards={p.city}/><div className="ct-city-value"><span>{p.city.length}/8 座</span><span>建筑费用 {p.city.reduce((sum,card)=>sum+district(card).cost,0)}</span><span>特殊建筑 {p.city.filter(card=>district(card).color==='purple').length}</span></div>
         <div className="ct-card-entries"><button className="text-button" onClick={e=>openInventory(p.seat,'city',e.currentTarget)}>城区详情 · {p.city.length} 座 ↗</button>{p.hand&&<button className="text-button" onClick={e=>openInventory(p.seat,'hand',e.currentTarget)}>查看手牌 · {p.handCount} 张 ↗</button>}</div>
       </AgentPlayerCard>)}</BoardGamePlayers>
-      {own?<HumanPlayerCard player={own} state={visual(own)} metrics={[{label:'金币',value:own.gold},{label:'城区',value:own.city.length}]} badges={own.roles.map(roleName).join(' / ')} status={status(own)} actions={playerActions} tableActions={tableActions} aria-label="我的城区、手牌与行动">
+      {own?<HumanPlayerCard player={own} state={visual(own)} metrics={[{label:'金币',value:own.gold},{label:'城区',value:own.city.length}]} badges={<RoleBadges player={own}/>} status={status(own)} actions={playerActions} tableActions={tableActions} aria-label="我的城区、手牌与行动">
         <CitySummary cards={own.city}/><div className="ct-card-entries ct-own-entries"><button className="text-button" onClick={e=>openInventory(own.seat,'city',e.currentTarget)}>城区 · {own.city.length} 座 ↗</button><button className="text-button" onClick={e=>openInventory(own.seat,'hand',e.currentTarget)}>{game.phase==='keep'&&active?`收入牌 · 保留 ${game.keepCount} 张`:`手牌 · ${own.handCount} 张`} ↗</button></div>
         {active&&game.phase==='draft'?<div className="ct-draft"><Select label="秘密身份" value={draftRole===null?'':String(draftRole)} onChange={value=>setDraftRole(Number(value))} options={[{value:'',label:'选择身份',disabled:true},...game.available.map(rank=>{const role=ROLES[rank-1];return {value:String(rank),label:`${role.symbol} ${rank} · ${role.name}`,detail:role.text};})]}/></div>:<>
           {active&&game.phase==='keep'&&<div className="ct-hand">{hand.map(card=><Building key={card.id} card={card} compact selected={selected.includes(card.id)} onClick={()=>toggle(card.id)}/>)}</div>}

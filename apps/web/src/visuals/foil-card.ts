@@ -1,5 +1,6 @@
 import {paintGameSymbol} from './game-symbol';
 import {paintFoilTexture} from './foil-texture';
+import {cardProjection} from './card-projection';
 export type FoilLabel={symbol:string;english:string;tone:'warm'|'cool'};
 const WIDTH=218,HEIGHT=294;
 // Canvas reproduces the approved CSS foil layers; the lens uses this very same frame.
@@ -20,31 +21,15 @@ export function paintFoil(canvas:HTMLCanvasElement,label:FoilLabel,x=.5,y=.5,tim
   ctx.strokeStyle='#e7edf955';ctx.lineWidth=1;ctx.strokeRect(.5,.5,WIDTH-1,HEIGHT-1);
 }
 
-// Both gallery and identity cards share the same projection in the cursor lens.
-export function cardProjection(card:HTMLElement){
-  const style=getComputedStyle(card),matrix=new DOMMatrix(style.transform),rect=card.getBoundingClientRect();
-  const width=card.offsetWidth,height=card.offsetHeight,perspective=parseFloat(getComputedStyle(card.parentElement!).perspective)||Infinity;
-  const project=(u:number,v:number)=>{const p=matrix.transformPoint(new DOMPoint((u-.5)*width,(v-.5)*height,0)),scale=1/(p.w-p.z/perspective);return {x:p.x*scale,y:p.y*scale};};
-  const corners=[project(0,0),project(1,0),project(0,1),project(1,1)];
-  const minX=Math.min(...corners.map(p=>p.x)),maxX=Math.max(...corners.map(p=>p.x)),minY=Math.min(...corners.map(p=>p.y)),maxY=Math.max(...corners.map(p=>p.y));
-  const point=(u:number,v:number)=>{const p=project(u,v);return {x:rect.left+(p.x-minX)*rect.width/(maxX-minX),y:rect.top+(p.y-minY)*rect.height/(maxY-minY)};};
-  const inverse=(screenX:number,screenY:number)=>{
-    const x=(screenX-rect.left)/rect.width*(maxX-minX)+minX,y=(screenY-rect.top)/rect.height*(maxY-minY)+minY;
-    const a=matrix.m14-matrix.m13/perspective,b=matrix.m24-matrix.m23/perspective,c=matrix.m44-matrix.m43/perspective;
-    const aa=matrix.m11-x*a,bb=matrix.m21-x*b,cc=matrix.m12-y*a,dd=matrix.m22-y*b,ex=x*c-matrix.m41,ey=y*c-matrix.m42,det=aa*dd-bb*cc;
-    return {x:(ex*dd-bb*ey)/det+width/2,y:(aa*ey-ex*cc)/det+height/2};
-  };
-  return {style,width,height,point,inverse};
-}
 let compositeLayer:HTMLCanvasElement|undefined;
 export function compositeFoil(target:CanvasRenderingContext2D,card:HTMLElement){
   const source=card.querySelector('canvas');if(source?.width)compositePlane(target,card,source);
 }
-export function compositePlane(target:CanvasRenderingContext2D,card:HTMLElement,source:HTMLCanvasElement){
+export function compositePlane(target:CanvasRenderingContext2D,card:HTMLElement,source:HTMLCanvasElement,projection=cardProjection(card)){
   compositeLayer??=document.createElement('canvas');
   if(compositeLayer.width!==target.canvas.width||compositeLayer.height!==target.canvas.height){compositeLayer.width=target.canvas.width;compositeLayer.height=target.canvas.height;}
   const ctx=compositeLayer.getContext('2d')!;ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,compositeLayer.width,compositeLayer.height);ctx.setTransform(target.getTransform());
-  const {style,width,height,point}=cardProjection(card);
+  const {style,width,height,point}=projection;
   // CSS clips the visible foil in its own plane BEFORE perspective. Reproduce
   // that contour in the lens; clipping an axis-aligned bounding box loses corners.
   const radius=Math.min(parseFloat(style.borderTopLeftRadius)||0,width/2,height/2),outline=new Path2D();

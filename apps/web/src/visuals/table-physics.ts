@@ -1,21 +1,21 @@
 import {Body, Box, GSSolver, SAPBroadphase, Vec3, World} from 'cannon-es';
 import {
-  ACESFilmicToneMapping, DirectionalLight, Fog, Group, HemisphereLight, OrthographicCamera,
-  PMREMGenerator, Quaternion, Scene, WebGLRenderer,
+  Group, Quaternion, Scene, WebGLRenderer,
 } from 'three';
-import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {TableModels,type TableTheme} from './table-models';
 import {FrameProfiler} from './frame-profiler';
+import type {TableSurfaces} from './table-surfaces';
+import {createTableCamera,createTableRenderer,resizeTableRenderer,TABLE_VIEW_HEIGHT} from './table-renderer';
 
 type Piece={body:Body;mesh:Group;radius:number};
 type PointerStroke={fromX:number;fromY:number;toX:number;toY:number;seconds:number};
-const HEIGHT=11,DEPTH=3.2,STEP=1/60;
+const HEIGHT=TABLE_VIEW_HEIGHT,DEPTH=3.2,STEP=1/60;
 const ATTRACTOR_FROM_TOP=.2,ATTRACTOR_Y=HEIGHT*(.5-ATTRACTOR_FROM_TOP);
 
 export class TablePhysics{
   private renderer:WebGLRenderer;
   private scene=new Scene();
-  private camera=new OrthographicCamera(-10,10,HEIGHT/2,-HEIGHT/2,.1,60);
+  private camera=createTableCamera();
   private world=new World({gravity:new Vec3(0,0,0),allowSleep:true});
   private models:TableModels;
   private pieces:Piece[]=[];
@@ -30,59 +30,45 @@ export class TablePhysics{
   private accumulator=0;
   private orientation=new Quaternion();
   private profiler:FrameProfiler|undefined;
-  private environment;
 
-  constructor(private canvas:HTMLCanvasElement,theme:TableTheme){
-    // Retain the displayed GPU buffer for the lens's small, cropped sample.
-    this.renderer=new WebGLRenderer({canvas,alpha:false,antialias:true,powerPreference:'high-performance',preserveDrawingBuffer:true});
+  constructor(private canvas:HTMLCanvasElement,theme:TableTheme,private surfaces:TableSurfaces){
+    this.renderer=createTableRenderer(canvas);
     const context=this.renderer.getContext();
     if(import.meta.env.DEV&&'beginQuery' in context)this.profiler=new FrameProfiler(canvas,context);
     try{
       this.world.doProfiling=import.meta.env.DEV;
-      this.renderer.setClearColor('#090b11',1);this.renderer.toneMapping=ACESFilmicToneMapping;this.renderer.toneMappingExposure=.9;
-      this.camera.position.z=18;this.scene.fog=new Fog('#090b11',10,23);
-      this.environment=this.lightEnvironment();this.scene.environment=this.environment.texture;this.scene.environmentIntensity=.6;
-      this.scene.add(new HemisphereLight('#d8e5ff','#262032',1.6));
-      const key=new DirectionalLight('#ffdec5',2.8);key.position.set(-4,6,8);this.scene.add(key);
-      const rim=new DirectionalLight('#9ab8ff',1.8);rim.position.set(5,-3,5);this.scene.add(rim);
       const solver=new GSSolver();solver.iterations=8;solver.tolerance=.001;this.world.solver=solver;
       this.world.broadphase=new SAPBroadphase(this.world);
       this.world.defaultContactMaterial.friction=.12;this.world.defaultContactMaterial.restitution=.35;
       this.world.defaultContactMaterial.contactEquationStiffness=1e6;
-      this.models=new TableModels(theme);
+      this.models=new TableModels(theme,this.surfaces);
+      this.scene.add(...this.models.lights);
+      const chipTheme=theme==='holdem'||theme==='citadels';
       const count=matchMedia('(max-width: 700px)').matches?12:20;
       for(let i=0;i<count;i++){
-        const scale=1.45+(i*7%11)/20,{mesh,colliders}=this.models.create(i,scale);
+        const scale=1.45+(i*7%11)/20,{mesh,collider,radius}=this.models.create(i,scale);
         const phase=i*2.399963;
         const body=new Body({mass:1,linearDamping:.45,angularDamping:.55,sleepSpeedLimit:.025,sleepTimeLimit:1.5});
-        colliders.forEach(({shape,offset})=>body.addShape(shape,offset));
-        body.quaternion.setFromEuler(theme==='holdem'?1.15+Math.sin(i)*.5:Math.sin(i)*.5,Math.cos(i*2)*.6,phase);
+        body.addShape(collider.shape,collider.offset);
+        body.quaternion.setFromEuler(chipTheme?1.15+Math.sin(i)*.5:Math.sin(i)*.5,Math.cos(i*2)*.6,phase);
         body.velocity.set(Math.sin(phase)*.03,Math.cos(phase)*.03,0);
         body.angularVelocity.set(Math.sin(i)*.06,Math.cos(i)*.07,.04);
-        this.pieces.push({body,mesh,radius:scale*(theme==='holdem'?.77:1)});
+        this.pieces.push({body,mesh,radius});
         this.world.addBody(body);this.scene.add(mesh);
       }
       this.resize(true);
     }catch(error){this.dispose();throw error;}
   }
 
-  private lightEnvironment(){
-    const room=new RoomEnvironment(),pmrem=new PMREMGenerator(this.renderer);
-    try{return pmrem.fromScene(room,.04);}finally{room.dispose();pmrem.dispose();}
-  }
-
   restore(){
     this.profiler?.resetGpu();
-    this.environment.dispose();this.environment=this.lightEnvironment();this.scene.environment=this.environment.texture;
+    this.surfaces.restore();
     this.resize();
   }
 
   resize(initial=false){
     const rect=this.canvas.getBoundingClientRect(),previousWidth=this.width;
-    this.width=HEIGHT*rect.width/Math.max(1,rect.height);
-    this.camera.left=-this.width/2;this.camera.right=this.width/2;this.camera.updateProjectionMatrix();
-    const ratio=Math.min(devicePixelRatio||1,1.25,Math.sqrt(1.25e6/Math.max(1,rect.width*rect.height)));
-    this.renderer.setPixelRatio(ratio);this.renderer.setSize(Math.max(1,rect.width),Math.max(1,rect.height),false);
+    this.width=resizeTableRenderer(this.renderer,this.camera,rect.width,rect.height,this.models.pixelBudget);
     this.walls.forEach(wall=>this.world.removeBody(wall));this.walls=[];
     const wall=(size:Vec3,position:Vec3)=>{
       const body=new Body({shape:new Box(size),position});this.world.addBody(body);this.walls.push(body);
@@ -241,7 +227,7 @@ export class TablePhysics{
 
   dispose(){
     this.clearPointer(true);this.world.bodies.slice().forEach(body=>this.world.removeBody(body));
-    this.models?.dispose();this.environment?.dispose();this.scene.clear();this.profiler?.dispose();this.renderer.dispose();this.renderer.forceContextLoss();
+    this.models?.dispose();this.surfaces.dispose();this.scene.clear();this.profiler?.dispose();this.renderer.dispose();this.renderer.forceContextLoss();
     this.pieces=[];this.walls=[];
   }
 }

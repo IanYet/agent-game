@@ -10,6 +10,7 @@ type AgentHand={count:number;cards?:readonly Pick<PlayingCardProps,'card'|'marke
 type AgentPlayerCardProps=Omit<ComponentProps<typeof PlayerCard>,'children'|'className'|'primary'>&{
   player:AgentPlayer;
   caption?:string;
+  badges?:ReactNode;
   modelName?:string;
   metrics?:readonly {label:string;value:ReactNode}[];
   hand?:AgentHand;
@@ -18,13 +19,14 @@ type AgentPlayerCardProps=Omit<ComponentProps<typeof PlayerCard>,'children'|'cla
   action:string;
 };
 
-export function AgentPlayerCard({player,caption,modelName,metrics,hand,status,action,children,...props}:AgentPlayerCardProps){
+export function AgentPlayerCard({player,caption,badges,modelName,metrics,hand,status,action,children,...props}:AgentPlayerCardProps){
   const values=metrics??(hand?[{label:'张',value:hand.count}]:[]);
   const model=modelName??player.model;
+  const name=<strong className="agent-player-name" title={player.name}>{player.name}</strong>;
   return <PlayerCard {...props} className="agent-player-card" status={status} action={action} aria-label={props['aria-label']??`${player.name}的玩家卡`}>
     <header className="agent-player-heading">
       <span className="agent-player-caption">PLAYER {String(player.seat+1).padStart(2,'0')}{caption?` · ${caption}`:''}</span>
-      <strong className="agent-player-name" title={player.name}>{player.name}</strong>
+      {badges?<div className="agent-player-name-row">{name}<span className="agent-player-badges">{badges}</span></div>:name}
       <small className="agent-player-model" title={[kindName[player.kind],model,player.reasoningEffort&&effortLabel(player.reasoningEffort)].filter(Boolean).join(' · ')}>{kindName[player.kind]}{model?` · ${model}`:''}{player.reasoningEffort?` · ${effortLabel(player.reasoningEffort)}`:''}</small>
       <div className="agent-player-metrics">{values.map(value=><span key={value.label}><b>{value.value}</b><small>{value.label}</small></span>)}</div>
       <PlayerCardAvatar kind={player.kind} seat={player.seat}/>
