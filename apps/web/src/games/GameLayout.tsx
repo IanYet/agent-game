@@ -17,7 +17,7 @@ export function GameLayout<Event extends PublicEvent>({gameId,label,className=''
       {children}
     </section>
     <GameSidebar>{score}<GameActivity events={events} players={eventPlayers} title={activityTitle} renderDetail={renderEventDetail}/></GameSidebar>
-    {viewport&&<div className="board-layout-controls">{viewport.tableActions}</div>}
+    {viewport&&<div className="board-layout-controls">{viewport.mode==='spectator'?<SpectatorTableActions>{viewport.tableActions}</SpectatorTableActions>:viewport.tableActions}</div>}
     {after}
   </div>;
 }

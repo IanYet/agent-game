@@ -48,11 +48,12 @@
 .azul-layout .human-player-name-row{flex-wrap:nowrap;min-height:26px}
 .azul-layout .human-player-metrics{min-width:88px;justify-content:flex-end}
 .azul-opponents{--board-player-min-height:316px}
-.game-layout.board-game-layout.azul-layout>.game-surface>.azul-opponents{width:min(100%,var(--board-fit-player-width,400px));justify-self:start;--board-player-template-rows:initial}
+.game-layout.board-game-layout.azul-layout>.game-surface>.azul-opponents{width:100%;justify-self:start;--board-player-template-rows:initial}
 .game-layout.board-game-layout.azul-layout[data-board-mode=player]>.game-surface>.azul-opponents{justify-self:end}
 .azul-layout .azul-opponents .board-player-slots{scrollbar-gutter:auto;align-items:flex-start}
+.azul-opponents .player-card-grid{width:100%}
 .azul-layout[data-board-mode=player] .azul-opponents .board-player-slots{align-items:safe flex-end}
-.azul-opponents :is(.agent-player-caption,.agent-player-name,.agent-player-model,.player-card-status,.player-card-action){overflow:visible;text-overflow:clip;white-space:nowrap}
+.azul-opponents .player-card-action{white-space:normal;line-height:1.5}
 .azul-opponents .agent-player-card>.player-card-footer{grid-template-columns:max-content minmax(0,1fr)}
 .azul-opponents .azul-board{--tile:clamp(12px,calc((100cqw - 38px)/12),18px);--tile-gap:2px;--board-row-gap:3px;--arrow-width:8px;width:100%;max-width:254px;margin-inline:auto}
 .azul-opponents .azul-board-labels{font-size:9px;line-height:12px;letter-spacing:0;margin-bottom:4px}
@@ -112,7 +113,7 @@
 @media(min-width:1281px) and (min-height:851px){
   .game-layout.board-game-layout.azul-layout[data-board-mode=player]>.game-surface{grid-template-columns:minmax(0,440px) minmax(0,1fr)}
   .board-game-layout.azul-layout[data-board-mode=player]>.game-surface>.identity-shell:has(>.human-player-card){grid-column:1}
-  .board-game-layout.azul-layout[data-board-mode=player]>.game-surface>.azul-opponents{--board-player-reserved-width:452px;grid-column:2;width:var(--board-fit-player-width,400px);height:calc(var(--board-player-rows)*(var(--board-player-min-height) + 14px) + 18px)}
+  .board-game-layout.azul-layout[data-board-mode=player]>.game-surface>.azul-opponents{grid-column:2;height:calc(var(--board-player-rows)*(var(--board-player-min-height) + 14px) + 18px)}
 }
 
 @media(max-width:900px){.azul-replay-boards{grid-template-columns:1fr}}

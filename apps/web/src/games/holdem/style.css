@@ -1,10 +1,17 @@
 .holdem-main {
   --holdem-human-card-width: 360px;
-  /* 底栏为「本轮下注 + 16 位筹码」和「跟注 + 16 位筹码 + 全下」预留单行空间。 */
-  --holdem-agent-card-width: 320px;
+  --holdem-agent-card-width: min(320px, calc((100cqw - var(--holdem-human-card-width) - 18px - 3 * var(--holdem-seat-gap)) / 4));
   --holdem-seat-gap: 14px;
   container-type: inline-size;
 }
+.holdem-main:has(.holdem-spectator-seats) {
+  --holdem-agent-card-width: min(320px, calc((100cqw - 4 * var(--holdem-seat-gap)) / 5));
+}
+.holdem-main .poker-felt { gap: 8px; }
+.holdem-player-area > .holdem-agent-seats { margin-bottom: 0; }
+.holdem-layout .poker-score { padding: 14px; }
+.holdem-layout .poker-score h3 { margin-bottom: 8px; }
+.holdem-layout .poker-score-rows > div { padding-block: 7px; }
 
 .holdem-main > .holdem-player-area {
   display: grid;
@@ -15,7 +22,7 @@
   min-width: 0;
 }
 
-/* 固定四列两排；空席位保留位置，玩家卡不随人数或窗口宽度拉伸。 */
+/* 真人右侧保留四列两排，卡宽随牌桌可用宽度收缩。 */
 .holdem-agent-seats {
   display: grid;
   grid-template-columns: repeat(4, var(--holdem-agent-card-width));

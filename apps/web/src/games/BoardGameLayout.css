@@ -32,13 +32,10 @@ body:has(.board-game-layout){min-width:0}
 .board-player-slots .agent-player-heading{flex:none}
 .board-player-slots .agent-player-body{flex:none;min-height:0;padding:0 12px 6px}
 .board-player-slots .agent-player-card>.player-card-footer{flex:none;margin:auto 12px 0;height:36px;min-height:36px}
-.board-game-layout[data-board-mode=spectator]>.game-surface{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
+.board-game-layout[data-board-mode=spectator]>.game-surface{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto auto}
 .game-layout.board-game-layout[data-board-mode=spectator]>.game-surface>.game-table{grid-column:1}
 .board-game-layout[data-board-mode=spectator]>.game-surface>.board-players{grid-column:1;grid-row:3;height:calc(var(--board-player-rows,1) * (var(--board-player-min-height,264px) + 14px) + 18px)}
-.board-game-layout>.game-surface>.spectator-table-actions{grid-column:1/-1;grid-row:3;margin:0;padding-top:8px;min-width:0}
-.board-game-layout[data-board-mode=spectator]>.game-surface>.table-toolbar{padding-right:180px}
-.board-game-layout[data-board-mode=spectator]>.game-surface>.spectator-table-actions{grid-row:1;justify-self:end;align-self:center;border:0;padding:0}
-.board-game-layout[data-board-mode=spectator]>.game-surface>.spectator-table-actions>p{display:none}
+.board-game-layout>.game-surface>.spectator-table-actions{grid-column:1/-1;grid-row:4;min-width:0}
 .board-game-layout>aside.table-rail.game-sidebar{padding-top:var(--game-rail-offset,0px);height:auto;min-height:0}
 .board-game-layout>.game-sidebar>.identity-shell:first-child{flex:0 1 auto;max-height:calc(100% - 108px)}
 .board-game-layout>.game-sidebar>.identity-shell:has(>.game-activity){flex:1 1 0;min-height:96px}
@@ -67,7 +64,6 @@ body:has(.board-game-layout){min-width:0}
   .board-layout-tabs>.button{min-height:30px;padding:5px 12px;font-size:11px}
   .board-layout-tabs>.button[aria-pressed=true]{border-color:var(--warm);background:#e7b7a210;color:var(--warm)}
   .game-layout.board-game-layout>.game-surface,.board-game-layout[data-board-mode=spectator]>.game-surface{grid-column:1;grid-row:2;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:8px}
-  .board-game-layout[data-board-mode=spectator]>.game-surface>.table-toolbar{padding-right:0}
   .game-layout.board-game-layout>.game-surface>.game-table,.board-game-layout>.game-surface>.board-players,.board-game-layout[data-board-mode=spectator]>.game-surface>.board-players,.board-game-layout>.game-surface>.identity-shell:has(>.human-player-card){grid-column:1;grid-row:2;height:100%;max-height:100%;align-self:stretch}
   .board-game-layout>.game-surface>.identity-shell:has(>.human-player-card){width:min(100%,1000px);height:auto;justify-self:start;align-self:end}
   .board-game-layout[data-board-panel]:not([data-board-panel=table])>.game-surface>.game-table,
@@ -77,8 +73,10 @@ body:has(.board-game-layout){min-width:0}
   .board-game-layout[data-board-panel=activity]>.game-surface,
   .board-game-layout>.game-surface>.spectator-table-actions{display:none}
   .board-game-layout>aside.table-rail.game-sidebar{grid-column:1;grid-row:2;min-height:0;padding:0;height:100%}
-  .board-game-layout>.board-layout-controls{grid-column:1;grid-row:3;display:flex;justify-content:flex-end;min-width:0;border-top:1px solid var(--line);padding-top:7px}
-  .board-layout-controls .game-actions .button{min-height:32px;padding:7px 13px;font-size:11px}
+  .board-game-layout>.board-layout-controls{grid-column:1;grid-row:3;display:flex;justify-content:flex-end;min-width:0}
+  .board-game-layout[data-board-mode=player]>.board-layout-controls{border-top:1px solid var(--line);padding-top:7px}
+  .board-layout-controls>.spectator-table-actions{width:100%}
+  .board-layout-controls>.game-actions .button{min-height:32px;padding:7px 13px;font-size:11px}
   .board-game-layout[data-board-mode=player][data-board-panel=player]{grid-template-rows:auto minmax(0,1fr)}
   .board-game-layout[data-board-mode=player][data-board-panel=player]>.board-layout-controls{display:none}
 }

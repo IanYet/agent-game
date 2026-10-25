@@ -31,6 +31,12 @@ Actions 会从 runner 已安装的稳定版 Xcode 中选择最高版本（至少
 
 macOS 的布局采用 Apple [窗口规范](https://developer.apple.com/design/human-interface-guidelines/windows)、[侧栏规范](https://developer.apple.com/design/human-interface-guidelines/sidebars)、[设置规范](https://developer.apple.com/design/human-interface-guidelines/settings)及 [NavigationSplitView](https://developer.apple.com/documentation/swiftui/navigationsplitview)、[MenuBarExtra](https://developer.apple.com/documentation/swiftui/menubarextra)；材质交给标准控件适配，遵循 [Liquid Glass 采用指南](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass)。`NavigationSplitView` 与 `MenuBarExtra` 从 macOS 13 可用；最低 13.5 来自[随包 Node.js 24 的要求](https://nodejs.org/en/blog/migrations/v22-to-v24)，与构建 SDK 版本分别约束。
 
+## 界面人工检查
+
+页面最低支持 1920×1080。开发服务启动后，打开 `/src/games/preview.html`，逐个切换游戏，分别检查最大人数的「真人 + Agent」和「全 Agent 观战」；公共牌桌、玩家卡与操作按钮应完整显示，不产生布局滚动条。
+
+富饶之城的 `/src/games/citadels/preview.html` 提供八座城区、四张手牌及各身份操作场景，用于检查操作切换时玩家卡高度是否稳定。璀璨宝石的 `/src/games/splendor/preview.html` 提供满背包场景。这些预览使用正式牌桌组件，不连接模型，也不读取或写入真实游戏存档。
+
 ## 发布网页
 
 网页与连接器分别管理版本。只修改游戏规则、界面、材质、透镜或动态桌面时，更新 `package.json` 和 `package-lock.json` 中的网页版本，运行 `npm test` 与 `npm run build:web`，再发布整个 `dist/client/`。连接器实现和协议未变时，保留连接器版本，不触发连接器发布；新增游戏也不需要重新打包连接器。
