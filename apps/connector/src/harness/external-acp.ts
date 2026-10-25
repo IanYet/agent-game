@@ -130,7 +130,7 @@ export class ExternalAcpAdapter implements HarnessAdapter {
     const cwd = await mkdtemp(join(tmpdir(), 'agent-arcade-probe-'));
     let rpc: JsonRpcProcess | undefined;
     try {
-      const opened = await this.open({ cwd, scopeId:'interface-probe', playerId:'probe', kind:this.id, name:'接口检测', instructions:'仅检测原生模型目录，不调用推理。', tools:[{name:'interface_probe',description:'Interface probe',inputSchema:{type:'object',additionalProperties:false}}], mcpUrl: '', onActivity: () => {}, onUsage: () => {}, onConversation: () => {} }, false); rpc = opened.rpc;
+      const opened = await this.open({ cwd, scopeId:'interface-probe', playerId:'probe', kind:this.id, name:'接口检测', instructions:'仅检测原生模型目录，不调用推理。', tools:[{name:'interface_probe',description:'Interface probe',inputSchema:{type:'object',additionalProperties:false}}], mcpUrl: '', onActivity: () => {}, onUsage: () => {}, onConversation: () => {}, onRateLimit: () => {} }, false); rpc = opened.rpc;
       const { result, init } = opened;
       let options: AcpConfigOption[] = result.configOptions ?? [];
       const models = modelsFromAcp(options, result.models);

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { ConversationEntry, ConversationKind, ConversationUpdate } from '@agent-game/protocol';
 import type { HarnessContext } from '../types';
 import type { JsonRpcProcess } from './rpc';
+import { observeRateLimits } from './rate-limit';
 
 export class ConversationRecorder {
   private entries = new Map<string, Pick<ConversationEntry, 'id' | 'time'>>();
@@ -18,6 +19,7 @@ export class ConversationRecorder {
 // Observe conversational RPC traffic without recording authentication, MCP URLs
 // or process configuration. Unknown conversation events retain their full payload.
 export function captureConversation(rpc: JsonRpcProcess, context: HarnessContext): void {
+  observeRateLimits(rpc, context.onRateLimit);
   const recorder = new ConversationRecorder(context.onConversation);
   const permissions = new Set<string | number>();
   const turns = new Set<string | number>();

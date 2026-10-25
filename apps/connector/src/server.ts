@@ -5,6 +5,7 @@ import { PROTOCOL_VERSION, type ConnectorEvent, type SessionRequest } from '@age
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { LocalBridge } from './bridge';
 import { registerMcp } from './mcp';
+import { UpstreamCooldownError } from './cooldowns';
 
 export function createConnectorServer(bridge: LocalBridge, allowedOrigins: string[]) {
   const app = express(); app.disable('x-powered-by');
@@ -61,7 +62,11 @@ export function createConnectorServer(bridge: LocalBridge, allowedOrigins: strin
   app.post('/api/disconnect', async (_req, res) => { await bridge.disconnect(); res.json({ ok: true }); });
   registerMcp(app, bridge);
   app.get('/', (_req, res) => res.type('text/plain').send('同桌本地连接器正在运行。请在独立的游戏网页点击连接本机。'));
-  const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => { if (!res.headersSent) res.status(400).json({ error: error instanceof z.ZodError ? '请求参数不符合要求' : String(error.message ?? '连接失败').slice(0, 500) }); };
+  const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
+    if (res.headersSent) return;
+    if (error instanceof UpstreamCooldownError) { res.set('Retry-After', String(Math.max(1, Math.ceil((error.retryAt - Date.now()) / 1000)))); res.status(429).json({ error: error.message, retryAt: error.retryAt }); return; }
+    res.status(400).json({ error: error instanceof z.ZodError ? '请求参数不符合要求' : String(error.message ?? '连接失败').slice(0, 500) });
+  };
   app.use(errorHandler);
   const server = createServer(app);
   return {

@@ -9,10 +9,12 @@ import { sessionInstructions } from './harness/instructions';
 import { resolveSettings } from './harness/settings';
 import { ConversationRecorder } from './harness/conversation';
 import { abortError } from './harness/rpc';
+import { UpstreamCooldowns, UpstreamCooldownError, cooldownChannel } from './cooldowns';
+import { rateLimitNotice, type RateLimitNotice } from './harness/rate-limit';
 
 interface Capability { request: SessionRequest; registry: ToolRegistry; conversation: ConversationRecorder; sessionId?: string; discarded?: boolean }
 interface PlayerSession { session: AgentSession | null; capability: Capability; token: string; cwd: string }
-interface ActiveDecision { decisionId: string; controller: AbortController; done: Promise<void> }
+interface ActiveDecision { decisionId: string; controller: AbortController; done: Promise<void>; kind: SessionRequest['kind'] }
 export class LocalBridge extends EventEmitter {
   private owner: { token: string; origin: string; attached: boolean } | null = null;
   private sessions = new Map<string, PlayerSession>();
@@ -22,7 +24,8 @@ export class LocalBridge extends EventEmitter {
   private generation = 0;
   private creating = new Set<string>();
   private attachTimeout: ReturnType<typeof setTimeout> | null = null;
-  constructor(readonly info: ConnectorInfo, private adapters: Map<string, HarnessAdapter>, private dataDirectory: string) { super(); }
+  private cooldowns: UpstreamCooldowns;
+  constructor(readonly info: ConnectorInfo, private adapters: Map<string, HarnessAdapter>, private dataDirectory: string) { super(); this.cooldowns = new UpstreamCooldowns(dataDirectory); }
   connect(origin: string): string {
     if (this.owner) throw new Error('连接器已被另一个网页占用，请关闭那张网页后重试');
     const token = randomBytes(32).toString('hex'); this.owner = { token, origin, attached: false };
@@ -66,6 +69,8 @@ export class LocalBridge extends EventEmitter {
     return this.startSession(request, randomUUID());
   }
   private async startSession(request: SessionRequest, sessionId: string, signal?: AbortSignal): Promise<{ sessionId: string }> {
+    await this.cooldowns.ready();
+    const cooling = this.cooldowns.error(request.kind); if (cooling) throw cooling;
     if (!this.owner?.attached) throw new Error('请先连接游戏网页');
     const key = JSON.stringify([request.scopeId, request.playerId]);
     if (this.creating.has(key) || [...this.sessions].some(([id, s]) => id !== sessionId && s.capability.request.scopeId === request.scopeId && s.capability.request.playerId === request.playerId)) throw new Error('该玩家已有会话或正在创建');
@@ -90,30 +95,47 @@ export class LocalBridge extends EventEmitter {
         onConversation: update => { if (!capability.discarded) onConversation(update); },
         onActivity: (text, tool) => { if(this.capabilities.get(token)===capability)this.emitEvent({ type: 'activity', playerId: request.playerId, text, tool }); },
         onUsage: tokens => { if(this.capabilities.get(token)===capability)this.emitEvent({ type: 'usage', playerId: request.playerId, tokens }); },
+        onRateLimit: notice => { if (this.capabilities.get(token) === capability) this.rateLimited(capability, notice); },
       });
       if (signal?.aborted || generation !== this.generation || this.owner !== owner || !this.owner.attached) { await session.close(); throw signal?.aborted ? abortError() : new Error('连接已结束'); }
+      const cooling = this.cooldowns.error(request.kind); if (cooling) { await session.close(); throw cooling; }
       // The browser keeps this logical handle when an unresponsive native
       // session is replaced. Each replacement gets fresh MCP credentials.
       capability.sessionId = sessionId; this.sessions.set(sessionId, { session, capability, token, cwd }); return { sessionId };
-    } catch (error) { conversation.record('error', '创建玩家会话失败', (error as Error).message); this.capabilities.delete(token); await this.removeTemporaryWorkspace(cwd); throw error; }
+    } catch (error) {
+      const failure = this.cooldowns.error(request.kind) ?? error as Error;
+      conversation.record('error', '创建玩家会话失败', failure.message); this.capabilities.delete(token); await this.removeTemporaryWorkspace(cwd); await this.cooldowns.flush(); throw failure;
+    }
     finally { this.creating.delete(key); }
   }
   async playTurn(sessionId: string, prompt: string, decisionId: string, settings?: AgentSettings): Promise<{ completed: boolean }> {
+    await this.cooldowns.ready();
     const player = this.sessions.get(sessionId); if (!player) throw new Error('找不到玩家会话，请重新连接');
+    const cooling = this.cooldowns.error(player.capability.request.kind); if (cooling) throw cooling;
     if (this.active.has(sessionId)) throw new Error('此玩家已有正在处理的决策');
     const resolved = resolveSettings(modelsForHarness(this.info, player.capability.request.kind), settings ?? player.capability.request);
     const controller = new AbortController();
-    const active: ActiveDecision = { decisionId, controller, done: Promise.resolve() }; this.active.set(sessionId, active);
+    const active: ActiveDecision = { decisionId, controller, done: Promise.resolve(), kind: player.capability.request.kind }; this.active.set(sessionId, active);
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 180_000);
+    const stopTimer = () => clearTimeout(timer); controller.signal.addEventListener('abort', stopTimer, { once: true });
     active.done = this.runDecision(sessionId, player, prompt, controller.signal, resolved);
     try { await active.done; player.capability.conversation.record('event', '本次决策结束', 'Agent 已结束本次任务。'); return { completed: true }; }
     catch (error) {
-      const failure = timedOut ? new Error('本次决策超过 180 秒，已取消上游任务。点击继续可重试。') : error as Error;
-      const paused = controller.signal.aborted && !timedOut;
+      const notice = rateLimitNotice({ message: (error as Error)?.message });
+      if (notice && !(controller.signal.reason instanceof UpstreamCooldownError)) this.rateLimited(player.capability, notice);
+      const limited = controller.signal.reason instanceof UpstreamCooldownError;
+      const failure = limited ? this.cooldowns.error(player.capability.request.kind) ?? controller.signal.reason : timedOut ? new Error('本次决策超过 180 秒，已取消上游任务。点击继续可重试。') : error as Error;
+      const paused = controller.signal.aborted && !timedOut && !limited;
+      if (limited) await this.cooldowns.flush();
       player.capability.conversation.record(paused ? 'event' : 'error', paused ? '推理已暂停' : '推理失败', failure.message); throw failure;
     }
-    finally { clearTimeout(timer); if (this.active.get(sessionId) === active) this.active.delete(sessionId); }
+    finally { clearTimeout(timer); controller.signal.removeEventListener('abort', stopTimer); if (this.active.get(sessionId) === active) this.active.delete(sessionId); }
+  }
+  private rateLimited(capability: Capability, notice: RateLimitNotice): void {
+    const failure = this.cooldowns.record(capability.request.kind, notice);
+    capability.conversation.record('error', '上游限流，共享冷却', failure.message + (notice.retryAt === undefined ? ' 上游程序未提供恢复时间，本次按 10 分钟保守冷却。' : ''));
+    for (const task of this.active.values()) if (cooldownChannel(task.kind) === cooldownChannel(capability.request.kind)) task.controller.abort(failure);
   }
   private async runDecision(sessionId: string, player: PlayerSession, prompt: string, signal: AbortSignal, settings: AgentSettings): Promise<void> {
     let onAbort!: () => void;
@@ -125,6 +147,7 @@ export class LocalBridge extends EventEmitter {
         player = this.sessions.get(sessionId)!;
       }
       if (signal.aborted) throw abortError();
+      const cooling = this.cooldowns.error(player.capability.request.kind); if (cooling) throw cooling;
       await player.session!.playTurn(prompt, signal, settings);
     })();
     // Keep the original task observed while cancellation is acknowledged. An
@@ -136,7 +159,7 @@ export class LocalBridge extends EventEmitter {
       if ('cancelled' in outcome || signal.aborted) {
         const completion = await Promise.race([settled, new Promise<null>(resolve => { grace = setTimeout(() => resolve(null), 5000); })]);
         if (!completion || (completion.error !== undefined && (completion.error as Error)?.name !== 'AbortError')) await this.discardSession(sessionId);
-        throw abortError();
+        throw signal.reason instanceof UpstreamCooldownError ? signal.reason : abortError();
       }
       if (outcome.error !== undefined) { await this.discardSession(sessionId); throw outcome.error; }
     } finally { clearTimeout(grace); signal.removeEventListener('abort', onAbort); }

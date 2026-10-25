@@ -82,7 +82,7 @@ Windows 可用 `Get-FileHash .\TongZhuo-Connector-Windows-x64.exe -Algorithm SHA
 | `AGENT_GAME_CONFIG` | 自定义配置文件的绝对路径 |
 | `AGENT_GAME_PORT` | 连接器端口，默认 3211 |
 
-Windows 将运行时按内容哈希展开到 `%LOCALAPPDATA%/TongZhuo/connector-<hash>`，会话默认保存在 `%LOCALAPPDATA%/AgentArcade/sessions`。macOS 直接读取应用内的运行时，会话在 `~/Library/Application Support/AgentArcade/sessions`，日志在 `~/Library/Logs/AgentArcade/connector.log`；指定 `AGENT_GAME_DATA_DIR` 时，macOS 日志改存该目录的 `logs/`。
+Windows 将运行时按内容哈希展开到 `%LOCALAPPDATA%/TongZhuo/connector-<hash>`，会话默认保存在 `%LOCALAPPDATA%/AgentArcade/sessions`。macOS 直接读取应用内的运行时，会话在 `~/Library/Application Support/AgentArcade/sessions`，日志在 `~/Library/Logs/AgentArcade/connector.log`；指定 `AGENT_GAME_DATA_DIR` 时，macOS 日志改存该目录的 `logs/`。两端在数据目录的 `cooldowns.json` 保存上游冷却截止时间；该文件不包含登录凭据、对话或游戏存档。
 
 macOS 的 Finder 环境与终端不同。连接器会读取登录 shell 的 PATH，并查找常见的 Homebrew、Node 和官方桌面 CLI 安装位置；特殊路径可用上表的变量指定。
 
@@ -116,6 +116,7 @@ macOS 包只有 ad-hoc 本地签名，没有 Developer ID 身份签名，未经�
 | 能选模型但推理失败 | 在对应 Harness 中检查登录、模型权限与网络 |
 | Agent 未完成决策 | 查看错误信息，处理原因后继续牌局 |
 | 决策超过 180 秒 | 连接器会取消上游任务并暂停牌局；5 秒内仍未结束则关闭该玩家会话，点击继续时重建。180 秒也包含 Harness 的限流重试等待；遇到 429 时先等待上游限制恢复 |
+| 上游限流，仍需等待 | 冷却结束后再点继续。同一程序的玩家共享等待，Codex 的两种接入也共用；重连和重启不会重置。优先采用上游提供的恢复时间，程序未透传时保守冷却 10 分钟 |
 | 刷新后暂停 | 点击继续，会建立新的原生会话 |
 | 存档格式不匹配 | 新建游戏，开发期不迁移旧存档 |
 
