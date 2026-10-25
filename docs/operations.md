@@ -33,7 +33,7 @@ macOS 的布局采用 Apple [窗口规范](https://developer.apple.com/design/hu
 
 ## 发布网页
 
-修改游戏模块和注册表后，运行 `npm test` 与 `npm run build:web`，再发布整个 `dist/client/`。新增游戏不需要重新打包连接器。
+网页与连接器分别管理版本。只修改游戏规则、界面、材质、透镜或动态桌面时，更新 `package.json` 和 `package-lock.json` 中的网页版本，运行 `npm test` 与 `npm run build:web`，再发布整个 `dist/client/`。连接器实现和协议未变时，保留连接器版本，不触发连接器发布；新增游戏也不需要重新打包连接器。
 
 `.github/workflows/pages.yml` 在 `main` 推送时构建并部署网页。仓库 Pages 设置的 Source 应选择 GitHub Actions；工作流会读取站点路径，本地也可用 `PAGES_BASE_PATH` 指定。
 
