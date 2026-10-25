@@ -1,4 +1,4 @@
-import type {ComponentProps,ReactNode} from 'react';
+import type {ComponentProps,CSSProperties,ReactNode} from 'react';
 import type {StablePlayer} from '../runtime/types';
 import {effortLabel,kindName} from '../AgentModelFields';
 import {PlayerCard,PlayerCardAvatar} from '../visuals/PlayerCard';
@@ -32,7 +32,7 @@ export function AgentPlayerCard({player,caption,badges,modelName,metrics,hand,st
       <PlayerCardAvatar kind={player.kind} seat={player.seat}/>
     </header>
     {(hand||children)&&<div className="agent-player-body">
-      {hand&&<><PlayingCardGroup className="agent-player-hand" data-short-hand={hand.count<=2}>
+      {hand&&<><PlayingCardGroup className="agent-player-hand" data-short-hand={hand.count<=2} style={{'--agent-hand-count':hand.count} as CSSProperties}>
         {hand.count?hand.cards?hand.cards.map((card,i)=><PlayingCard {...card} key={card.card?.id??i} size="small"/>):Array.from({length:hand.count},(_,i)=><PlayingCard key={i} size="small"/>):<span className="empty-hand">手牌已出完</span>}
       </PlayingCardGroup>{(hand.note||(!hand.cards&&hand.count>0))&&<p className="agent-player-note">{hand.note||'手牌仅本人可见'}</p>}</>}
       {children}

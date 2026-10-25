@@ -186,7 +186,7 @@ export function legalCitadels(s:CitadelsState,seat:number):LegalAction[]{
     add('end','结束身份回合',{type:'end'},'结束');
   }return result;
 }
-export function scoreCitadels(s:CitadelsState):Score[]{return s.players.map(p=>{
+export function scoreCitadels(s:Pick<CitadelsState,'round'|'firstCompleted'>&{players:readonly Pick<Player,'seat'|'gold'|'city'>[]}):Score[]{return s.players.map(p=>{
   const districts=p.city.reduce((sum,c)=>sum+district(c).cost,0),special=p.city.filter(c=>['university','dragon-gate'].includes(c.key)).length*2;
   const haunted=p.city.find(c=>c.key==='haunted-city'),normal=p.city.filter(c=>c!==haunted).map(c=>district(c).color);
   const options:Color[]=haunted&&haunted.builtRound<s.round?['purple','yellow','blue','green','red']:['purple'];

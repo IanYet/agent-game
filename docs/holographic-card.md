@@ -1,6 +1,6 @@
 # 公共镭射卡组件
 
-`apps/web/src/visuals/HolographicCard.tsx` 提供暗色镭射卡面、指针光照、鼠标倾角和圆角饰圈。璀璨宝石的发展牌与贵族卡已使用它。游戏通过 `children` 提供数字、图标、费用和说明，公共组件不读取游戏数据。
+`apps/web/src/visuals/HolographicCard.tsx` 提供暗色镭射卡面、指针光照、鼠标倾角和圆角饰圈。璀璨宝石的发展牌与贵族卡、富饶之城的身份与建筑卡共用它。游戏通过 `children` 提供数字、图标、费用和说明，公共组件不读取游戏数据。
 
 ## 使用
 
@@ -23,7 +23,7 @@ import {HolographicCard} from '../../visuals/HolographicCard';
 </HolographicCard>
 ```
 
-卡面默认宽 112px，宽高比为 64∶91，内容沿纵向排列，内边距 12px。`children` 位于内层 `.holographic-card-face` 中、材质层上方，可以通过自己的类名调整布局。尺寸可以传入 CSS 长度或变量，例如 `width="var(--card-width,112px)"`；内容的字号与间距由调用方决定。需要调整卡面内边距或阴影时，样式作用于 `.holographic-card-face`。
+卡面默认宽 112px，宽高比为 64∶91，内容沿纵向排列，内边距 12px。`children` 位于内层 `.holographic-card-face` 中、材质层上方，可以通过自己的类名调整布局。尺寸可以传入 CSS 长度或变量，例如 `width="var(--card-width,112px)"`；内容的字号与间距由调用方决定。小于 112px 的卡片会同步缩小光斑、炫光带和图案受光范围，最小保留默认范围的 40%；较大卡片保留原有光照范围。需要调整卡面内边距或阴影时，样式作用于 `.holographic-card-face`。
 
 正方形金色王冠卡：
 
@@ -50,7 +50,8 @@ import {HolographicCard} from '../../visuals/HolographicCard';
 | `highlightColor` | 与 `glowColor` 相同 | 悬停、键盘聚焦及选中时的外框颜色，支持 CSS 颜色 |
 | `trimColor` | `"#737d8c66"` | 悬停或键盘聚焦时显示的内圈颜色 |
 | `rainbow` | `false` | 开启彩虹衍射与珠光刻线；关闭时使用 `glowColor` |
-| `pattern` | `"contours"` | `"contours"` 为等高线，`"crowns"` 为错行王冠，两者不叠加 |
+| `pattern` | `"contours"` | `"contours"` 为等高线，`"crowns"` 为错行王冠，`"rings"` 为同心圆，`"symbols"` 为错行平铺的符号，各纹路单独使用 |
+| `patternSymbol` | `""` | `pattern="symbols"` 时平铺的字符或 emoji，例如 `"👑"` |
 | `width` | `112` | 卡片宽度，数字以 CSS px 为单位，也可传入 CSS 长度或变量 |
 | `aspectRatio` | `64 / 91` | 宽高比，例如 `1` 为正方形 |
 | `radius` | `12` | 外圆角半径，单位为 CSS px，最小为 2 |
@@ -64,6 +65,8 @@ import {HolographicCard} from '../../visuals/HolographicCard';
 外框固定 2px，内圈固定 1px、向内收进 7px，内圆角为外圆角的 0.875 倍。材质按外圆角减去边框宽度裁切，透镜使用相同轮廓。默认光点在左上角；指针进入后平滑移向指针，离开后返回静止位置。键盘聚焦会把光点移向中心；选中状态只保留外框颜色，内圈仍在悬停或聚焦时显示。
 
 静止卡面保持正面朝向，默认光点位置不产生常驻倾斜。鼠标越靠近卡面边缘，倾斜越明显，单轴最大 10°，投影角点的位移遵循公共的 20 CSS px 上限。键盘聚焦与触屏输入不驱动倾角；减少动态或静态画面偏好下保持正面朝向。
+
+所有镭射卡统一使用默认的平行炫光，光色由 `glowColor` 和 `rainbow` 决定。富饶之城的身份卡传入 `pattern="symbols"` 和 `patternSymbol={身份 emoji}`，选中或当前叫号身份的 `restingLight` 为 `[0.5,0.5]`，其余为 `[0.09,0.09]`。建筑卡使用 `pattern="rings"` 与类别色，选中时同样将静止光点放在中央。`GoldCoin.tsx` 提供两款游戏共用的金币图标；`engraved` 开启时保留暗色凹刻层，由公共绘制器控制受光后的金色图层。
 
 ## 图标随光照显色
 

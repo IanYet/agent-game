@@ -42,7 +42,7 @@ export class TablePhysics{
       this.world.defaultContactMaterial.friction=.12;this.world.defaultContactMaterial.restitution=.35;
       this.world.defaultContactMaterial.contactEquationStiffness=1e6;
       this.models=new TableModels(theme,this.surfaces);
-      this.scene.add(...this.models.lights);
+      for(const light of this.models.lights)this.scene.add(light);
       const chipTheme=theme==='holdem'||theme==='citadels';
       const count=matchMedia('(max-width: 700px)').matches?12:20;
       for(let i=0;i<count;i++){

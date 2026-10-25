@@ -134,7 +134,7 @@
 .player-table-actions .game-actions .button{min-height:32px;padding:7px 13px;font-size:11px}
 .player-table-actions .game-actions .text-button{font-size:10px}
 .player-table-actions .game-actions .button.primary{background:#d8dce6;color:#15171f}
-.spectator-table-actions{display:flex;align-items:center;justify-content:space-between;gap:20px;flex:none;border-top:1px solid #ffffff20;margin-top:16px;padding-top:12px}
+.spectator-table-actions{display:flex;align-items:center;justify-content:space-between;gap:20px;flex:none;border-top:1px solid #ffffff20;margin-top:0;padding-top:8px}
 .spectator-table-actions>p{font-size:11px;line-height:1.8;color:var(--muted)}
 .spectator-table-actions>.game-actions{max-width:none;flex:none}
 .spectator-table-actions .button{min-height:34px;padding:8px 16px;font-size:11px}

@@ -11,6 +11,7 @@ type CardOptions={
   trimColor?:string;
   rainbow?:boolean;
   pattern?:HolographicPattern;
+  patternSymbol?:string;
   width?:CSSProperties['width'];
   aspectRatio?:CSSProperties['aspectRatio'];
   radius?:number;
@@ -24,7 +25,7 @@ export type HolographicCardProps<T extends CardTag='div'>=CardOptions&{as?:T}&Om
 // dark card, its frame, moving reflection and shared lens paint surface.
 export function HolographicCard<T extends CardTag='div'>({
   as,children,className='',style,glowColor='#c3cbd6',highlightColor=glowColor,trimColor='#737d8c66',
-  rainbow=false,pattern='contours',width=112,aspectRatio=64/91,radius=12,restingLight=[.09,.09],tilt=true,selected=false,...props
+  rainbow=false,pattern='contours',patternSymbol='',width=112,aspectRatio=64/91,radius=12,restingLight=[.09,.09],tilt=true,selected=false,...props
 }:HolographicCardProps<T>){
   const cardStyle:CSSProperties&Record<`--holographic-${string}`,string|number>={
     width,aspectRatio,'--holographic-radius':`${Math.max(2,radius)}px`,
@@ -35,7 +36,7 @@ export function HolographicCard<T extends CardTag='div'>({
     className:`holographic-card ${className}`,style:cardStyle,
     'data-holographic-selected':selected||undefined,
   },<div className="holographic-card-face" data-lens-card-frame data-lens-plane>
-    <HolographicMaterial glowColor={glowColor} rainbow={rainbow} pattern={pattern} restingLight={restingLight} tilt={tilt}/>
+    <HolographicMaterial glowColor={glowColor} rainbow={rainbow} pattern={pattern} patternSymbol={patternSymbol} restingLight={restingLight} tilt={tilt}/>
     {children}
   </div>);
 }

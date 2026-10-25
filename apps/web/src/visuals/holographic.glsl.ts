@@ -39,7 +39,7 @@ uniform vec2 uCssSize;
 uniform vec2 uPointer;
 uniform vec3 uHaloColor;
 uniform float uRainbow;
-uniform float uEngravedPattern;
+uniform int uPattern;
 uniform sampler2D uEngraving;
 out vec4 outColor;
 
@@ -74,11 +74,13 @@ float grain(vec2 point){
 }
 
 float etchedPhase(vec2 p){
+  float spacing=uPattern==2?2.:7.;
+  float frequency=3.14159265*uCssSize.x/(1.28*spacing);
+  if(uPattern==2)return length(p)*frequency;
   vec2 warp=vec2(sin(p.y*7.+sin(p.x*4.))*.085,sin(p.x*6.-p.y*3.)*.07);
   vec2 q=p+warp-vec2(.13,.08);
   float radius=length(q*vec2(1.,.76));
-  // Seven CSS pixels between grooves, independent of card size and display DPR.
-  float frequency=3.14159265*uCssSize.x/(1.28*7.);
+  // Contours keep 7px grooves; building rings use 2px, independent of size/DPR.
   return radius*frequency+sin(atan(q.y,q.x)*3.+radius*8.)*1.7;
 }
 
@@ -89,10 +91,11 @@ void main(){
   vec2 p=(uv-.5)*halfSize*2.;
   vec2 lightCenter=uPointer*halfSize;
   vec2 delta=p-lightCenter;
+  float lightScale=clamp(uCssSize.x/112.,.4,1.);
   float sweep=delta.x*.72+delta.y*.52+sin(p.y*4.+p.x*3.)*.08;
-  float band=exp(-pow(sweep/.36,2.));
-  float glint=exp(-pow(sweep/.085,2.));
-  float spotlight=exp(-dot(delta*vec2(1.05,.72),delta*vec2(1.05,.72))*2.6);
+  float band=exp(-pow(sweep/(.36*lightScale),2.));
+  float glint=exp(-pow(sweep/(.085*lightScale),2.));
+  float spotlight=exp(-dot(delta*vec2(1.05,.72),delta*vec2(1.05,.72))*2.6/(lightScale*lightScale));
   float light=band*spotlight;
   vec3 lightDirection=normalize(vec3(lightCenter-p,1.2));
   vec3 viewDirection=normalize(vec3(-p,4.5));
@@ -122,7 +125,7 @@ void main(){
   color+=pearl*light*.24;
   color+=(pearl*.5+vec3(.5))*glint*spotlight*.12;
   vec3 outerFoil=vec3(.12,.14,.18)+outerPearl*.65+diffracted*.12;
-  float etching=mix(contours*.6,engraving.r*.85,uEngravedPattern);
+  float etching=(uPattern==1||uPattern==3)?engraving.r*.85:contours*.6;
   color+=etching*outerFoil*reveal;
   outColor=vec4(color,1.);
 }`;

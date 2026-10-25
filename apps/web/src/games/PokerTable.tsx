@@ -10,10 +10,10 @@ type TableNotice={title:string;text?:string;lines?:readonly string[]};
 type TableResult={title:string;detail?:string;note?:string;scores?:readonly {name:string;delta:number;detail?:string}[]};
 
 export function PokerTable({players,actions,status,topCards,caption,notice,result}:{players:readonly {name:string;seat:number}[];actions:readonly (PokerTableAction|null)[];status:string;topCards?:{label:string;cards:readonly PokerTableCard[]};caption?:string;notice?:TableNotice;result?:TableResult}){
-  const columns=players.length===4?2:Math.min(3,players.length);
+  const columns=Math.min(5,players.length);
   return <GameTable className="poker-table" aria-label="公开出牌信息">
     {caption&&<p className="poker-table-caption">{caption}</p>}
-    {topCards&&<div className="poker-table-top-cards"><span>{topCards.label}</span><PlayingCardGroup>{topCards.cards.map((card,i)=><PlayingCard {...card} size="large" key={card.card?.id??i}/>)}</PlayingCardGroup></div>}
+    {topCards&&<div className="poker-table-top-cards"><span>{topCards.label}</span><PlayingCardGroup>{topCards.cards.map((card,i)=><PlayingCard {...card} size="small" key={card.card?.id??i}/>)}</PlayingCardGroup></div>}
     {notice&&<div className="poker-table-notice"><h2>{notice.title}</h2>{notice.text&&<p>{notice.text}</p>}{notice.lines?.map((line,i)=><small key={i}>{line}</small>)}</div>}
     <div className="poker-played-grid" style={{gridTemplateColumns:`repeat(${columns},minmax(0,1fr))`}}>
       {players.map(player=>{const action=actions[player.seat];return <div className="poker-played-zone" key={player.seat}>

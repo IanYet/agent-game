@@ -39,11 +39,11 @@
 .sp-layout .human-player-content{display:grid;grid-template-columns:minmax(0,352px) minmax(0,336px);align-items:start;gap:20px;width:708px;max-width:100%;overflow:visible}
 .sp-layout .human-player-actions{padding-left:372px}
 .sp-layout .sp-action-box{margin:0;padding:0;border:0}
-.sp-player-seat{display:flex;flex-direction:column;gap:12px;min-width:0}
+.sp-player-seat{display:flex;flex-direction:column;gap:12px;min-width:0;container-type:inline-size}
 .sp-player-seat>.identity-shell{flex:1;min-width:0}
-.sp-reserved-hand{--sp-card-width:112px;display:flex;align-items:flex-start;gap:8px;flex:none;height:159.25px;min-height:159.25px}
-.game-layout.board-game-layout.sp-layout>.game-surface>.sp-human-seat{grid-column:1;grid-row:3;align-self:end;justify-self:start;width:max-content;max-width:100%;min-height:0}
-.game-layout.board-game-layout.sp-layout>.game-surface>.sp-opponents{width:min(100%,var(--board-fit-player-width,360px));height:auto;max-height:none;justify-self:start;--board-player-template-rows:max-content}
+.sp-reserved-hand{--sp-card-width:min(112px,calc((100cqw - 16px)/3));display:flex;align-items:flex-start;gap:8px;flex:none;height:calc(var(--sp-card-width)*91/64);min-height:calc(var(--sp-card-width)*91/64)}
+.game-layout.board-game-layout.sp-layout>.game-surface>.sp-human-seat{grid-column:1;grid-row:3;align-self:end;justify-self:start;width:743px;max-width:100%;min-height:0}
+.game-layout.board-game-layout.sp-layout>.game-surface>.sp-opponents{width:100%;height:auto;max-height:none;justify-self:start;--board-player-template-rows:max-content}
 .sp-layout .sp-opponents .board-player-slots{flex:none;align-items:flex-start;justify-content:flex-start;overflow:visible;scrollbar-gutter:auto}
 .sp-opponents .player-card-grid{width:100%}
 .sp-player-contents{display:grid;gap:6px;width:100%;max-width:100%;min-width:0}
@@ -72,7 +72,6 @@
 .sp-player-contents .sp-inventory-entry{justify-self:start;margin:0;padding:2px 0}
 @media(min-width:1281px) and (min-height:851px){
   .game-layout.board-game-layout.sp-layout[data-board-mode=player]>.game-surface{grid-template-columns:max-content minmax(0,1fr)}
-  .game-layout.board-game-layout.sp-layout[data-board-mode=player]>.game-surface>.sp-opponents{--board-player-reserved-width:760px}
 }
 @media(max-width:820px){
   .sp-layout .human-player-content{grid-template-columns:minmax(0,1fr);gap:10px;width:352px}
@@ -145,8 +144,8 @@
 .sp-card-back>b{font-size:calc(var(--sp-card-width,112px) * .08929);font-weight:500;letter-spacing:1px}
 .sp-card-back>svg{width:calc(var(--sp-card-width,112px) * .25);height:calc(var(--sp-card-width,112px) * .25);color:#b4beca88}
 .sp-card-back>small{font-size:calc(var(--sp-card-width,112px) * .08036);color:#8290a3}
-@container(min-width:1640px){
-  .sp-market-board{grid-template-columns:calc(var(--sp-row-width) * 3 + 32px)}
+@container(min-width:1440px){
+  .sp-market-board{--sp-card-width:min(112px,calc((100cqw - 272px)/12));--sp-row-width:calc(4 * var(--sp-card-width) + 80px);grid-template-columns:calc(var(--sp-row-width) * 3 + 32px)}
   .sp-market-rows{grid-template-columns:repeat(3,var(--sp-row-width));align-items:start;gap:16px;width:calc(var(--sp-row-width) * 3 + 32px)}
   .sp-bank{grid-column:1;grid-row:1;justify-self:end;align-self:center;width:auto;gap:6px}
   .sp-bank-stocks{grid-template-columns:repeat(3,max-content);gap:10px 18px}
