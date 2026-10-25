@@ -36,7 +36,7 @@ export function App(){
   const conversationPlayer=canViewConversations?state.room?.roster.find(p=>p.playerId===conversationPlayerId&&p.kind!=='human'):undefined;
   useEffect(()=>{setConversationPlayerId(null);},[state.room?.runId,page]);
   useEffect(()=>{if(!canViewConversations)setConversationPlayerId(null);},[canViewConversations]);
-  const overlay=setup||connection||rules||players||next||!!conversationPlayer;
+  const overlay=setup||connection||rules||players||next;
   const gate=useRef(false);
   const run=async(action:()=>Promise<void>)=>{if(gate.current)return;gate.current=true;setBusy(true);try{await action();}catch(e){setToast((e as Error).message);}finally{gate.current=false;setBusy(false);}};
   const scrollTarget=useRef<'top'|'games'>('top');
