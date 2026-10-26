@@ -36,6 +36,24 @@ describe('德州扑克牌力', () => {
 });
 
 describe('无限注流程、底池与隔离', () => {
+  it('自行决定未列为快捷选项的加注额，仍准确扣款并经跟注、弃牌、过牌进入翻牌',()=>{
+    const initial=createHoldem('direct',players(3),{random:seeded(1)}),before=structuredClone(initial);
+    let s=act(initial,0,{type:'raise',amount:37});
+    expect(s.players[0]).toMatchObject({chips:963,streetBet:37,committed:37});expect(s.lastFullRaise).toBe(27);
+    s=act(s,1,{type:'call'});expect(s.players[1].streetBet).toBe(37);
+    s=act(s,2,{type:'fold'});expect(s.phase).toBe('flop');expect(s.turn).toBe(1);
+    s=act(s,1,{type:'check'});expect(s.turn).toBe(0);assertHoldemChips(s);expect(initial).toEqual(before);
+  });
+  it('拒绝非法下注时，筹码、底池、加注权、牌库和历史全部保持原状',()=>{
+    const initial=createHoldem('invalid',players(3),{random:seeded(1)});
+    const checked=act(act(initial,0,{type:'call'}),1,{type:'call'});
+    const cases:Array<[HoldemState,number,Parameters<typeof act>[2]]>=[
+      [initial,1,{type:'call'}],[initial,0,{type:'check'}],
+      ...[0,10,19,20.5,1001,NaN,Infinity].map(amount=>[initial,0,{type:'raise',amount}] as [HoldemState,number,Parameters<typeof act>[2]]),
+      [checked,2,{type:'call'}],
+    ];
+    for(const [s,seat,action] of cases){const before=structuredClone(s);expect(()=>act(s,seat,action)).toThrow();expect(s).toEqual(before);assertHoldemChips(s);}
+  });
   it('Agent 可读取本手完整下注与公共牌记录，隐藏暗牌且下一手重置记录', () => {
     const meta={moduleId:'holdem',moduleVersion:'1.0.0',stateVersion:1,roomId:'history-room',runId:'history-run',index:1,config:{initialChips:1000,smallBlind:5,bigBlind:10},roster:Array.from({length:9},(_,i)=>({playerId:`p${i}`,name:`P${i}`,kind:'codex' as const}))};
     const run={...meta,state:holdemModule.create(meta,seeded(5))};

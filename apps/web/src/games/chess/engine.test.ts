@@ -11,6 +11,22 @@ const run=(s:ChessState):StoredRun<ChessState>=>({moduleId:'chess',moduleVersion
 const cycle=['g1f3','g8f6','f3g1','f6g8'];
 
 describe('国际象棋 · 人数、合法走子与王的安全',()=>{
+  it.each([
+    [{type:'accept_draw'},/没有.*提和/],
+    [{type:'decline_draw'},/没有.*提和/],
+    [{type:'claim_draw',reason:'threefold'},/三次重复/],
+    [{type:'claim_draw',reason:'fifty'},/50/],
+    [{type:'move',uci:'e2e5'},/合法棋步|移动/],
+  ])('非法申请或棋步 %j 提供可修正原因，棋盘、提议、棋谱和分数保持原状',(action,reason)=>{
+    const s=create(),before=structuredClone(s);expect(()=>applyChessAction(s,0,action)).toThrow(reason);expect(s).toEqual(before);
+  });
+  it('拒绝升变遗漏、非法预定棋步和越权后，可继续正确升变',()=>{
+    const s=create('7k/P7/8/8/8/8/8/4K3 w - - 0 1'),before=structuredClone(s);
+    expect(()=>applyChessAction(s,0,{type:'move',uci:'a7a8'})).toThrow('升变');
+    expect(()=>applyChessAction(s,0,{type:'claim_draw',reason:'fifty',uci:'a7b8q'})).toThrow();
+    expect(()=>applyChessAction(s,1,{type:'move',uci:'h8g8'})).toThrow();expect(s).toEqual(before);
+    expect(applyChessAction(s,0,{type:'move',uci:'a7a8r'}).moves.at(-1)?.promotion).toBe('r');
+  });
   it('标准开局 32 子、20 着，白方先行；初始状态不可被修改',()=>{
     const s=create(),before=structuredClone(s),next=play(s,'e2e4');
     expect(viewChess(s,null).board).toHaveLength(32);expect(legalChessMoves(s)).toHaveLength(20);expect(s.turn).toBe(0);expect(next.turn).toBe(1);expect(s).toEqual(before);expect(next.revision).toBe(2);

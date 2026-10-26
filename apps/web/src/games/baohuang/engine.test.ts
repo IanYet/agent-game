@@ -55,6 +55,28 @@ describe('保皇固定保的牌库、套牌与王挂牌',()=>{
   });
 });
 describe('皇位、侍卫与私有观察',()=>{
+  it('自行选择实体副本和挂王，不要求代表行动；保留标记牌就不暴露暗保',()=>{
+    const s=fixture([[6,6,6,16,16,17],[7,7],[8],[9],[10]],1,0);
+    const normal=s.players[0].hand.filter(c=>c.rank===6).slice(1),joker=s.players[0].hand.find(c=>c.rank===16&&!c.mark)!;
+    const before=structuredClone(s),next=applyAction(s,0,{type:'play',cards:[...normal.map(c=>c.id),joker.id]});
+    expect(next.lastPlay?.cards).toHaveLength(3);expect(next.players[0].hand.some(c=>c.mark==='guard')).toBe(true);
+    expect(next.guardPublic).toBe(false);expect(viewGame(next,1).guard).toBeNull();expect(next.turn).toBe(1);expect(s).toEqual(before);
+  });
+  it('各阶段的错误行动和越权明保均不改身份、资源、名次与记录',()=>{
+    const crown=createGame('invalid',players,{random:seeded(7)}),declare=applyAction(crown,crown.turn,{type:'enthrone'});
+    const s=fixture([[6,7,16],[8],[9],[10],[11]]),nonGuard=(declare.guard+1)%5;
+    const cases:Array<[BaoState,number,Parameters<typeof applyAction>[2]]>=[
+      [crown,crown.turn,{type:'declare',open:false}],[declare,nonGuard,{type:'declare',open:true}],
+      [declare,declare.guard,{type:'play',cards:[declare.players[declare.guard].hand[0].id]}],
+      [s,1,{type:'pass'}],[s,0,{type:'pass'}],[s,0,{type:'enthrone'}],
+      [s,0,{type:'play',cards:[]}],[s,0,{type:'play',cards:[s.players[1].hand[0].id]}],
+      [s,0,{type:'play',cards:[s.players[0].hand[0].id,s.players[0].hand[0].id]}],
+      [s,0,{type:'play',cards:s.players[0].hand.map(c=>c.id)}],
+    ];
+    for(const [state,seat,action] of cases){const before=structuredClone(state);expect(()=>applyAction(state,seat,action)).toThrow();expect(state).toEqual(before);}
+    const ready=applyAction(declare,nonGuard,{type:'declare',open:false}),before=structuredClone(ready);
+    expect(()=>applyAction(ready,nonGuard,{type:'declare',open:false})).toThrow();expect(ready).toEqual(before);
+  });
   it('让位向上家只传一张皇牌；一轮后原持有人强制登基',()=>{
     let s=createGame('cede',players,{random:seeded(1)}),initial=s.emperor;const hands=s.players.map(p=>p.hand.length);
     for(let i=0;i<5;i++){const prev=s.emperor;s=applyAction(s,prev,{type:'cede'});expect(s.emperor).toBe((prev+4)%5);expect(s.players[s.emperor].hand.some(c=>c.mark==='emperor')).toBe(true);}

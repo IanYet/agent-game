@@ -14,6 +14,26 @@ const draft=(s:AzulState,source:number,color:Color,row:number)=>applyAzul(s,s.tu
 function runOf(s:AzulState):StoredRun<AzulState>{return {moduleId:'azul',moduleVersion:'1.0.0',stateVersion:1,roomId:'room',runId:s.id,index:s.match,config:{},roster:roster(s.players.length).map(p=>({...p,kind:'codex' as const})),state:s};}
 
 describe('花砖物语原版有色墙',()=>{
+  it.each([0,1,2,3,4,5])('自行指定目的行 %i：收取全部同色，按容量落地，中央标记只拿一次',row=>{
+    for(const source of [0,1,5]){
+      const {s,take}=fixture();if(source)s.factories[source-1]=take('blue',4);else s.center=take('blue',4);
+      s.factories[1]=take('red');const before=structuredClone(s),next=applyAzul(s,0,{source,color:'blue',row});
+      expect(next.players[0].pattern.flat()).toHaveLength(Math.min(row,4));
+      expect(next.players[0].floor).toHaveLength(4-Math.min(row,4)+(source===0?1:0));
+      expect(next.firstOwner).toBe(source===0?0:null);expect(next.turn).toBe(1);assertAzul(next);expect(s).toEqual(before);
+    }
+  });
+  it('按具体图案行约束拒绝自主选砖，失败不会移动砖、标记或改写记录',()=>{
+    const {s,take,wall}=fixture();s.factories[0]=take('blue',2);s.players[0].pattern[0]=take('blue');
+    s.players[0].pattern[1]=take('red');wall(0,2,2);
+    for(const [action,reason] of [
+      [{source:1,color:'blue',row:1},/已满/],
+      [{source:1,color:'blue',row:2},/同色|颜色/],
+      [{source:1,color:'blue',row:3},/墙/],
+      [{source:0,color:'blue',row:4},/来源.*蓝|来源.*blue|来源.*颜色/],
+      [{source:6,color:'blue',row:4},/来源/],
+    ] as const){const before=structuredClone(s);expect(()=>applyAzul(s,0,action)).toThrow(reason);expect(s).toEqual(before);}
+  });
   it.each([2,3,4])('%i 人按官方工厂数开局且每色恰好 20 片',n=>{
     const s=createAzul('a',roster(n),seeded(n));expect(s.factories).toHaveLength(n*2+1);expect(s.factories.every(f=>f.length===4)).toBe(true);expect(s.bag).toHaveLength(100-(n*2+1)*4);expect(()=>assertAzul(s)).not.toThrow();
   });

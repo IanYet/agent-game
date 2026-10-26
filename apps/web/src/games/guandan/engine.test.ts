@@ -37,6 +37,30 @@ const conservation=(s:GuandanState)=>{
 };
 
 describe('掼蛋牌型与声明',()=>{
+  it.each([
+    {cards:[c(7)],combination:{kind:'single',rank:7}},
+    {cards:[c(7),c(7,'D')],combination:{kind:'pair',rank:7}},
+    {cards:[c(7),c(7,'D'),c(2,'H')],combination:{kind:'triple',rank:7}},
+    {cards:[c(7),c(7,'D'),c(2,'H'),c(16),c(16,'J',1)],combination:{kind:'full_house',rank:7,pairRank:16}},
+    {cards:[c(4),c(5,'D'),c(6),c(7),c(2,'H')],combination:{kind:'straight',rank:8}},
+    {cards:hand([14,14,2,2,3,3]),combination:{kind:'pair_run',rank:3}},
+    {cards:hand([14,14,14,2,2,2]),combination:{kind:'triple_run',rank:2}},
+    {cards:makeDeck().filter(c=>c.rank===8).slice(0,4),combination:{kind:'bomb',rank:8}},
+    {cards:[...makeDeck().filter(c=>c.rank===8),c(2,'H'),c(2,'H',1)],combination:{kind:'bomb',rank:8}},
+    {cards:[c(3),c(4),c(5),c(2,'H'),c(2,'H',1)],combination:{kind:'straight_flush',rank:7,suit:'S'}},
+    {cards:makeDeck().filter(c=>c.rank>=16),combination:{kind:'four_jokers',rank:17}},
+  ])('直接提交实体牌与 $combination.kind 声明，保留声明含义并推进回合',({cards,combination})=>{
+    const s=rig([[...cards,c(13,'H',1)],[c(9,'D')],[c(10,'C')],[c(11,'D')]]),before=structuredClone(s);
+    const next=applyAction(s,0,{type:'play',cards:cards.map(c=>c.id),combination});
+    expect(next.lastPlay?.combination).toMatchObject(combination);expect(next.lastPlay?.combination.size).toBe(cards.length);
+    expect(next.players[0].hand).toEqual([c(13,'H',1)]);expect(next.turn).toBe(1);conservation(next);expect(s).toEqual(before);
+  });
+  it('不能把配牌当王或虚报主体、带对、同花；非法声明不消费实体牌',()=>{
+    const s=rig([[c(8),c(8,'D'),c(8,'C'),c(16),c(2,'H')],[c(9)],[c(10)],[c(11)]]);
+    for(const combination of [{kind:'full_house',rank:8,pairRank:16},{kind:'straight_flush',rank:8,suit:'S'},{kind:'bomb',rank:17}]){
+      const before=structuredClone(s);expect(()=>applyAction(s,0,{type:'play',cards:s.players[0].hand.map(c=>c.id),combination})).toThrow('声明');expect(s).toEqual(before);
+    }
+  });
   it('级牌在单张、对子、三张、三带对和同张数炸弹中高于 A；顺牌不升位',()=>{
     for(const n of [1,2,3,4,5,6]){
       const low=classify(hand(Array(n).fill(14)),7).find(c=>c.kind===(n===1?'single':n===2?'pair':n===3?'triple':'bomb'))!;
@@ -159,6 +183,16 @@ describe('掼蛋轮转、接风与名次',()=>{
 });
 
 describe('掼蛋贡还牌与抗贡',()=>{
+  it('贡还阶段的越轮、错误阶段、非最大贡和非法还牌都不部分交换',()=>{
+    const s=nextWithHands([0,1,2,3],false,[[c(4),c(11)],[c(5)],[c(6)],[c(2,'H'),c(2),c(14)]]);
+    for(const [seat,action] of [[0,{type:'tribute',card:c(4).id}],[3,{type:'return',card:c(14).id}],[3,{type:'tribute',card:c(14).id}],[3,{type:'tribute',card:c(2,'H').id}]] as const){
+      const before=structuredClone(s);expect(()=>applyAction(s,seat,action)).toThrow();expect(s).toEqual(before);
+    }
+    const returned=applyAction(s,3,{type:'tribute',card:c(2).id});
+    for(const action of [{type:'return',card:c(2).id},{type:'return',card:c(11).id},{type:'return',card:c(5).id},{type:'pass'}]){
+      const before=structuredClone(returned);expect(()=>applyAction(returned,0,action)).toThrow();expect(returned).toEqual(before);
+    }
+  });
   it('贡最大且不贡逢人配，级牌高于 A；不合规贡还被拒绝',()=>{
     let state=nextWithHands([0,1,2,3],false,[[c(4),c(11)],[c(5)],[c(6)],[c(2,'H'),c(2),c(14)]]);
     expect(tributeChoices(state,3).map(c=>c.id)).toEqual([c(2).id]);

@@ -46,6 +46,19 @@ describe('璀璨宝石固定基础牌组与开局',()=>{
   it('拒绝错误人数、重复身份和无效先手',()=>{expect(()=>game(1)).toThrow();expect(()=>game(5)).toThrow();expect(()=>createSplendor('x',[identities()[0],identities()[0]],{random:rng()})).toThrow();expect(()=>game(2,2)).toThrow();});
 });
 describe('拿取、支付与资源守恒',()=>{
+  it('非法自主行动不扣宝石、不补市场、不泄露或移动暗库牌，也不推进贵族与回合',()=>{
+    const s=game();marketCard(s,'1-white-01');giveTokens(s,0,{red:2,black:1,gold:1});
+    const reserved=applyAction(game(),0,{type:'reserveDeck',level:3}),secret=reserved.players[0].reserved[0].cardId;
+    const cases:Array<[SplendorState,number,unknown]>=[
+      [s,1,{type:'take',colors:['blue','green','black']}],[s,0,{type:'take',colors:['blue','blue','green']}],
+      [s,0,{type:'pair',color:'red'}],[s,0,{type:'reserve',cardId:s.decks[1][0]}],
+      [s,0,{type:'reserveDeck',level:4}],[s,0,{type:'buy',cardId:s.decks[1][0]}],
+      [reserved,1,{type:'buy',cardId:secret}],[s,0,{type:'buy',cardId:'1-white-01',payment:{red:2,black:1,gold:1}}],
+      [s,0,{type:'return',tokens:{red:1}}],[s,0,{type:'noble',nobleId:s.nobles[0]}],[s,0,{type:'pass'}],
+    ];
+    for(const [state,seat,action] of cases){const before=structuredClone(state);expect(()=>applyAction(state,seat,action)).toThrow();expect(state).toEqual(before);assertSplendor(state);}
+    expect(viewSplendor(reserved,1).players[0].reserved[0].card).toBeNull();
+  });
   it('必须拿三种不同颜色，不能重复、少拿或拿黄金',()=>{
     const s=game();for(const colors of [['white'],['white','white','blue'],['white','blue','gold'],['white','blue','purple']])expect(()=>applyAction(s,0,{type:'take',colors})).toThrow();
     const next=applyAction(s,0,{type:'take',colors:['white','blue','red']});expect(next.players[0].tokens).toEqual({white:1,blue:1,green:0,red:1,black:0,gold:0});expect(next.turn).toBe(1);expect(s.bank.white).toBe(4);
