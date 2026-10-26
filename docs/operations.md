@@ -60,11 +60,11 @@ gh run list --repo IanYet/agent-game --workflow connector.yml
 
 工作流分别在 Windows x64、macOS Apple Silicon 和 macOS Intel 上构建，使用 Node.js 24.19.0。各作业运行游戏规则测试、类型检查和构建，再生成原生安装包；Intel runner 串行运行同一套规则测试，避免多个进程争抢 CPU 导致长对局测试超时。不运行连接器、界面、协议或发布器自动测试。
 
-安装包名称和 Release 显示名统一放在 [connector-assets.mjs](../scripts/connector-assets.mjs)，从连接器版本文件自动读取版本。Actions 下载产物与 Release 显示名写明产品、版本、系统和芯片，例如「同桌连接器 v0.5.3 · Windows 64 位」。新打包文件使用带版本的 ASCII 名称，例如：
+安装包名称和 Release 显示名统一放在 [connector-assets.mjs](../scripts/connector-assets.mjs)，从连接器版本文件自动读取版本。Actions 下载产物与 Release 显示名写明产品、版本、系统和芯片，例如「同桌连接器 v0.5.4 · Windows 64 位」。新打包文件使用带版本的 ASCII 名称，例如：
 
-- `TongZhuo-Connector-v0.5.3-Windows-x64.exe`
-- `TongZhuo-Connector-v0.5.3-macOS-Apple-Silicon.zip`
-- `TongZhuo-Connector-v0.5.3-macOS-Intel.zip`
+- `TongZhuo-Connector-v0.5.4-Windows-x64.exe`
+- `TongZhuo-Connector-v0.5.4-macOS-Apple-Silicon.zip`
+- `TongZhuo-Connector-v0.5.4-macOS-Intel.zip`
 
 校验和与构建信息沿用完整安装包文件名，分别追加 `.sha256` 与 `.build.json`。客户端检查更新时，按最新正式 Release 的版本查找对应系统和芯片的安装包。
 
@@ -74,7 +74,7 @@ gh run list --repo IanYet/agent-game --workflow connector.yml
 
 连接器版本来自 `apps/connector/version.json`。修改时同步 Windows `Launcher.cs` 和 `Bootstrap.cs` 的 `AssemblyVersion`、`AssemblyFileVersion`；打包会核对它们。macOS 的应用版本由打包脚本生成。本地未提交的构建会在 `.build.json` 标记 `sourceDirty: true`；CI 拒绝从未保存到 Git 的源码发布。
 
-Windows 可用 `Get-FileHash .\TongZhuo-Connector-v0.5.3-Windows-x64.exe -Algorithm SHA256` 查看校验和；macOS 可运行 `shasum -a 256 -c TongZhuo-Connector-v0.5.3-macOS-Apple-Silicon.zip.sha256`，按实际下载文件名替换。已发布的 v0.5.3 包保持原文件名，下载地址见 README。
+Windows 可用 `Get-FileHash .\TongZhuo-Connector-v0.5.4-Windows-x64.exe -Algorithm SHA256` 查看校验和；macOS 可运行 `shasum -a 256 -c TongZhuo-Connector-v0.5.4-macOS-Apple-Silicon.zip.sha256`，按实际下载文件名替换。下载地址见 README。
 
 ## 配置与运行目录
 

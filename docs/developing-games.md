@@ -50,7 +50,6 @@ export const gameRegistry = new GameRegistry([existingGame, myGame]);
 | `initializePrompt(run,playerId)` | 身份、规则和操作说明；不放动态观察或历史 |
 | `historyCursor(run)` | 当前事件截止序号，供运行时确认送达范围 |
 | `decisionPrompt(run,decision,afterEvent)` | 当前私有观察，以及 afterEvent 之后的新增记录；0 表示完整历史 |
-| `notificationPrompt?(run,playerId,afterEvent)` | 有未送达的私有通知时返回无须回复的消息，否则返回 null；只发给目标玩家，不授予行动权限 |
 | `handleTool(run,request)` | 同步返回 `{state?,result}`；不原地修改 run |
 | `humanAction(run,playerId,input)` | 同步规则转换，与工具路径使用同一引擎 |
 | `timeout?(run,decision)` | 可选超时规则，返回新状态 |
@@ -63,7 +62,7 @@ export const gameRegistry = new GameRegistry([existingGame, myGame]);
 
 随机发牌使用平台传入的 random，测试可提供种子随机源。平台使用浏览器加密随机源。
 
-提示词通过玩家自己的 observe 生成，再过滤增量事件；不要过滤原始存档后直接外发，避免泄露隐藏牌。game_get_state 保留完整可见记录。私有通知需要保存在模块状态中并按接收者过滤；公开观察和导出不能包含其他玩家的通知。游标由运行时绑定实际会话，不存进游戏规则状态。
+提示词通过玩家自己的 observe 生成，再过滤增量事件；不要过滤原始存档后直接外发，避免泄露隐藏牌。game_get_state 保留完整可见记录。私有手牌等信息由当前观察按玩家过滤，公开观察和导出不能泄露隐藏信息。游标由运行时绑定实际会话，不存进游戏规则状态。
 
 ## 工具与 schema
 
@@ -107,7 +106,7 @@ const tools: ToolDefinition[] = [{
 
 工具列表在会话建立时冻结。不要按瞬时阶段改变 tools/list；将各阶段能力固定声明，在 handler 和 allowedTools 中限制阶段。room 会话进入下一轮时若工具声明改变，平台会创建新会话。
 
-`game_get_state` 在 `events` 字段返回当前局／手从发牌开始的完整可见记录，`seq` 按发生顺序递增。初始化只包含身份、完整规则和字段说明；首次决策或通知携带当前局面与完整历史，之后只携带新增记录。更换模型或重建会话时重新同步完整上下文。界面显示条数不限制 Agent 读取，下一局／手开始后记录重置。记录中的 `cards` 只包含已经公开的牌，不包含对手未公开的手牌、牌库或烧牌。
+`game_get_state` 在 `events` 字段返回当前局／手从发牌开始的完整可见记录，`seq` 按发生顺序递增。初始化只包含身份、完整规则和字段说明；首次决策携带当前局面与完整历史，之后只携带新增记录。更换模型或重建会话时重新同步完整上下文。界面显示条数不限制 Agent 读取，下一局／手开始后记录重置。记录中的 `cards` 只包含已经公开的牌，不包含对手未公开的手牌、牌库或烧牌。
 
 ## 决策设计
 
@@ -168,7 +167,7 @@ const visualState = playerCardState({
 
 1. 先在游戏目录写并运行规则测试，再改实现。直接构造行动覆盖合法与非法选择、失败不改状态、回合推进、结束条件、结算、资源守恒和信息可见范围；不要让新案例仅从合法行动生成器取样。
 2. 运行 `npm test` 和 `npm run build:web`。自动测试只覆盖游戏内容与规则，不为运行时、界面、协议或连接器另建测试。
-3. 以至少 1920×1080 打开网页并连接本机连接器，实际检查设置、真人行动、Agent 直接提交及纠错、暂停继续与回放；更换模型或重建会话后检查完整上下文，通知不能授予行动权限。
+3. 以至少 1920×1080 打开网页并连接本机连接器，实际检查设置、真人行动、Agent 直接提交及纠错、暂停继续与回放；更换模型或重建会话后检查完整上下文。
 4. 部署 `dist/client/`。同一可信 origin 下新增游戏不更改连接器配置或 EXE。
 
 需要新的 Harness、原生权限或不被当前协议表达的平台能力时，才修改连接器并协商新 capability 或协议。

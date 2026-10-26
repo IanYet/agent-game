@@ -57,10 +57,6 @@ export function createConnectorServer(bridge: LocalBridge, allowedOrigins: strin
     const { prompt, decisionId, settings } = z.object({ prompt: z.string().min(1).max(200_000), decisionId: z.string().min(1).max(300), settings: z.object({ model: z.string().min(1).max(500).optional(), reasoningEffort: z.string().min(1).max(100).optional() }).optional() }).parse(req.body);
     res.json(await bridge.playTurn(req.params.id as string, prompt, decisionId, settings));
   });
-  app.post('/api/sessions/:id/notify', async (req, res) => {
-    const { prompt, settings } = z.object({ prompt: z.string().min(1).max(200_000), settings: z.object({ model: z.string().min(1).max(500).optional(), reasoningEffort: z.string().min(1).max(100).optional() }).optional() }).strict().parse(req.body);
-    res.json(await bridge.notify(req.params.id as string, prompt, settings));
-  });
   app.post('/api/pause', async (_req, res) => { await bridge.pauseTurn(); res.json({ ok: true }); });
   app.delete('/api/sessions', async (req, res) => { const {ids}=z.object({ids:z.array(z.string()).optional()}).parse(req.body ?? {}); await bridge.stopSessions(ids); res.json({ ok: true }); });
   app.post('/api/disconnect', async (_req, res) => { await bridge.disconnect(); res.json({ ok: true }); });

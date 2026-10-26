@@ -19,7 +19,6 @@ export class GameController {
   private snapshot!:AppSnapshot;
   private seats:SeatRuntime[]=[];
   private bindings=new Map<string,Binding>();
-  private notifying=new Set<string>();
   private active=new Map<string,PendingDecision>();
   private info:ConnectorInfo|null=null;
   private connected=false;
@@ -56,16 +55,15 @@ export class GameController {
       }
       if(event.type==='activity'||event.type==='usage'){
         const seat=this.seats.find(s=>s.playerId===event.playerId);
-        // Private delivery must not reveal a hidden role through table activity.
-        if(seat&&!this.notifying.has(event.playerId)&&event.type==='activity'){seat.message=event.text;seat.lastTool=event.tool;}
-        if(seat&&!this.notifying.has(event.playerId)&&event.type==='usage')seat.tokens=event.tokens;
+        if(seat&&event.type==='activity'){seat.message=event.text;seat.lastTool=event.tool;}
+        if(seat&&event.type==='usage')seat.tokens=event.tokens;
       }
       this.refresh();
     };
     client.onDisconnect=()=>{
       this.connected=false;this.generation++;this.active.clear();this.bindings.clear();this.clearDeadline();
       this.seats.forEach(s=>{delete s.sessionId;s.status='paused';});
-      if(this.data.current&&(!this.module().finished(this.data.current.state)||this.notificationPlayers().length)){this.paused=true;this.error='连接器已断开，游戏已暂停。重新连接后可以继续。';}
+      if(this.data.current&&!this.module().finished(this.data.current.state)){this.paused=true;this.error='连接器已断开，游戏已暂停。重新连接后可以继续。';}
       this.refresh();
     };
   }
@@ -90,7 +88,7 @@ export class GameController {
   private refresh(){
     const run=this.data.current,viewer=run?.roster.find(p=>p.kind==='human')?.playerId??null;
     const {state:_state,...room}=run??({} as StoredRun);
-    this.snapshot={connector:this.info,connected:this.connected,connectorUpdateRequired:this.connectorUpdateRequired,game:run?this.module().tableView(run,viewer,{revealHands:viewer===null||(this.data.curiosityMode&&this.module().finished(run.state))}):null,room:run?{...room,finished:this.module().finished(run.state),notificationsPending:this.module().finished(run.state)&&this.notificationPlayers().length>0}:null,seats:structuredClone(this.seats),paused:this.paused,curiosityMode:this.data.curiosityMode,conversations:run?this.conversations.forRun(run.runId):{},conversationError:this.conversations.error,error:this.error,activity:run?{...this.module().activity(run),actors:[...new Set(this.pending().map(d=>d.actorId))]}:null,history:[...this.data.archives].reverse().map(r=>this.registry.get(r.moduleId).summary(r))};
+    this.snapshot={connector:this.info,connected:this.connected,connectorUpdateRequired:this.connectorUpdateRequired,game:run?this.module().tableView(run,viewer,{revealHands:viewer===null||(this.data.curiosityMode&&this.module().finished(run.state))}):null,room:run?{...room,finished:this.module().finished(run.state)}:null,seats:structuredClone(this.seats),paused:this.paused,curiosityMode:this.data.curiosityMode,conversations:run?this.conversations.forRun(run.runId):{},conversationError:this.conversations.error,error:this.error,activity:run?{...this.module().activity(run),actors:[...new Set(this.pending().map(d=>d.actorId))]}:null,history:[...this.data.archives].reverse().map(r=>this.registry.get(r.moduleId).summary(r))};
     this.listeners.forEach(listener=>listener());
   }
   private save(){
@@ -116,7 +114,6 @@ export class GameController {
   }
   async nextRound(configs?:PlayerConfig[]){
     const old=this.data.current;if(!old||!this.module().finished(old.state))throw new Error('当前游戏尚未结束，不能变更阵容');
-    if(this.notificationPlayers().length)throw new Error('请先完成当前局的技能通知，再开始下一局');
     if(!this.connected)throw new Error('请先重新连接本地连接器');
     const module=this.module(),meta={...old,runId:crypto.randomUUID(),index:old.index+1,roster:this.normalizePlayers(configs??old.roster,module.minPlayers,module.maxPlayers),moduleVersion:module.version,stateVersion:module.stateVersion};
     const next={...meta,state:module.next(old,meta,secureRandom)};
@@ -163,7 +160,7 @@ export class GameController {
     await this.client.pauseTurn();await this.pumpTask;await this.cleanupTask;this.refresh();
   }
   async resume(){
-    const run=this.data.current;if(!run||(this.module().finished(run.state)&&!this.notificationPlayers().length))return;
+    const run=this.data.current;if(!run||this.module().finished(run.state))return;
     if(!this.connected)throw new Error('请先连接本地连接器');
     if(!this.paused)return;
     this.error=null;this.paused=false;this.seats.forEach(s=>{s.status=s.sessionId?'ready':'idle';s.message=undefined;});this.refresh();this.armDeadline();this.schedule();
@@ -209,7 +206,7 @@ export class GameController {
     if(this.pumpTask||this.paused||!this.connected||!this.data.current||this.closedRunId===this.data.current.runId)return;
     this.pumpTask=this.pump(this.generation).finally(()=>{
       this.pumpTask=null;
-      if(!this.paused&&this.data.current&&this.closedRunId!==this.data.current.runId&&(this.notificationPlayers().length||this.pending().some(d=>this.data.current!.roster.find(p=>p.playerId===d.actorId)?.kind!=='human')))this.schedule();
+      if(!this.paused&&this.data.current&&this.closedRunId!==this.data.current.runId&&this.pending().some(d=>this.data.current!.roster.find(p=>p.playerId===d.actorId)?.kind!=='human'))this.schedule();
     });
   }
   private contextKey(player:StablePlayer){return JSON.stringify([this.scope(this.data.current!),player.kind,player.name,player.model??null,player.reasoningEffort??null]);}
@@ -217,17 +214,12 @@ export class GameController {
     const run=this.data.current!,binding=this.bindings.get(playerId),player=run.roster.find(p=>p.playerId===playerId)!;
     return binding?.contextKey===this.contextKey(player)&&binding.history.runId===run.runId?binding.history.seq:0;
   }
-  private notificationPlayers(){
-    const run=this.data.current;
-    if(!run||this.closedRunId===run.runId||!this.module().notificationPrompt)return [];
-    return run.roster.filter(p=>p.kind!=='human'&&this.module().notificationPrompt!(run,p.playerId,this.historyAfter(p.playerId))!==null);
-  }
   private async releaseSession(playerId:string,sessionId:string){
     const runtime=this.seats.find(s=>s.playerId===playerId);
     if(runtime?.sessionId===sessionId){delete runtime.sessionId;this.bindings.delete(playerId);}
     await this.client.stopSessions([sessionId]);
   }
-  private async ensureSession(playerId:string,generation:number,quiet=false){
+  private async ensureSession(playerId:string,generation:number){
     const run=this.data.current!,player=run.roster.find(p=>p.playerId===playerId)!,runtime=this.seats.find(s=>s.playerId===playerId)!;
     if(player.kind==='human')return;
     const contextKey=this.contextKey(player);
@@ -237,7 +229,7 @@ export class GameController {
       if(this.paused||generation!==this.generation)return;
     }
     const module=this.module(),scopeId=this.scope(run),registry=new ToolRegistry(module.tools(run,playerId));
-    if(!quiet){runtime.status='connecting';runtime.message='创建独立玩家会话';this.refresh();}
+    runtime.status='connecting';runtime.message='创建独立玩家会话';this.refresh();
     const binding:Binding={scopeId,registry,contextKey,history:{runId:run.runId,seq:0}};
     this.bindings.set(playerId,binding);
     try{
@@ -246,55 +238,50 @@ export class GameController {
         if(this.bindings.get(playerId)===binding)this.bindings.delete(playerId);
         await this.client.stopSessions([sessionId]);return;
       }
-      runtime.sessionId=sessionId;if(!quiet)runtime.status=this.paused||generation!==this.generation?'paused':'ready';
+      runtime.sessionId=sessionId;runtime.status=this.paused||generation!==this.generation?'paused':'ready';
       this.refresh();
     }catch(e){if(this.bindings.get(playerId)===binding)this.bindings.delete(playerId);throw e;}
   }
   private async pump(generation:number){
     const running=new Map<string,Promise<void>>();
-    const launch=(playerId:string,decision?:PendingDecision)=>{
+    const launch=(decision:PendingDecision)=>{
+      const playerId=decision.actorId;
       const task=(async()=>{
         const runtime=this.seats.find(s=>s.playerId===playerId)!,player=this.data.current!.roster.find(p=>p.playerId===playerId)!;
         let sessionId:string|undefined;
         try{
-          if(!decision)this.notifying.add(playerId);
-          await this.ensureSession(player.playerId,generation,!decision);
-          if(this.paused||generation!==this.generation||(decision&&!this.pending().some(d=>d.decisionId===decision.decisionId)))return;
+          await this.ensureSession(player.playerId,generation);
+          if(this.paused||generation!==this.generation||!this.pending().some(d=>d.decisionId===decision.decisionId))return;
           const run=this.data.current!,module=this.module(),binding=this.bindings.get(playerId)!,afterEvent=this.historyAfter(playerId),through=module.historyCursor(run);
-          const prompt=decision?module.decisionPrompt(run,decision,afterEvent):module.notificationPrompt!(run,playerId,afterEvent);
-          if(prompt===null)return;
+          const prompt=module.decisionPrompt(run,decision,afterEvent);
           sessionId=runtime.sessionId!;
-          if(decision){runtime.status='thinking';runtime.message='正在思考';}
-          if(decision)this.active.set(decision.decisionId,decision);this.refresh();
+          runtime.status='thinking';runtime.message='正在思考';
+          this.active.set(decision.decisionId,decision);this.refresh();
           const settings={model:player.model,reasoningEffort:player.reasoningEffort};
-          if(decision)await this.client.playTurn(sessionId,prompt,decision.decisionId,settings);
-          else await this.client.notify(sessionId,prompt,settings);
+          await this.client.playTurn(sessionId,prompt,decision.decisionId,settings);
           if(this.paused||generation!==this.generation)return;
-          if(decision&&this.pending().some(d=>d.decisionId===decision.decisionId&&d.actorId===player.playerId))throw new Error('Agent 结束了任务，但当前决策尚未完成。点击继续可重试。');
+          if(this.pending().some(d=>d.decisionId===decision.decisionId&&d.actorId===player.playerId))throw new Error('Agent 结束了任务，但当前决策尚未完成。点击继续可重试。');
           // A tool call can advance the game during delivery. Acknowledge only
           // the immutable snapshot actually sent, never the later live state.
           if(this.bindings.get(playerId)===binding)binding.history={runId:run.runId,seq:through};
-          if(decision){runtime.status='ready';runtime.message=undefined;runtime.turns++;}this.refresh();
+          runtime.status='ready';runtime.message=undefined;runtime.turns++;this.refresh();
         }catch(e:any){
           if(sessionId)await this.releaseSession(playerId,sessionId).catch(()=>{});
           // A human can finish the game while an agent is still returning from
           // its already committed action. Session disposal then rejects that
           // task; the completed game must keep its successful result.
-          if(generation!==this.generation||this.paused||(decision&&this.data.current&&this.module().finished(this.data.current.state)))return;
-          if(decision){runtime.status='error';runtime.message=`${player.name}：${e.message}`;this.error=runtime.message;}
-          else {this.seats.forEach(s=>{s.status='paused';});this.error=`私有技能通知未能送达：${e.message}。继续后会重新同步。`;}
+          if(generation!==this.generation||this.paused||(this.data.current&&this.module().finished(this.data.current.state)))return;
+          runtime.status='error';runtime.message=`${player.name}：${e.message}`;this.error=runtime.message;
           this.paused=true;this.clearDeadline();this.active.clear();this.refresh();
           await this.client.pauseTurn().catch(()=>{});
-        }finally{if(decision)this.active.delete(decision.decisionId);else this.notifying.delete(playerId);}
+        }finally{this.active.delete(decision.decisionId);}
       })().finally(()=>running.delete(playerId));
       running.set(playerId,task);
     };
     try{
       if(this.module().lifecycle.eagerAgents)for(const player of this.data.current!.roster){if(this.paused||generation!==this.generation)return;await this.ensureSession(player.playerId,generation);}
       while(!this.paused&&generation===this.generation){
-        const notified=new Set(this.notificationPlayers().map(p=>p.playerId));
-        for(const playerId of notified)if(!running.has(playerId))launch(playerId);
-        for(const d of this.pending())if(!notified.has(d.actorId)&&!running.has(d.actorId)&&this.data.current!.roster.find(p=>p.playerId===d.actorId)?.kind!=='human')launch(d.actorId,d);
+        for(const d of this.pending())if(!running.has(d.actorId)&&this.data.current!.roster.find(p=>p.playerId===d.actorId)?.kind!=='human')launch(d);
         if(!running.size)break;
         await Promise.race(running.values());
       }
