@@ -1,6 +1,7 @@
 import {paintSvgIcon,type SvgIconName} from './svg-icons';
 
-export type HolographicPattern='contours'|'crowns'|'rings'|'symbols';
+export type HolographicEngraving={key:string;paint:(ctx:CanvasRenderingContext2D,width:number,height:number)=>void};
+export type HolographicPattern='contours'|'crowns'|'rings'|'symbols'|HolographicEngraving;
 export type EngravingBitmap={width:number;height:number;mark:HTMLCanvasElement;pixels:Uint8Array};
 const CROWN_OUTLINE:Array<[number,number]>=[[0,-.78],[.34,-.18],[.82,-.55],[.6,.5],[-.6,.5],[-.82,-.55],[-.34,-.18]];
 
@@ -12,7 +13,9 @@ export function createCardEngraving(pattern:HolographicPattern,width:number,heig
   const trace=(ctx:CanvasRenderingContext2D,vertices:Array<[number,number]>,cx:number,cy:number,size:number)=>{
     ctx.beginPath();vertices.forEach(([px,py],i)=>i?ctx.lineTo(cx+px*size,cy+py*size):ctx.moveTo(cx+px*size,cy+py*size));ctx.closePath();
   };
-  if(pattern==='crowns'){
+  if(typeof pattern!=='string'){
+    ctx.save();pattern.paint(ctx,width,height);ctx.restore();
+  }else if(pattern==='crowns'){
     const spacing=32,scale=11.5;ctx.lineWidth=.6;
     for(let row=-1;row<=Math.ceil(height/spacing);row++)for(let col=-1;col<=Math.ceil(width/spacing);col++){
       const x=(col+.5+(row&1)*.5)*spacing,y=(row+.5)*spacing;

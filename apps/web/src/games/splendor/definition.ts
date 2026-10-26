@@ -6,7 +6,7 @@ import {SPLENDOR_RULES} from './rules';
 import {GEMS, type SplendorState} from './types';
 
 const descriptors=[
-  {name:'game_get_state',description:'读取自己可见的完整市场、银行、贵族、所有公开玩家资源、自己的预留及从开局开始的全部公开 events。对手未公开预留和暗库顺序隐藏。',inputSchema:emptySchema,annotations:readOnly},
+  {name:'game_get_state',description:'读取完整市场、银行、贵族、公开玩家资源、所有市场预留、自己的暗抽预留及从开局开始的全部公开 events。对手尚未公开的暗抽牌与暗库顺序隐藏。',inputSchema:emptySchema,annotations:readOnly},
   {name:'game_legal_actions',description:'分页读取当前阶段全部合法行动，包括拿取、购买、明暗预留、超额归还与贵族选择。购买的 action.payment 是优先使用彩色宝石的默认支付，可通过 game_act.payment 改用黄金。',inputSchema:{type:'object' as const,properties:{offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:100}},additionalProperties:false},annotations:readOnly},
   {name:'game_act',description:'用最新 revision 和合法 actionId 完成当前阶段的一次决策，然后结束任务。超额归还/多位贵族会产生新的决策。只有 buy 行动可提供 payment 覆盖默认支付：各色及黄金的实际支付数量，省略颜色为 0，须恰好覆盖折扣后费用。',inputSchema:{type:'object' as const,properties:{revision:{type:'integer',minimum:1},actionId:{type:'string',minLength:1,maxLength:300},payment:{type:'object',properties:Object.fromEntries(GEMS.map(c=>[c,{type:'integer',minimum:0,maximum:10}])),additionalProperties:false}},required:['revision','actionId'],additionalProperties:false},requiresDecision:true},
   {name:'game_rules',description:'读取璀璨宝石基础版完整中文规则、资源、隐私与跨局计分说明。',inputSchema:emptySchema,annotations:readOnly},

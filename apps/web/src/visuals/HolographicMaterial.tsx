@@ -82,7 +82,7 @@ class HolographicRenderer{
     if(moving)this.raf=requestAnimationFrame(this.tick);
   };
   private engraving(entry:Entry,width:number,height:number,dpr:number){
-    const key=`${entry.pattern}:${entry.patternSymbol}:${entry.glowColor}:${width}:${height}:${dpr}`;
+    const key=`${typeof entry.pattern==='string'?entry.pattern:entry.pattern.key}:${entry.patternSymbol}:${entry.glowColor}:${width}:${height}:${dpr}`;
     let result=this.engravings.get(key);
     if(!result){
       const bitmap=createCardEngraving(entry.pattern,width/dpr,height/dpr,dpr,entry.patternSymbol);
@@ -143,7 +143,7 @@ class HolographicRenderer{
       gl.uniform2f(this.uniforms.uResolution,width,height);gl.uniform2f(this.uniforms.uCssSize,width/dpr,height/dpr);
       gl.uniform2f(this.uniforms.uPointer,current.x,current.y);
       gl.uniform3fv(this.uniforms.uHaloColor,entry.halo);gl.uniform1f(this.uniforms.uRainbow,entry.rainbow?1:0);
-      gl.uniform1i(this.uniforms.uPattern,{contours:0,crowns:1,rings:2,symbols:3}[entry.pattern]);
+      gl.uniform1i(this.uniforms.uPattern,typeof entry.pattern==='string'?{contours:0,crowns:1,rings:2,symbols:3}[entry.pattern]:4);
       gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,engraving.texture);gl.uniform1i(this.uniforms.uEngraving,0);
       gl.drawArrays(gl.TRIANGLES,0,3);ctx.drawImage(this.source,0,0);
     }else{
@@ -158,6 +158,7 @@ class HolographicRenderer{
       film.save();film.scale(dpr,dpr);film.strokeStyle=entry.glowColor;film.lineWidth=.55;film.globalAlpha=.65;
       if(entry.rainbow){
         const spectrum=film.createLinearGradient(0,0,width/dpr,height/dpr);spectrum.addColorStop(0,'#e6c4ed');spectrum.addColorStop(.5,'#b1e4eb');spectrum.addColorStop(1,'#ede0bc');film.strokeStyle=spectrum;
+        film.globalCompositeOperation='source-in';film.fillStyle=spectrum;film.fillRect(0,0,width/dpr,height/dpr);film.globalCompositeOperation='source-over';
       }
       if(entry.pattern==='rings')for(let radius=2;radius<(width+height)/dpr;radius+=2){film.beginPath();film.arc(width/dpr*.5,height/dpr*.5,radius,0,Math.PI*2);film.stroke();}
       if(entry.pattern==='contours')for(let radius=7;radius<(width+height)/dpr;radius+=7){

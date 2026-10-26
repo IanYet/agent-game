@@ -84,8 +84,6 @@
 @media(max-width:460px){.sp-inventory-modal.board-inventory-modal .sp-inventory-sheet{padding:13px}}
 /* Game information stays here; HolographicCard owns the material and frame. */
 .sp-card>.holographic-card-face{padding:calc(var(--sp-card-width,112px) * .10714)}
-.sp-card-back::after{content:'';position:absolute;inset:7px;z-index:2;border:1px solid #737d8c66;border-radius:calc(var(--sp-card-radius) * .875);opacity:0;transition:opacity .18s;pointer-events:none}
-.sp-card-back:hover::after{opacity:1}
 .sp-card.sp-noble:hover>.holographic-card-face{box-shadow:0 0 9px #9d7b453d,0 5px 14px #0005}
 .sp-noble.eligible:hover>.holographic-card-face{outline:1px solid #9d7b4566;outline-offset:2px}
 .sp-card>.holographic-card-face>.sp-card-marker{position:absolute;top:calc(var(--sp-card-width,112px) * .42857);right:calc(var(--sp-card-width,112px) * .08929);z-index:1;display:block;padding:2px 4px;border:1px solid #c8ab7055;border-radius:4px;background:#17191fe6;color:#dfc693;font-size:calc(var(--sp-card-width,112px) * .07143);line-height:1.2;white-space:nowrap}
@@ -140,10 +138,10 @@
 .sp-bank-empty{font-size:10px;color:#697687}
 .sp-deck-reserve-marker{font-size:8px;line-height:1.5;color:#dfc693}
 .sp-inventory-grid{display:grid;grid-template-columns:repeat(var(--sp-inventory-columns,1),var(--sp-card-width,112px));grid-auto-rows:max-content;gap:10px;justify-content:start}
-.sp-card-back{--sp-card-radius:calc(var(--sp-card-width,112px) * .10714);position:relative;display:flex;flex-direction:column;align-items:center;justify-content:space-between;box-sizing:border-box;width:var(--sp-card-width,112px);aspect-ratio:64/91;padding:calc(var(--sp-card-width,112px) * .10714);border:2px solid #454c57;border-radius:var(--sp-card-radius);background:#111318;color:#a2afbf;text-align:center}
-.sp-card-back>b{font-size:calc(var(--sp-card-width,112px) * .08929);font-weight:500;letter-spacing:1px}
-.sp-card-back>svg{width:calc(var(--sp-card-width,112px) * .25);height:calc(var(--sp-card-width,112px) * .25);color:#b4beca88}
-.sp-card-back>small{font-size:calc(var(--sp-card-width,112px) * .08036);color:#8290a3}
+.sp-card-back>.holographic-card-face{align-items:center;justify-content:space-between;text-align:center}
+.sp-card-back>.holographic-card-face>b{font-size:calc(var(--sp-card-width,112px) * .08929);font-weight:500;letter-spacing:1px;color:#a2afbf}
+.sp-card-back>.holographic-card-face>.sp-reserved-coin{position:absolute;left:50%;top:50%;width:44%;height:auto;aspect-ratio:1;transform:translate(-50%,-50%)}
+.sp-card-back>.holographic-card-face>small{font-size:calc(var(--sp-card-width,112px) * .08036);color:#8290a3}
 @container(min-width:1440px){
   .sp-market-board{--sp-card-width:min(112px,calc((100cqw - 272px)/12));--sp-row-width:calc(4 * var(--sp-card-width) + 80px);grid-template-columns:calc(var(--sp-row-width) * 3 + 32px)}
   .sp-market-rows{grid-template-columns:repeat(3,var(--sp-row-width));align-items:start;gap:16px;width:calc(var(--sp-row-width) * 3 + 32px)}

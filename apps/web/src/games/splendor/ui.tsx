@@ -1,5 +1,4 @@
 import {useEffect,useLayoutEffect,useMemo,useRef,useState,type CSSProperties,type ReactNode} from 'react';
-import {Diamond} from 'lucide-react';
 import type {ControlledView,GameUiProps,StoredRun} from '../../runtime/types';
 import {playerCardState} from '../../visuals/PlayerCard';
 import {AgentPlayerCard} from '../AgentPlayerCard';
@@ -10,10 +9,12 @@ import {BoardGamePlayers} from '../BoardGamePlayers';
 import {Modal} from '../../Modal';
 import {useEffectsPreference} from '../../visuals/preferences';
 import {CARD_BY_ID,NOBLE_BY_ID} from './data';
-import {cardName,emptyTokens,tokenCount} from './engine';
+import {cardName,emptyTokens,splendorEvents,tokenCount} from './engine';
 import {GemIcon} from './gem';
 import {HolographicCard} from '../../visuals/HolographicCard';
+import {GoldCoin} from '../../visuals/GoldCoin';
 import {GEM_PALETTE} from './artwork';
+import {RESERVED_BACK_PATTERN} from './reserve-artwork';
 import {COLORS,GEMS,GEM_NAMES,type Action,type Card,type Color,type Cost,type Noble,type SplendorState,type SplendorView,type Tokens} from './types';
 import './style.css';
 
@@ -71,7 +72,10 @@ function DevelopmentOverview({card}:{card:Card}){
   </div>;
 }
 function ReservedCardBack({level}:{level:Card['level']}){
-  return <span className="sp-card-back" data-lens-card-frame role="img" aria-label={`${LEVEL_NAMES[level]}，未公开预留`}><b>{LEVEL_NAMES[level]}</b><Diamond aria-hidden="true" strokeWidth={1}/><small>未公开预留</small></span>;
+  const description=`${LEVEL_NAMES[level]}，暗抽预留，牌面仅持有者可见`;
+  return <HolographicCard className="sp-card sp-card-back" pattern={RESERVED_BACK_PATTERN} rainbow glowColor="#c3cbd6" width="var(--sp-card-width,112px)" role="img" aria-label={description} title={description}>
+    <b aria-hidden="true">{LEVEL_NAMES[level]}</b><GoldCoin className="sp-reserved-coin" engraved outline/><small aria-hidden="true">暗抽预留</small>
+  </HolographicCard>;
 }
 function PlayerContents({player,viewer,onInventory}:{player:View['players'][number];viewer:boolean;onInventory:(trigger:HTMLButtonElement)=>void}){
   const held=GEMS.filter(color=>player.tokens[color]>0);
@@ -91,7 +95,7 @@ function PlayerContents({player,viewer,onInventory}:{player:View['players'][numb
 }
 function ReservedCards({player,viewer,selectedCard,onChoose}:{player:View['players'][number];viewer:number|null;selectedCard:string;onChoose?:(card:Card)=>void}){
   return <div className="sp-reserved-hand" role="group" aria-label={`${player.name}的预留卡牌，${player.reserved.length} / 3`}>
-    {player.reserved.map((reserved,index)=>reserved.card?<Development key={reserved.card.id} card={reserved.card} marker={reserved.source==='deck'?'暗抽预留':'预留'} selected={player.seat===viewer&&selectedCard===reserved.card.id} onClick={player.seat===viewer&&onChoose?()=>onChoose(reserved.card!):undefined}/>:<ReservedCardBack key={`hidden-${index}`} level={reserved.level}/>)}
+    {player.reserved.map((reserved,index)=>reserved.card?<Development key={reserved.card.id} card={reserved.card} marker={reserved.source==='deck'?'暗抽预留':'市场预留'} selected={player.seat===viewer&&selectedCard===reserved.card.id} onClick={player.seat===viewer&&onChoose?()=>onChoose(reserved.card!):undefined}/>:<ReservedCardBack key={`hidden-${index}`} level={reserved.level}/>)}
   </div>;
 }
 function InventoryCardGrid({children,count,square=false,caption=false}:{children:ReactNode;count:number;square?:boolean;caption?:boolean}){
@@ -131,7 +135,7 @@ function Inventory({player,game,onClose,onChoose}:{player:View['players'][number
     <div className="sp-inventory-tabs" role="group" aria-label="背包分类">{(['bought','reserved','nobles'] as const).map((value,i)=><button key={value} aria-pressed={tab===value} onClick={()=>{setTab(value);setFilter('all');setSelectedId('');}}>{['已购发展牌','预留卡牌','贵族'][i]} <b>{[player.bought.length,player.reserved.length,player.nobles.length][i]}</b></button>)}</div>
     {tab==='nobles'?<InventoryCardGrid count={player.nobles.length} square>{player.nobles.map(n=><NobleTile key={n.id} noble={n}/>)}{!player.nobles.length&&<p>尚无贵族来访。</p>}</InventoryCardGrid>:<>
       <div className="sp-inventory-filters" role="group" aria-label="按折扣颜色筛选"><button aria-pressed={filter==='all'} onClick={()=>setFilter('all')}>全部颜色</button>{COLORS.map(c=><button key={c} aria-pressed={filter===c} onClick={()=>setFilter(c)}><GemIcon color={c}/>{GEM_NAMES[c]}</button>)}</div>
-      <InventoryCardGrid count={cards.length+hidden.length} caption={tab==='reserved'&&!!onChoose}>{cards.map(card=><div key={card.id}><Development card={card} selected={selectedId===card.id} marker={tab==='reserved'?'预留':undefined} onClick={()=>setSelectedId(card.id)}/>{tab==='reserved'&&onChoose&&<small>{game.legalActions.some(a=>a.action.type==='buy'&&a.action.cardId===card.id)?'可购买':'暂时买不起'}</small>}</div>)}{hidden.map((r,i)=><div className="sp-inventory-hidden" key={'hidden-'+i}><ReservedCardBack level={r.level}/></div>)}</InventoryCardGrid>
+      <InventoryCardGrid count={cards.length+hidden.length} caption={tab==='reserved'&&!!onChoose}>{cards.map(card=><div key={card.id}><Development card={card} selected={selectedId===card.id} marker={tab==='reserved'?(player.reserved.find(r=>r.card?.id===card.id)?.source==='deck'?'暗抽预留':'市场预留'):undefined} onClick={()=>setSelectedId(card.id)}/>{tab==='reserved'&&onChoose&&<small>{game.legalActions.some(a=>a.action.type==='buy'&&a.action.cardId===card.id)?'可购买':'暂时买不起'}</small>}</div>)}{hidden.map((r,i)=><div className="sp-inventory-hidden" key={'hidden-'+i}><ReservedCardBack level={r.level}/></div>)}</InventoryCardGrid>
       {!cards.length&&!hidden.length&&<p className="sp-inventory-empty">没有卡牌</p>}
     </>}
     </FoilPanel>
@@ -212,7 +216,8 @@ export function SplendorTable({state,controller,onError,tableActions}:GameUiProp
 export function SplendorConfigFields(){return <div className="sp-config"><strong>基础版 · 2024 周年版规则</strong><p>2–4 人；在玩家名单中新增或移除参与者。每局完整使用 90 张发展牌。</p><table><thead><tr><th>人数</th><th>每色宝石</th><th>黄金</th><th>贵族</th></tr></thead><tbody>{[[2,4,3],[3,5,4],[4,7,5]].map(([count,gems,nobles])=><tr key={count}><td>{count}</td><td>{gems}</td><td>5</td><td>{nobles}</td></tr>)}</tbody></table><p>15 分触发等轮结束。同桌下一局轮换先手，继承胜局和累计声望。</p></div>;}
 
 export function SplendorReplay({run}:{run:StoredRun<SplendorState>}){
-  const events=run.state.events,[step,setStep]=useState(events.length);
+  const spectator=run.roster.every(player=>player.kind!=='human');
+  const events=useMemo(()=>splendorEvents(run.state,spectator),[run.state,spectator]),[step,setStep]=useState(events.length);
   const tally=useMemo(()=>{
     const players=run.roster.map(()=>({points:0,cards:0,tokens:emptyTokens(),bonuses:{white:0,blue:0,green:0,red:0,black:0}}));
     for(const event of events.slice(0,step)){
@@ -223,7 +228,7 @@ export function SplendorReplay({run}:{run:StoredRun<SplendorState>}){
     }return players;
   },[events,run.roster,step]);
   const event=events[step-1];
-  return <div className="sp-replay"><p>仅使用公开记录回放。暗库顺序与未公开预留不会出现在记录中。</p><label>回放进度 {step} / {events.length}<input aria-label="回放进度" type="range" min={1} max={events.length} value={step} onChange={e=>setStep(Number(e.target.value))}/></label><div className="sp-replay-controls"><button className="button outline" disabled={step<=1} onClick={()=>setStep(s=>s-1)}>上一步</button><button className="button outline" disabled={step>=events.length} onClick={()=>setStep(s=>s+1)}>下一步</button><button className="button outline" onClick={()=>setStep(events.length)}>结算</button></div>
+  return <div className="sp-replay"><p>{spectator?'纯 Agent 对局回放包含暗抽牌面，记录保留“暗抽”标注。':'按公开记录回放；暗抽当时的牌面保密，购买或公开时再展示。'}</p><label>回放进度 {step} / {events.length}<input aria-label="回放进度" type="range" min={1} max={events.length} value={step} onChange={e=>setStep(Number(e.target.value))}/></label><div className="sp-replay-controls"><button className="button outline" disabled={step<=1} onClick={()=>setStep(s=>s-1)}>上一步</button><button className="button outline" disabled={step>=events.length} onClick={()=>setStep(s=>s+1)}>下一步</button><button className="button outline" onClick={()=>setStep(events.length)}>结算</button></div>
     <div className="sp-replay-scores">{run.roster.map((p,i)=><div key={p.playerId}><b>{p.name}</b><strong>{tally[i].points} 分 / {tally[i].cards} 张</strong><TokenRow tokens={tally[i].tokens} label={`${p.name}此时 token`}/></div>)}</div>
     {event&&<FoilPanel className="sp-replay-focus"><small>#{event.seq} {event.seat===undefined?'':run.roster[event.seat].name}</small><h3>{event.text}</h3><div>{event.cards?.map(id=><Development key={id} card={CARD_BY_ID[id]}/>)}</div>{event.nobleId&&<NobleTile noble={NOBLE_BY_ID[event.nobleId]}/>}</FoilPanel>}
     <div className="replay-events">{events.slice(0,step).map(e=><div key={e.seq}><span>{e.seq.toString().padStart(2,'0')}</span><p>{e.seat!==undefined&&<b>{run.roster[e.seat].name} </b>}{e.text}</p></div>)}</div>

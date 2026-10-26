@@ -125,7 +125,7 @@ void main(){
   color+=pearl*light*.24;
   color+=(pearl*.5+vec3(.5))*glint*spotlight*.12;
   vec3 outerFoil=vec3(.12,.14,.18)+outerPearl*.65+diffracted*.12;
-  float etching=(uPattern==1||uPattern==3)?engraving.r*.85:contours*.6;
+  float etching=(uPattern==0||uPattern==2)?contours*.6:engraving.r*.85;
   color+=etching*outerFoil*reveal;
   outColor=vec4(color,1.);
 }`;
