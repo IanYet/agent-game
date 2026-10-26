@@ -72,8 +72,8 @@ describe('牌局、权限与计分', () => {
     for(const player of run.roster){
       const privateView=doudizhuModule.observe(run,player.playerId);
       expect(privateView.players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
-      const prompt=doudizhuModule.initializePrompt(run,player.playerId);
-      expect(JSON.parse(prompt.split('初始观察：')[1]).players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
+      const prompt=doudizhuModule.decisionPrompt(run,{decisionId:'view',actorId:player.playerId});
+      expect(JSON.parse(prompt.split('当前观察：')[1]).players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
       const result=doudizhuModule.handleTool(run,{id:'read',scopeId:'run',playerId:player.playerId,tool:'game_get_state',args:{}}).result.structuredContent as any;
       expect(result.players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
     }
@@ -103,10 +103,13 @@ describe('牌局、权限与计分', () => {
       const view=doudizhuModule.handleTool(run,{id:'history',scopeId:run.runId,playerId:player.playerId,tool:'game_get_state',args:{}}).result.structuredContent as any;
       expect(view.events).toEqual(expected);
       expect(view.players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
-      expect(JSON.parse(doudizhuModule.initializePrompt(run,player.playerId).split('初始观察：')[1]).events).toEqual(expected);
+      expect(JSON.parse(doudizhuModule.decisionPrompt(run,{decisionId:'view',actorId:player.playerId}).split('当前观察：')[1]).events).toEqual(expected);
     }
     const decision=doudizhuModule.decisions(run)[0];
     expect(JSON.parse(doudizhuModule.decisionPrompt(run,decision).split('当前观察：')[1]).events).toEqual(expected);
+    const recent=JSON.parse(doudizhuModule.decisionPrompt(run,decision,35).split('当前观察：')[1]);
+    expect(recent.events).toEqual(expected.filter(e=>e.seq>35));expect(recent.eventsAfter).toBe(35);expect(recent.eventsThrough).toBe(expected.at(-1)!.seq);
+    expect(recent.players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([decision.actorId]);
     const publicCards=new Set([...run.state.bottom,...expected.filter(e=>e.type==='play').flatMap(e=>e.cards??[])].map(c=>c.id));
     expect(expected.flatMap(e=>e.cards??[]).every(c=>publicCards.has(c.id))).toBe(true);
     while(run.state.phase!=='finished')step();

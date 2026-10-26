@@ -99,7 +99,7 @@ describe('预留、暗库和信息可见范围',()=>{
     expect(other.events.find(e=>e.type==='reserveDeck')?.cards).toBeUndefined();
     expect(table.events.find(e=>e.type==='reserveDeck')).toMatchObject({cards:[secret],text:expect.stringContaining(`暗抽 ${cardName(CARD_BY_ID[secret])}`)});
     expect(self.players[0].reserved[0].card?.id).toBe(secret);expect(other.players[0].reserved[0].card).toBeNull();expect(pub.players[0].reserved[0].card).toBeNull();expect(table.players[0].reserved[0].card?.id).toBe(secret);expect(JSON.stringify(other)).not.toContain(secret);expect('decks' in pub).toBe(false);expect(other.legalActions.every(a=>a.action.type!=='buy'||a.action.cardId!==secret)).toBe(true);
-    const run=runFor(next);expect(splendorModule.initializePrompt(run,'p1')).not.toContain(secret);expect(splendorModule.initializePrompt(run,'p0')).toContain(secret);expect(JSON.stringify(splendorModule.observe(run,null))).not.toContain(secret);expect(JSON.stringify(splendorModule.tableView(run,null,{revealHands:true}))).toContain(secret);
+    const run=runFor(next);expect(splendorModule.decisionPrompt(run,{decisionId:'view',actorId:'p1'})).not.toContain(secret);expect(splendorModule.decisionPrompt(run,{decisionId:'view',actorId:'p0'})).toContain(secret);expect(JSON.stringify(splendorModule.observe(run,null))).not.toContain(secret);expect(JSON.stringify(splendorModule.tableView(run,null,{revealHands:true}))).toContain(secret);
   });
   it('市场与暗抽预留混合时，真人和 Agent 只见公开牌；观战显示暗抽牌面及完整记录',()=>{
     let s=game();const publicCard=s.market[1][0]!,secret=s.decks[3][0];
@@ -113,11 +113,14 @@ describe('预留、暗库和信息可见范围',()=>{
     expect(spectator.players[0].reserved.map(r=>[r.source,r.card?.id])).toEqual([['market',publicCard],['deck',secret]]);
     expect(spectator.events.find(e=>e.type==='reserveDeck')?.text).toContain(secret);expect(spectator.events.find(e=>e.type==='reserveDeck')?.text).toContain('暗抽');
     expect(splendorModule.decisionPrompt(run,splendorModule.decisions(run)[0])).not.toContain(secret);
+    const after=s.events.find(e=>e.type==='reserve')!.seq;
+    const delta=JSON.parse(splendorModule.decisionPrompt(run,splendorModule.decisions(run)[0],after).split('当前观察：')[1]);
+    expect(delta.events.every((e:any)=>e.seq>after)).toBe(true);expect(delta.events.some((e:any)=>e.type==='reserveDeck')).toBe(true);expect(JSON.stringify(delta)).not.toContain(secret);
     const observation=splendorModule.handleTool(run,{id:'read',scopeId:run.runId,playerId:'p1',tool:'game_get_state',args:{}});
     expect(JSON.stringify(observation)).not.toContain(secret);expect(JSON.stringify(splendorModule.observe(run,'p1'))).not.toContain(secret);
     const agents=structuredClone(run);agents.roster.forEach(player=>{player.kind='codex';});agents.state.players.forEach(player=>{player.kind='agent';});
     expect((splendorModule.tableView(agents,null,{revealHands:true}) as SplendorView).events.find(e=>e.type==='reserveDeck')?.cards).toEqual([secret]);
-    expect(JSON.stringify(splendorModule.observe(agents,'p1'))).not.toContain(secret);expect(splendorModule.initializePrompt(agents,'p1')).not.toContain(secret);
+    expect(JSON.stringify(splendorModule.observe(agents,'p1'))).not.toContain(secret);expect(splendorModule.decisionPrompt(agents,{decisionId:'view',actorId:'p1'})).not.toContain(secret);
   });
   it('暗抽购买后，公开记录只在购买时显示牌名，观战仍保留暗抽来源',()=>{
     const s=game();giveTokens(s,0,{red:2,black:1});takeOut(s,'1-white-01');s.decks[1].unshift('1-white-01');

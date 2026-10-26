@@ -1,6 +1,6 @@
 import {toolResult,type ToolDefinition} from '@agent-game/protocol';
 import type {GameModule,StoredRun} from '../../runtime/types';
-import {decorateView,decisionKey,emptySchema,enginePlayers,readOnly,seatFor,checkRevision} from '../shared';
+import {historyCursor,historyInstructions,incrementalObservation,decorateView,decisionKey,emptySchema,enginePlayers,readOnly,seatFor,checkRevision} from '../shared';
 import {AZUL_RULES,applyAzul,createAzul,legalActions,restoreAzul,viewAzul,type AzulState} from './engine';
 
 const descriptors:ToolDefinition[]=[
@@ -21,8 +21,9 @@ export const azulModule:GameModule<AzulState>={
   next:(previous,run,random)=>{azulModule.validateConfig!(run.config);return createAzul(run.runId,enginePlayers(run.roster),random,run.index,previous.state);},
   finished:s=>s.phase==='finished',observe,tableView:(run,actor)=>observe(run,actor),
   decisions:run=>run.state.phase==='finished'?[]:[decision(run)],tools:()=>descriptors,
-  initializePrompt:(run,actor)=>`你是花砖物语玩家 ${run.roster[seatFor(run,actor)].name}。\n${AZUL_RULES}\n工具列表在本局固定。每次唤醒可先读取 game_legal_actions，然后用当前 revision 和 actionId 调用 game_act 一次。所有板面公开，但袋内顺序不可见。events 是从开局开始的完整公开记录。初始观察：${JSON.stringify(observe(run,actor))}`,
-  decisionPrompt:(run,d)=>`花砖物语第 ${run.index} 局，第 ${run.state.round} 轮，决策 ${d.decisionId}。完成一次合法选砖后结束本次任务。优先完成图案行、连接墙砖并避免地板溢出；也可考虑对手需求与先手。当前公开观察：${JSON.stringify(observe(run,d.actorId))}`,
+  historyCursor,
+  initializePrompt:(run,actor)=>`你是花砖物语玩家 ${run.roster[seatFor(run,actor)].name}。\n${AZUL_RULES}\n工具列表在本局固定。每次唤醒可先读取 game_legal_actions，然后用当前 revision 和 actionId 调用 game_act 一次。所有板面公开，但袋内顺序不可见。${historyInstructions}`,
+  decisionPrompt:(run,d,afterEvent=0)=>`花砖物语第 ${run.index} 局，第 ${run.state.round} 轮，决策 ${d.decisionId}。完成一次合法选砖后结束本次任务。优先完成图案行、连接墙砖并避免地板溢出；也可考虑对手需求与先手。当前公开观察：${JSON.stringify(incrementalObservation(observe(run,d.actorId),afterEvent))}`,
   handleTool:(run,request)=>{
     try{
       const seat=seatFor(run,request.playerId);

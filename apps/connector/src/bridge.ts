@@ -14,13 +14,13 @@ import { rateLimitNotice, type RateLimitNotice } from './harness/rate-limit';
 
 interface Capability { request: SessionRequest; registry: ToolRegistry; conversation: ConversationRecorder; sessionId?: string; discarded?: boolean }
 interface PlayerSession { session: AgentSession | null; capability: Capability; token: string; cwd: string }
-interface ActiveDecision { decisionId: string; controller: AbortController; done: Promise<void>; kind: SessionRequest['kind'] }
+interface ActiveTurn { decisionId?: string; controller: AbortController; done: Promise<void>; kind: SessionRequest['kind'] }
 export class LocalBridge extends EventEmitter {
   private owner: { token: string; origin: string; attached: boolean } | null = null;
   private sessions = new Map<string, PlayerSession>();
   private capabilities = new Map<string, Capability>();
   private pending = new Map<string, { capability: Capability; resolve: (response: ToolResponse) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
-  private active = new Map<string, ActiveDecision>();
+  private active = new Map<string, ActiveTurn>();
   private generation = 0;
   private creating = new Set<string>();
   private attachTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -50,9 +50,9 @@ export class LocalBridge extends EventEmitter {
     try {
       const definition = capability.registry.definition(tool); capability.registry.validateInput(tool, args);
       const decision = capability.sessionId ? this.active.get(capability.sessionId) : undefined;
-      if (definition.requiresDecision && (!decision || decision.controller.signal.aborted)) throw new Error('当前没有此玩家的有效决策授权');
+      if (definition.requiresDecision && (!decision?.decisionId || decision.controller.signal.aborted)) throw new Error('当前没有此玩家的有效决策授权');
       const id = randomUUID();
-      const request: BrowserToolRequest = { id, scopeId, playerId: capability.request.playerId, ...(decision ? { decisionId: decision.decisionId } : {}), tool, args };
+      const request: BrowserToolRequest = { id, scopeId, playerId: capability.request.playerId, ...(decision?.decisionId ? { decisionId: decision.decisionId } : {}), tool, args };
       const result = await new Promise<ToolResponse>((resolve, reject) => {
         const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('游戏网页没有响应，请保持网页打开')); }, 20_000);
         this.pending.set(id, { capability, resolve, reject, timer }); this.emitEvent({ type: 'tool', request });
@@ -68,7 +68,7 @@ export class LocalBridge extends EventEmitter {
   async createSession(request: SessionRequest): Promise<{ sessionId: string }> {
     return this.startSession(request, randomUUID());
   }
-  private async startSession(request: SessionRequest, sessionId: string, signal?: AbortSignal): Promise<{ sessionId: string }> {
+  private async startSession(request: SessionRequest, sessionId: string): Promise<{ sessionId: string }> {
     await this.cooldowns.ready();
     const cooling = this.cooldowns.error(request.kind); if (cooling) throw cooling;
     if (!this.owner?.attached) throw new Error('请先连接游戏网页');
@@ -97,10 +97,10 @@ export class LocalBridge extends EventEmitter {
         onUsage: tokens => { if(this.capabilities.get(token)===capability)this.emitEvent({ type: 'usage', playerId: request.playerId, tokens }); },
         onRateLimit: notice => { if (this.capabilities.get(token) === capability) this.rateLimited(capability, notice); },
       });
-      if (signal?.aborted || generation !== this.generation || this.owner !== owner || !this.owner.attached) { await session.close(); throw signal?.aborted ? abortError() : new Error('连接已结束'); }
+      if (generation !== this.generation || this.owner !== owner || !this.owner.attached) { await session.close(); throw new Error('连接已结束'); }
       const cooling = this.cooldowns.error(request.kind); if (cooling) { await session.close(); throw cooling; }
-      // The browser keeps this logical handle when an unresponsive native
-      // session is replaced. Each replacement gets fresh MCP credentials.
+      // A replaced native session must receive a new browser handle so its
+      // first message supplies the full current context again.
       capability.sessionId = sessionId; this.sessions.set(sessionId, { session, capability, token, cwd }); return { sessionId };
     } catch (error) {
       const failure = this.cooldowns.error(request.kind) ?? error as Error;
@@ -109,23 +109,29 @@ export class LocalBridge extends EventEmitter {
     finally { this.creating.delete(key); }
   }
   async playTurn(sessionId: string, prompt: string, decisionId: string, settings?: AgentSettings): Promise<{ completed: boolean }> {
+    return this.deliver(sessionId,prompt,settings,decisionId);
+  }
+  async notify(sessionId: string, prompt: string, settings?: AgentSettings): Promise<{ completed: boolean }> {
+    return this.deliver(sessionId,`这是一条仅供知悉的游戏通知，无需回复，不调用工具，不采取行动，直接结束本次任务。它不授予任何决策权限。\n\n${prompt}`,settings);
+  }
+  private async deliver(sessionId: string, prompt: string, settings?: AgentSettings, decisionId?: string): Promise<{ completed: boolean }> {
     await this.cooldowns.ready();
     const player = this.sessions.get(sessionId); if (!player) throw new Error('找不到玩家会话，请重新连接');
     const cooling = this.cooldowns.error(player.capability.request.kind); if (cooling) throw cooling;
-    if (this.active.has(sessionId)) throw new Error('此玩家已有正在处理的决策');
+    if (this.active.has(sessionId)) throw new Error('此玩家已有正在处理的消息');
     const resolved = resolveSettings(modelsForHarness(this.info, player.capability.request.kind), settings ?? player.capability.request);
     const controller = new AbortController();
-    const active: ActiveDecision = { decisionId, controller, done: Promise.resolve(), kind: player.capability.request.kind }; this.active.set(sessionId, active);
+    const active: ActiveTurn = { decisionId, controller, done: Promise.resolve(), kind: player.capability.request.kind }; this.active.set(sessionId, active);
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 180_000);
     const stopTimer = () => clearTimeout(timer); controller.signal.addEventListener('abort', stopTimer, { once: true });
-    active.done = this.runDecision(sessionId, player, prompt, controller.signal, resolved);
-    try { await active.done; player.capability.conversation.record('event', '本次决策结束', 'Agent 已结束本次任务。'); return { completed: true }; }
+    active.done = this.runTurn(sessionId, player, prompt, controller.signal, resolved);
+    try { await active.done; player.capability.conversation.record('event', decisionId?'本次决策结束':'通知已送达', decisionId?'Agent 已结束本次任务。':'私有通知已送达，未授予行动权限，也不要求回复。'); return { completed: true }; }
     catch (error) {
       const notice = rateLimitNotice({ message: (error as Error)?.message });
       if (notice && !(controller.signal.reason instanceof UpstreamCooldownError)) this.rateLimited(player.capability, notice);
       const limited = controller.signal.reason instanceof UpstreamCooldownError;
-      const failure = limited ? this.cooldowns.error(player.capability.request.kind) ?? controller.signal.reason : timedOut ? new Error('本次决策超过 180 秒，已取消上游任务。点击继续可重试。') : error as Error;
+      const failure = limited ? this.cooldowns.error(player.capability.request.kind) ?? controller.signal.reason : timedOut ? new Error(`${decisionId?'本次决策':'通知发送'}超过 180 秒，已取消上游任务。点击继续可重试。`) : error as Error;
       const paused = controller.signal.aborted && !timedOut && !limited;
       if (limited) await this.cooldowns.flush();
       player.capability.conversation.record(paused ? 'event' : 'error', paused ? '推理已暂停' : '推理失败', failure.message); throw failure;
@@ -137,15 +143,11 @@ export class LocalBridge extends EventEmitter {
     capability.conversation.record('error', '上游限流，共享冷却', failure.message + (notice.retryAt === undefined ? ' 上游程序未提供恢复时间，本次按 10 分钟保守冷却。' : ''));
     for (const task of this.active.values()) if (cooldownChannel(task.kind) === cooldownChannel(capability.request.kind)) task.controller.abort(failure);
   }
-  private async runDecision(sessionId: string, player: PlayerSession, prompt: string, signal: AbortSignal, settings: AgentSettings): Promise<void> {
+  private async runTurn(sessionId: string, player: PlayerSession, prompt: string, signal: AbortSignal, settings: AgentSettings): Promise<void> {
     let onAbort!: () => void;
     const cancelled = new Promise<{ cancelled: true }>(resolve => { onAbort = () => resolve({ cancelled: true }); signal.addEventListener('abort', onAbort, { once: true }); });
     const task = (async () => {
-      if (!player.session) {
-        player.capability.conversation.record('event', '重建玩家会话', '上次会话已关闭，正在根据当前决策建立新会话。');
-        await this.startSession({ ...player.capability.request, ...settings }, sessionId, signal);
-        player = this.sessions.get(sessionId)!;
-      }
+      if (!player.session) throw new Error('上次会话已关闭，请重新创建玩家会话并同步当前上下文。');
       if (signal.aborted) throw abortError();
       const cooling = this.cooldowns.error(player.capability.request.kind); if (cooling) throw cooling;
       await player.session!.playTurn(prompt, signal, settings);

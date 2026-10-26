@@ -1,6 +1,6 @@
 import {toolResult} from '@agent-game/protocol';
 import type {GameModule, StoredRun} from '../../runtime/types';
-import {agentObservation, checkRevision, decisionKey, decorateView, emptySchema, enginePlayers, readOnly, seatFor} from '../shared';
+import {historyCursor,historyInstructions,incrementalObservation,agentObservation, checkRevision, decisionKey, decorateView, emptySchema, enginePlayers, readOnly, seatFor} from '../shared';
 import {applyAction, assertSplendor, createSplendor, legalActions, nextSplendor, points, viewSplendor} from './engine';
 import {SPLENDOR_RULES} from './rules';
 import {GEMS, type SplendorState} from './types';
@@ -25,8 +25,9 @@ export const splendorModule:GameModule<SplendorState>={
   finished:state=>state.phase==='finished',observe,
   tableView:(run,actor,{revealHands})=>decorateView(viewSplendor(run.state,actor===null?null:seatFor(run,actor),revealHands),run.roster),
   decisions,tools:()=>descriptors,
-  initializePrompt:(run,actor)=>`你是璀璨宝石玩家 ${run.roster[seatFor(run,actor)].name}。\n${SPLENDOR_RULES}\n只使用本局固定的游戏工具，不调用终端或文件。观察包含全部公开事件和合法行动摘要；用 game_legal_actions 分页读全。先比较可负担的购买和长期折扣，目标是在等轮结束时胜出。每次唤醒成功执行一次 game_act 后结束任务；归还和贵族选择会另行唤醒。初始观察：${JSON.stringify(agentObservation(observe(run,actor)))}`,
-  decisionPrompt:(run,d)=>`璀璨宝石第 ${run.index} 局，阶段 ${run.state.phase}，决策 ${d.decisionId}。执行一次合法 game_act 并结束任务。完整公开记录及当前观察：${JSON.stringify(agentObservation(observe(run,d.actorId)))}`,
+  historyCursor,
+  initializePrompt:(run,actor)=>`你是璀璨宝石玩家 ${run.roster[seatFor(run,actor)].name}。\n${SPLENDOR_RULES}\n只使用本局固定的游戏工具，不调用终端或文件。观察包含公开事件和合法行动摘要；用 game_legal_actions 分页读全。先比较可负担的购买和长期折扣，目标是在等轮结束时胜出。每次唤醒成功执行一次 game_act 后结束任务；归还和贵族选择会另行唤醒。${historyInstructions}`,
+  decisionPrompt:(run,d,afterEvent=0)=>`璀璨宝石第 ${run.index} 局，阶段 ${run.state.phase}，决策 ${d.decisionId}。执行一次合法 game_act 并结束任务。当前观察：${JSON.stringify(incrementalObservation(agentObservation(observe(run,d.actorId)),afterEvent))}`,
   handleTool:(run,request)=>{
     const seat=seatFor(run,request.playerId);
     if(request.scopeId!==run.runId)throw Error('该工具请求不属于当前局');

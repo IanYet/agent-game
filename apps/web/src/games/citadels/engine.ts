@@ -4,6 +4,7 @@ export interface PlayerInput {playerId:string;name:string;kind:'human'|'agent'}
 export interface Player extends PlayerInput {seat:number;gold:number;hand:District[];city:BuiltDistrict[];roles:number[];revealed:number[];totalScore:number;wins:number}
 export type Phase='draft'|'income'|'keep'|'main'|'graveyard'|'finished';
 export interface Event {seq:number;round:number;time:string;text:string;seat?:number;role?:number;cards?:District[];kind?:'build'|'destroy';target?:number}
+export interface Notification {seq:number;round:number;recipient:number;kind:'assassinate'|'steal'|'robbed'|'magic_swap';text:string;hand?:District[]}
 export interface Score {seat:number;districts:number;colors:number;completion:number;special:number;total:number;gold:number;hauntedColor:Color}
 export interface Config {firstCrown:number}
 export const DEFAULT_CONFIG:Config={firstCrown:1};
@@ -13,7 +14,7 @@ export interface CitadelsState {
   available:number[];faceUp:number[];faceDown:number[];called:number;assassinated:number|null;robbed:number|null;
   collected:boolean;powerUsed:boolean;taxUsed:boolean;built:number;labUsed:boolean;smithyUsed:boolean;
   pendingCards:District[];keepCount:number;graveyard:District|null;firstCompleted:number|null;
-  bankFlow:number;events:Event[];scores:Score[]|null;winners:number[];endedAt?:string;
+  bankFlow:number;events:Event[];notifications:Notification[];scores:Score[]|null;winners:number[];endedAt?:string;
 }
 export type Action=
   |{type:'choose';role:number}|{type:'income';source:'gold'|'cards'}|{type:'keep';cards:string[]}
@@ -26,6 +27,9 @@ export function validateConfig(c:Config){if(!c||!Number.isInteger(c.firstCrown)|
 function random(s:CitadelsState){let x=s.rng;x^=x<<13;x^=x>>>17;x^=x<<5;s.rng=x>>>0;return s.rng/4294967296;}
 function shuffle<T>(s:CitadelsState,items:T[]){for(let i=items.length-1;i>0;i--){const j=Math.floor(random(s)*(i+1));[items[i],items[j]]=[items[j],items[i]];}return items;}
 function event(s:CitadelsState,text:string,seat?:number,role?:number,cards?:District[]){s.events.push({seq:s.events.length+1,round:s.round,time:new Date().toISOString(),text,...(seat!==undefined?{seat}:{}),...(role?{role}:{}),...(cards?.length?{cards:cards.map(c=>({id:c.id,key:c.key}))}:{})});}
+function notify(s:CitadelsState,recipient:Player|undefined,kind:Notification['kind'],text:string,hand?:District[]){
+  if(recipient)s.notifications.push({seq:s.events.at(-1)!.seq,round:s.round,recipient:recipient.seat,kind,text,...(hand?{hand:hand.map(c=>({...c}))}:{})});
+}
 function has(p:Player,key:string){return p.city.some(c=>c.key===key);}
 function gain(s:CitadelsState,seat:number,amount:number){s.players[seat].gold+=amount;s.bankFlow+=amount;}
 function pay(s:CitadelsState,seat:number,amount:number){requireRule(s.players[seat].gold>=amount,'金币不足');s.players[seat].gold-=amount;s.bankFlow-=amount;}
@@ -50,7 +54,7 @@ export function createCitadels(id:string,players:PlayerInput[],config=DEFAULT_CO
     players:players.map((p,seat)=>({...p,seat,gold:2,hand:[],city:[],roles:[],revealed:[],totalScore:0,wins:0})),
     deck:makeDeck(),rng:Math.floor(randomSource()*4294967296)||0x91e10da5,config:{...config},crown:config.firstCrown-1,draftCrown:config.firstCrown-1,draftIndex:0,
     available:[],faceUp:[],faceDown:[],called:0,assassinated:null,robbed:null,collected:false,powerUsed:false,taxUsed:false,built:0,labUsed:false,smithyUsed:false,
-    pendingCards:[],keepCount:0,graveyard:null,firstCompleted:null,bankFlow:players.length*2,events:[],scores:null,winners:[]};
+    pendingCards:[],keepCount:0,graveyard:null,firstCompleted:null,bankFlow:players.length*2,events:[],notifications:[],scores:null,winners:[]};
   shuffle(s,s.deck);s.players.forEach(p=>p.hand=draw(s,4));event(s,'每人领取四张建筑牌与两枚金币；使用 FFG 经典八身份、66 张基础建筑、八建筑终局。');startRound(s);assertCitadels(s);return s;
 }
 export function nextCitadels(previous:CitadelsState,id:string,players:PlayerInput[],randomSource:()=>number){
@@ -81,7 +85,7 @@ function callNext(s:CitadelsState){
     if(!p){event(s,`叫号 ${rank} · ${roleName(rank)}：无人应答。`,undefined,rank);continue;}
     s.turn=p.seat;p.revealed.push(rank);s.phase='income';s.collected=false;s.powerUsed=false;s.taxUsed=false;s.built=0;s.labUsed=false;s.smithyUsed=false;
     event(s,`叫号 ${rank} · ${roleName(rank)}，身份公开并开始回合。`,p.seat,rank);
-    if(rank===s.robbed){const thief=owner(s,2);if(thief){const amount=p.gold;p.gold=0;thief.gold+=amount;event(s,`盗贼 ${thief.name} 在收入前拿走 ${amount} 金币。`,p.seat,rank);}}
+    if(rank===s.robbed){const thief=owner(s,2);if(thief){const amount=p.gold;p.gold=0;thief.gold+=amount;event(s,`盗贼 ${thief.name} 在收入前拿走 ${amount} 金币。`,p.seat,rank);notify(s,p,'robbed',`你的${roleName(rank)}已被叫到，盗贼 ${thief.name} 拿走了 ${amount} 金币。当前剩余 ${p.gold} 金币；正常收入仍由下一条决策消息安排。`);}}
     if(rank===4){s.crown=p.seat;event(s,'国王获得王冠，下轮率先选角。',p.seat,4);}return;
   }
   endRound(s);
@@ -125,12 +129,14 @@ export function applyCitadels(s:CitadelsState,seat:number,action:Action):Citadel
         requireRule(Number.isInteger(a.role)&&a.role>=(a.type==='assassinate'?2:3)&&a.role<=8,'不能选择该目标身份');
         requireRule(a.type==='assassinate'||a.role!==n.assassinated,'不能偷窃被刺杀的身份');n.powerUsed=true;
         if(a.type==='assassinate')n.assassinated=a.role;else n.robbed=a.role;
-        event(n,`${a.type==='assassinate'?'刺杀':'偷窃'}目标：${roleName(a.role)}。`,seat,a.role);break;
+        event(n,`${a.type==='assassinate'?'刺杀':'偷窃'}目标：${roleName(a.role)}。`,seat,a.role);
+        notify(n,owner(n,a.role),a.type,a.type==='assassinate'?`你持有的${roleName(a.role)}被刺杀，本轮该身份的整个回合将跳过；不要应答叫号或公开身份。`:`你持有的${roleName(a.role)}被盗贼选为目标；该身份被叫到时，先将全部金币交给盗贼，再正常收入。此刻尚未转移金币，不要公开身份。`);break;
       }
       case 'tax':requireRule([4,5,6,8].includes(n.called)&&!n.taxUsed,'当前不能再次领取身份税收');{const gold=taxAmount(n);gain(n,seat,gold);n.taxUsed=true;event(n,`${roleName(n.called)}领取建筑税收 ${gold} 金币。`,seat,n.called);}break;
       case 'magic_swap':{
         requireRule(n.called===3&&!n.powerUsed,'魔术师技能当前不可用');requireRule(Number.isInteger(a.target)&&a.target>=0&&a.target<n.players.length&&a.target!==seat,'换牌目标须为另一玩家');
-        const other=n.players[a.target];[p.hand,other.hand]=[other.hand,p.hand];n.powerUsed=true;event(n,`魔术师与 ${other.name} 交换全部手牌（内容保密）。`,seat,3);break;
+        const other=n.players[a.target];[p.hand,other.hand]=[other.hand,p.hand];n.powerUsed=true;event(n,`魔术师与 ${other.name} 交换全部手牌（内容保密）。`,seat,3);
+        notify(n,other,'magic_swap',`魔术师 ${p.name} 已与你交换全部手牌，你现在有 ${other.hand.length} 张手牌。通知中的 hand 是换牌完成时的新手牌；之后行动以当前观察为准。`,other.hand);break;
       }
       case 'magic_cycle':{
         requireRule(n.called===3&&!n.powerUsed,'魔术师技能当前不可用');validateCards(a.cards,p.hand);
@@ -201,6 +207,7 @@ export function assertCitadels(s:CitadelsState){
   requireRule(s.players.reduce((sum,p)=>sum+p.gold,0)===s.bankFlow,'金币收支不守恒');
   const roles=[...s.available,...s.faceUp,...s.faceDown,...s.players.flatMap(p=>p.roles)];
   requireRule(roles.length===8&&new Set(roles).size===8&&roles.every(r=>Number.isInteger(r)&&r>=1&&r<=8),'身份牌不守恒');
+  requireRule(Array.isArray(s.notifications)&&s.notifications.every((n,i)=>n&&Number.isSafeInteger(n.seq)&&n.seq>=1&&n.seq<=s.events.length&&(i===0||n.seq>s.notifications[i-1].seq)&&n.round===s.events[n.seq-1].round&&Number.isInteger(n.recipient)&&n.recipient>=0&&n.recipient<s.players.length&&['assassinate','steal','robbed','magic_swap'].includes(n.kind)&&typeof n.text==='string'&&(n.kind==='magic_swap'?Array.isArray(n.hand)&&new Set(n.hand.map(c=>c.id)).size===n.hand.length&&n.hand.every(c=>original.some(o=>o.id===c.id&&o.key===c.key)):n.hand===undefined)),'私有技能通知无效');
 }
 export function viewCitadels(s:CitadelsState,viewer:number|null,revealHands=false){
   return {gameId:s.gameId,id:s.id,round:s.round,gameNumber:s.gameNumber,revision:s.revision,phase:s.phase,turn:s.turn,viewer,crown:s.crown,draftCrown:s.draftCrown,
@@ -210,6 +217,7 @@ export function viewCitadels(s:CitadelsState,viewer:number|null,revealHands=fals
     pendingCards:s.phase==='keep'&&(viewer===s.turn||revealHands)?s.pendingCards.map(c=>({...c})):[],keepCount:s.keepCount,graveyard:s.graveyard?{...s.graveyard}:null,
     players:s.players.map(p=>({playerId:p.playerId,name:p.name,kind:p.kind,seat:p.seat,gold:p.gold,city:p.city.map(c=>({...c})),handCount:p.hand.length,
       hand:viewer===p.seat||revealHands?p.hand.map(c=>({...c})):undefined,roles:viewer===p.seat||revealHands?[...p.roles]:[...p.revealed],roleCount:p.roles.length,revealed:[...p.revealed],totalScore:p.totalScore,wins:p.wins})),
-    legalActions:viewer===null?[]:legalCitadels(s,viewer),events:s.events.map(e=>({...e,cards:e.cards?.map(c=>({...c}))})),scores:s.scores,winners:[...s.winners]};
+    legalActions:viewer===null?[]:legalCitadels(s,viewer),events:s.events.map(e=>({...e,cards:e.cards?.map(c=>({...c}))})),
+    notifications:s.notifications.filter(n=>n.recipient===viewer).map(({recipient:_,...n})=>({...n,...(n.hand?{hand:n.hand.map(c=>({...c}))}:{})})),scores:s.scores,winners:[...s.winners]};
 }
 export type CitadelsView=ReturnType<typeof viewCitadels>;

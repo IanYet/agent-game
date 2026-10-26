@@ -46,7 +46,10 @@ export const gameRegistry = new GameRegistry([existingGame, myGame]);
 | `tableView(run,playerId|null,{revealHands})` | 浏览器牌桌视图；按显式标记公开全部手牌，不能用于 Agent 提示或工具 |
 | `decisions(run)` | 当前待完成决策集合 |
 | `tools(run,playerId)` | 为该玩家声明完整、固定的会话工具列表 |
-| `initializePrompt/decisionPrompt` | 初始化与本次唤醒的提示；包含必要规则及私有观察 |
+| `initializePrompt(run,playerId)` | 身份、规则和操作说明；不放动态观察或历史 |
+| `historyCursor(run)` | 当前事件截止序号，供运行时确认送达范围 |
+| `decisionPrompt(run,decision,afterEvent)` | 当前私有观察，以及 afterEvent 之后的新增记录；0 表示完整历史 |
+| `notificationPrompt?(run,playerId,afterEvent)` | 有未送达的私有通知时返回无须回复的消息，否则返回 null；只发给目标玩家，不授予行动权限 |
 | `handleTool(run,request)` | 同步返回 `{state?,result}`；不原地修改 run |
 | `humanAction(run,playerId,input)` | 同步规则转换，与工具路径使用同一引擎 |
 | `timeout?(run,decision)` | 可选超时规则，返回新状态 |
@@ -58,6 +61,8 @@ export const gameRegistry = new GameRegistry([existingGame, myGame]);
 `StoredRun<S>` 封装 `moduleId/moduleVersion/stateVersion/roomId/runId/index/roster/config/state`。规则只消费需要的领域数据；从 roster 转成引擎玩家时不要把 Harness 模型设置当作规则枚举。
 
 随机发牌使用平台传入的 random，测试可提供种子随机源。平台使用浏览器加密随机源。
+
+提示词通过玩家自己的 observe 生成，再过滤增量事件；不要过滤原始存档后直接外发，避免泄露隐藏牌。game_get_state 保留完整可见记录。私有通知需要保存在模块状态中并按接收者过滤；公开观察和导出不能包含其他玩家的通知。游标由运行时绑定实际会话，不存进游戏规则状态。
 
 ## 工具与 schema
 
