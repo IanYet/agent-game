@@ -6,6 +6,7 @@ import {HumanPlayerCard} from '../HumanPlayerCard';
 import {FoilPanel} from '../../visuals/FoilPanel';
 import {GameLayout,GameTable,SpectatorTableActions,type BoardGamePanel} from '../GameLayout';
 import {StatusTag} from '../../UiBits';
+import {SvgIcon} from '../../visuals/SvgIcon';
 import {ROLES,district,roleName,type District} from './cards';
 import {BuildingFan,RoleCard} from './cards-ui';
 import {scoreCitadels,type Action,type CitadelsView} from './engine';
@@ -108,7 +109,7 @@ export function Table({state,controller,onError,tableActions}:GameUiProps){
   </section>;
   const turnText=game.phase==='finished'?`${game.winners.map(seat=>game.players[seat].name).join('、')}获胜`:game.phase==='draft'?`${game.players[game.turn].name} · 选角 ${game.draftIndex+1}/${game.draftTotal}`:game.phase==='graveyard'?`${game.players[game.turn].name} · 墓地收回`:`${game.players[game.turn].name} · ${game.called} 号${roleName(game.called)}`;
 
-  return <GameLayout gameId="citadels" label="富饶之城牌桌" className="ct-layout" surfaceClassName="ct-main" viewport={{mode:own?'player':'spectator',panel,onPanelChange:setPanel,playerLabel:'我的城市',tableActions}} toolbar={<><span>第 {game.gameNumber} 局 · 第 {game.round} 轮 · {turnText}</span><span>👑 {game.players[game.crown].name} · 牌库 {game.deckCount} 张</span></>} score={<FoilPanel className="ct-progress"><span className="identity-caption">CITY CHRONICLE.</span><h3>本局分数</h3>{game.players.map(player=><div key={player.playerId}><span>{player.name}</span><b title="建筑费用、五色、完工与特殊建筑奖励合计">{roundScores[player.seat].total} 分</b><small>城区 {player.city.length}/8 · 累计 {player.totalScore} 分 · {player.wins} 胜</small></div>)}{game.phase!=='finished'&&game.firstCompleted!==null&&<p>{game.players[game.firstCompleted].name}已完工，本轮结束后结算。</p>}{game.phase==='finished'&&<Results game={game}/>}</FoilPanel>} events={game.events} eventPlayers={game.players} activityTitle="城中纪事">
+  return <GameLayout gameId="citadels" label="富饶之城牌桌" className="ct-layout" surfaceClassName="ct-main" viewport={{mode:own?'player':'spectator',panel,onPanelChange:setPanel,playerLabel:'我的城市',tableActions}} toolbar={<><span>第 {game.gameNumber} 局 · 第 {game.round} 轮 · {turnText}</span><span><SvgIcon name="crown"/> {game.players[game.crown].name} · 牌库 {game.deckCount} 张</span></>} score={<FoilPanel className="ct-progress"><span className="identity-caption">CITY CHRONICLE.</span><h3>本局分数</h3>{game.players.map(player=><div key={player.playerId}><span>{player.name}</span><b title="建筑费用、五色、完工与特殊建筑奖励合计">{roundScores[player.seat].total} 分</b><small>城区 {player.city.length}/8 · 累计 {player.totalScore} 分 · {player.wins} 胜</small></div>)}{game.phase!=='finished'&&game.firstCompleted!==null&&<p>{game.players[game.firstCompleted].name}已完工，本轮结束后结算。</p>}{game.phase==='finished'&&<Results game={game}/>}</FoilPanel>} events={game.events} eventPlayers={game.players} activityTitle="城中纪事">
     <GameTable className="ct-public-table"><div className="ct-public">
       <div className="ct-call-track" role="list" aria-label="身份叫号顺序">{ROLES.map(role=>{
         const revealed=game.players.find(player=>player.revealed.includes(role.rank)),removed=game.faceUp.includes(role.rank),current=game.phase!=='draft'&&game.phase!=='finished'&&game.called===role.rank;

@@ -1,14 +1,14 @@
 export type Color='yellow'|'blue'|'green'|'red'|'purple';
 export const COLORS:Record<Color,string>={yellow:'贵族',blue:'宗教',green:'商业',red:'军事',purple:'特殊'};
 export const ROLES=[
-  {rank:1,name:'刺客',symbol:'🗡️',text:'指定另一身份，令其整回合无法行动；目标持有人暂不公开。'},
-  {rank:2,name:'盗贼',symbol:'💰',text:'指定刺客与被刺杀身份以外的身份；叫到目标时，先拿走其全部金币。'},
-  {rank:3,name:'魔术师',symbol:'🪄',text:'与另一玩家交换全部手牌，或将任意手牌放回牌库底并抽等量牌。限一次。'},
-  {rank:4,name:'国王',symbol:'👑',text:'获得王冠。可一次领取每座黄色建筑 1 金币的税收。'},
-  {rank:5,name:'主教',symbol:'⚜️',text:'可一次领取每座蓝色建筑 1 金币；未被刺杀时整座城市免受军阀拆除。'},
-  {rank:6,name:'商人',symbol:'📦',text:'正常收入后额外获得 1 金币；可一次领取每座绿色建筑 1 金币。'},
-  {rank:7,name:'建筑师',symbol:'📐',text:'正常收入后额外抽两张建筑牌；本身份回合最多建造三座。'},
-  {rank:8,name:'军阀',symbol:'🪖',text:'可一次领取每座红色建筑 1 金币；回合末可付建筑费用减一拆一座建筑。'},
+  {rank:1,name:'刺客',symbol:'dagger',text:'指定另一身份，令其整回合无法行动；目标持有人暂不公开。'},
+  {rank:2,name:'盗贼',symbol:'money-bag',text:'指定刺客与被刺杀身份以外的身份；叫到目标时，先拿走其全部金币。'},
+  {rank:3,name:'魔术师',symbol:'wand',text:'与另一玩家交换全部手牌，或将任意手牌放回牌库底并抽等量牌。限一次。'},
+  {rank:4,name:'国王',symbol:'crown',text:'获得王冠。可一次领取每座黄色建筑 1 金币的税收。'},
+  {rank:5,name:'主教',symbol:'fleur-de-lis',text:'可一次领取每座蓝色建筑 1 金币；未被刺杀时整座城市免受军阀拆除。'},
+  {rank:6,name:'商人',symbol:'parcel',text:'正常收入后额外获得 1 金币；可一次领取每座绿色建筑 1 金币。'},
+  {rank:7,name:'建筑师',symbol:'set-square',text:'正常收入后额外抽两张建筑牌；本身份回合最多建造三座。'},
+  {rank:8,name:'军阀',symbol:'helmet',text:'可一次领取每座红色建筑 1 金币；回合末可付建筑费用减一拆一座建筑。'},
 ] as const;
 export interface DistrictDefinition {key:string;name:string;color:Color;cost:number;count:number;text?:string}
 // FFG English reprint: 80 districts minus 14 starred Dark City cards = 66.

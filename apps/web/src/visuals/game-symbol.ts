@@ -1,19 +1,10 @@
 import {paintSplendorSymbol} from '../games/splendor/artwork';
 import {paintAzulSymbol} from '../games/azul/artwork';
-import chessSymbol from './assets/chess-symbol.svg?raw';
-import citadelsSymbol from './assets/citadels-symbol.svg?raw';
+import {paintSvgIcon,svgIconNames,type SvgIconName} from './svg-icons';
 
-function svgSymbolPainter(source:string){
-  let paths:{path:Path2D;fill:boolean}[]|undefined;
-  return (ctx:CanvasRenderingContext2D)=>{
-    // Parse the shared SVG once; both the foil and modal retain their own material.
-    paths??=Array.from(new DOMParser().parseFromString(source,'image/svg+xml').querySelectorAll('path'),element=>({path:new Path2D(element.getAttribute('d')!),fill:element.getAttribute('fill')!=='none'}));
-    ctx.save();ctx.lineJoin='round';ctx.lineCap='round';
-    for(const {path,fill} of paths){if(fill)ctx.fill(path,'evenodd');ctx.stroke(path);}
-    ctx.restore();
-  };
-}
-const symbolPainters:Record<string,(context:CanvasRenderingContext2D)=>void>={'❖':paintAzulSymbol,'💎':paintSplendorSymbol,'♟\uFE0E':svgSymbolPainter(chessSymbol),'🏰':svgSymbolPainter(citadelsSymbol)};
+export type GameSymbol=SvgIconName|'tiles'|'gem'|'2'|'3';
+
+const symbolPainters:Record<string,(context:CanvasRenderingContext2D)=>void>={tiles:paintAzulSymbol,gem:paintSplendorSymbol,...Object.fromEntries(svgIconNames.map(name=>[name,(ctx:CanvasRenderingContext2D)=>paintSvgIcon(ctx,name)]))};
 type SymbolBounds={left:number;top:number;width:number;height:number};
 const paintedSymbolBounds=new Map<string,SymbolBounds>();
 export const gameSymbolFont=(symbol:string)=>symbol==='2'||symbol==='3'?'400 198px Anton':'400 210px Arial, "Segoe UI Symbol", sans-serif';
@@ -21,6 +12,7 @@ export const gameSymbolFont=(symbol:string)=>symbol==='2'||symbol==='3'?'400 198
 function measureSymbol(ctx:CanvasRenderingContext2D,symbol:string):SymbolBounds{
   const painter=symbolPainters[symbol];
   if(!painter){
+    if(symbol!=='2'&&symbol!=='3')throw new Error(`未注册的游戏图标：${symbol}`);
     ctx.font=gameSymbolFont(symbol);const metrics=ctx.measureText(symbol);
     return {left:-metrics.actualBoundingBoxLeft,top:-metrics.actualBoundingBoxAscent,width:metrics.actualBoundingBoxLeft+metrics.actualBoundingBoxRight,height:metrics.actualBoundingBoxAscent+metrics.actualBoundingBoxDescent};
   }
@@ -35,7 +27,9 @@ function measureSymbol(ctx:CanvasRenderingContext2D,symbol:string):SymbolBounds{
 export function paintGameSymbol(ctx:CanvasRenderingContext2D,symbol:string,centered=false){
   ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
   // Match visible artwork bounds to the original 210 px Hold'em spade.
-  const reference=measureSymbol(ctx,'♠'),bounds=measureSymbol(ctx,symbol),scale=Math.min(reference.width/bounds.width,reference.height/bounds.height);
+  ctx.font=gameSymbolFont('spade');const metrics=ctx.measureText('♠');
+  const reference={left:-metrics.actualBoundingBoxLeft,top:-metrics.actualBoundingBoxAscent,width:metrics.actualBoundingBoxLeft+metrics.actualBoundingBoxRight,height:metrics.actualBoundingBoxAscent+metrics.actualBoundingBoxDescent};
+  const bounds=measureSymbol(ctx,symbol),scale=Math.min(reference.width/bounds.width,reference.height/bounds.height);
   if(!centered)ctx.translate(reference.left+reference.width/2,reference.top+reference.height/2);
   ctx.scale(scale,scale);ctx.translate(-bounds.left-bounds.width/2,-bounds.top-bounds.height/2);ctx.lineWidth/=scale;
   const painter=symbolPainters[symbol];

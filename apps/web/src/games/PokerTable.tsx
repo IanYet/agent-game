@@ -1,4 +1,4 @@
-import type {CSSProperties} from 'react';
+import type {CSSProperties,ReactNode} from 'react';
 import {FoilPanel} from '../visuals/FoilPanel';
 import {GameTable} from './GameLayout';
 import {PlayingCard,PlayingCardGroup,type PlayingCardProps} from './PlayingCard';
@@ -9,7 +9,7 @@ export type PokerTableAction={label:string;cards?:readonly PokerTableCard[]};
 type TableNotice={title:string;text?:string;lines?:readonly string[]};
 type TableResult={title:string;detail?:string;note?:string;scores?:readonly {name:string;delta:number;detail?:string}[]};
 
-export function PokerTable({players,actions,status,topCards,caption,notice,result}:{players:readonly {name:string;seat:number}[];actions:readonly (PokerTableAction|null)[];status:string;topCards?:{label:string;cards:readonly PokerTableCard[]};caption?:string;notice?:TableNotice;result?:TableResult}){
+export function PokerTable({players,actions,status,topCards,caption,notice,result}:{players:readonly {name:string;seat:number}[];actions:readonly (PokerTableAction|null)[];status:string;topCards?:{label:string;cards:readonly PokerTableCard[]};caption?:ReactNode;notice?:TableNotice;result?:TableResult}){
   const columns=Math.min(5,players.length);
   return <GameTable className="poker-table" aria-label="公开出牌信息">
     {caption&&<p className="poker-table-caption">{caption}</p>}

@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from 'react';
 import type { AgentSettings, BrowserToolRequest, ConnectorInfo, ConversationEntry, PlayerKind, ToolDefinition, ToolResponse } from '@agent-game/protocol';
 import type { GameController } from '../controller';
+import type { GameSymbol } from '../visuals/game-symbol';
 
 export interface PlayerConfig extends AgentSettings { playerId?: string; name: string; kind: PlayerKind }
 export interface StablePlayer extends PlayerConfig { playerId: string }
@@ -18,7 +19,7 @@ export interface TableViewOptions { revealHands:boolean }
 export interface GameUiProps { state:AppSnapshot; controller:GameController; onError:(message:string)=>void; tableActions?:ReactNode }
 export interface GameModule<S = any,V = any> {
   id:string; version:string; stateVersion:number; name:string; description:string; tagline:string;
-  presentation:{english:string;symbol:string;tone:'warm'|'cool'};
+  presentation:{english:string;symbol:GameSymbol;tone:'warm'|'cool'};
   minPlayers:number; maxPlayers:number; defaultPlayers:number; defaultConfig:any; runNoun:string;
   rules:(run?:StoredRun<S>)=>string;
   validateConfig?:(config:any)=>void;

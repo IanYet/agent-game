@@ -35,7 +35,7 @@ export function restoreBao(data:unknown,version:number):BaoState{
 }
 export const baohuangModule:GameModule<BaoState,BaoView>={
   id:'baohuang',version:'1.0.0',stateVersion:1,name:'山东保皇',description:'皇帝在明，侍卫在暗。五人四副牌，皇保与平民争先走完。',tagline:'五人 · 固定保 · 明暗博弈',
-  presentation:{english:'BAOHUANG',symbol:'👑',tone:'warm'},minPlayers:5,maxPlayers:5,defaultPlayers:5,defaultConfig:{ruleset:'jj-fixed168',baseScore:1},runNoun:'局',
+  presentation:{english:'BAOHUANG',symbol:'crown',tone:'warm'},minPlayers:5,maxPlayers:5,defaultPlayers:5,defaultConfig:{ruleset:'jj-fixed168',baseScore:1},runNoun:'局',
   validateConfig,rules:()=>BAOHUANG_RULES,lifecycle:{sessionScope:'run',eagerAgents:false},
   activity:run=>({phase:{enthrone:'决定皇帝',declare:'全体准备',playing:'行牌',finished:'已结算'}[run.state.phase],detail:`第${run.index}局 · JJ标准固定保 · ${run.state.baseScore}底分`}),
   create:(run,random)=>{validateConfig(run.config);return createGame(run.roomId,enginePlayers(run.roster),{random,round:run.index,baseScore:run.config.baseScore});},

@@ -2,14 +2,15 @@ import {useEffect, useState} from 'react';
 import MetallicPaint from './vendor/MetallicPaint';
 import {useEffectsPreference} from './preferences';
 import {gameSymbolFont,gameSymbolImage} from './game-symbol';
-export function BrandPanel({symbol='∞'}:{symbol?:string}){
+export function BrandPanel({symbol='infinity'}:{symbol?:string}){
   const preference=useEffectsPreference();
   const [hidden,setHidden]=useState(document.hidden);
   const [artwork,setArtwork]=useState<{symbol:string;src:string}|null>(null);
   useEffect(()=>{const change=()=>setHidden(document.hidden);document.addEventListener('visibilitychange',change);return()=>document.removeEventListener('visibilitychange',change);},[]);
   useEffect(()=>{
     let alive=true;
-    void document.fonts.load(gameSymbolFont(symbol),symbol).catch(()=>{}).then(()=>{if(alive)setArtwork({symbol,src:gameSymbolImage(symbol)});});
+    const ready=symbol==='2'||symbol==='3'?document.fonts.load(gameSymbolFont(symbol),symbol):Promise.resolve();
+    void ready.catch(()=>{}).then(()=>{if(alive)setArtwork({symbol,src:gameSymbolImage(symbol)});});
     return()=>{alive=false;};
   },[symbol]);
   const src=artwork?.symbol===symbol?artwork.src:undefined;

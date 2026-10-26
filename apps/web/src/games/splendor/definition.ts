@@ -15,7 +15,7 @@ const observe=(run:StoredRun<SplendorState>,actor:string|null)=>decorateView(vie
 const decisions=(run:StoredRun<SplendorState>)=>run.state.phase==='finished'?[]:[{decisionId:decisionKey(run,run.state.revision,run.state.turn),actorId:run.roster[run.state.turn].playerId,allowedTools:['game_act']}];
 const validateConfig=(config:any)=>{if(!config||Array.isArray(config)||config.edition!=='base-2024'||Object.keys(config).some(k=>k!=='edition'))throw Error('璀璨宝石使用固定的 2024 基础版规则');};
 export const splendorModule:GameModule<SplendorState>={
-  id:'splendor',version:'1.0.0',stateVersion:1,name:'璀璨宝石',description:'收集宝石，建立商路，赢得贵族的青睐。',tagline:'基础版 · 宝石与声望',presentation:{english:'SPLENDOR',symbol:'💎',tone:'warm'},
+  id:'splendor',version:'1.0.0',stateVersion:1,name:'璀璨宝石',description:'收集宝石，建立商路，赢得贵族的青睐。',tagline:'基础版 · 宝石与声望',presentation:{english:'SPLENDOR',symbol:'gem',tone:'warm'},
   minPlayers:2,maxPlayers:4,defaultPlayers:2,defaultConfig:{edition:'base-2024'},runNoun:'局',
   validateConfig,
   lifecycle:{sessionScope:'run',eagerAgents:false},rules:()=>SPLENDOR_RULES,

@@ -9,17 +9,19 @@ import {AgentPlayerCard} from '../AgentPlayerCard';
 import {HumanPlayerCard} from '../HumanPlayerCard';
 import {StatusTag} from '../../UiBits';
 import {FoilPanel} from '../../visuals/FoilPanel';
+import {SvgIcon} from '../../visuals/SvgIcon';
+import type {SvgIconName} from '../../visuals/svg-icons';
 import {GameLayout,GameTable,PlayerCardGrid} from '../GameLayout';
 import {COLOR_NAMES,PIECE_NAMES,type ChessAction,type ChessMove,type ChessOptions,type ChessState,type ChessView,type LegalChessMove} from './engine';
 import './chess.css';
 
-const GLYPHS:Record<Color,Record<PieceSymbol,string>>={w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
+const PIECE_ICONS:Record<PieceSymbol,SvgIconName>={k:'chess-king',q:'chess-queen',r:'chess-rook',b:'chess-bishop',n:'chess-knight',p:'chess-pawn'};
 type BoardPiece={square:Square;type:PieceSymbol;color:Color};
 type PieceMotion={square:HTMLButtonElement;animation:Animation};
 function stopPieceMotions(motions:PieceMotion[]){
   for(const {square,animation} of motions.splice(0)){animation.onfinish=null;animation.cancel();delete square.dataset.pieceMoving;}
 }
-function Piece({color,type}:{color:Color;type:PieceSymbol}){return <span className={`chess-piece chess-piece-${color}`} aria-hidden="true">{GLYPHS[color][type]+'\uFE0E'}</span>;}
+function Piece({color,type}:{color:Color;type:PieceSymbol}){return <span className={`chess-piece chess-piece-${color}`} aria-hidden="true"><SvgIcon name={PIECE_ICONS[type]}/></span>;}
 function Board({pieces,black=false,selected=null,destination=null,targets=[],lastMove,checkSquare,onSquare,interactive=false}:{pieces:BoardPiece[];black?:boolean;selected?:Square|null;destination?:Square|null;targets?:Square[];lastMove?:ChessMove;checkSquare?:Square|null;onSquare?:(square:Square)=>void;interactive?:boolean}){
   const {reduced}=useEffectsPreference(),squares=useRef(new Map<Square,HTMLButtonElement>()),motions=useRef<PieceMotion[]>([]);
   const position=pieces.map(piece=>`${piece.square}${piece.color}${piece.type}`).join(''),previous=useRef({pieces,position,black,reduced,lastMove});

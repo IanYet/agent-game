@@ -4,11 +4,12 @@ import {HOLOGRAPHIC_FRAGMENT,HOLOGRAPHIC_VERTEX} from './holographic.glsl';
 import {createCardEngraving,type HolographicPattern,type EngravingBitmap} from './holographic-engraving';
 import {cardPerspective,cardTilt} from './card-tilt';
 import {cardProjection} from './card-projection';
+import type {SvgIconName} from './svg-icons';
 
 type Light={x:number;y:number};
 type Motion=Light&{tiltX:number;tiltY:number};
 type InkLight={node:HTMLElement|SVGElement;x:number;y:number;level:number};
-type MaterialOptions={glowColor:`#${string}`;rainbow:boolean;pattern:HolographicPattern;patternSymbol:string;restingLight:readonly [number,number];tilt:boolean};
+type MaterialOptions={glowColor:`#${string}`;rainbow:boolean;pattern:HolographicPattern;patternSymbol:SvgIconName;restingLight:readonly [number,number];tilt:boolean};
 type Entry=Omit<MaterialOptions,'restingLight'>&{canvas:HTMLCanvasElement;root:HTMLElement;ctx:CanvasRenderingContext2D;halo:[number,number,number];rest:Light;current:Motion;target:Motion;ink:InkLight[];geometryDirty:boolean;reduced:boolean;visible:boolean;dirty:boolean};
 let shared:HolographicRenderer|undefined;
 
