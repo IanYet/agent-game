@@ -14,7 +14,7 @@ import { rateLimitNotice, type RateLimitNotice } from './harness/rate-limit';
 
 interface Capability { request: SessionRequest; registry: ToolRegistry; conversation: ConversationRecorder; sessionId?: string; discarded?: boolean }
 interface PlayerSession { session: AgentSession | null; capability: Capability; token: string; cwd: string }
-interface ActiveTurn { decisionId?: string; controller: AbortController; done: Promise<void>; kind: SessionRequest['kind'] }
+interface ActiveTurn { decisionId: string; controller: AbortController; done: Promise<void>; kind: SessionRequest['kind'] }
 export class LocalBridge extends EventEmitter {
   private owner: { token: string; origin: string; attached: boolean } | null = null;
   private sessions = new Map<string, PlayerSession>();
@@ -109,12 +109,6 @@ export class LocalBridge extends EventEmitter {
     finally { this.creating.delete(key); }
   }
   async playTurn(sessionId: string, prompt: string, decisionId: string, settings?: AgentSettings): Promise<{ completed: boolean }> {
-    return this.deliver(sessionId,prompt,settings,decisionId);
-  }
-  async notify(sessionId: string, prompt: string, settings?: AgentSettings): Promise<{ completed: boolean }> {
-    return this.deliver(sessionId,`这是一条仅供知悉的游戏通知，无需回复，不调用工具，不采取行动，直接结束本次任务。它不授予任何决策权限。\n\n${prompt}`,settings);
-  }
-  private async deliver(sessionId: string, prompt: string, settings?: AgentSettings, decisionId?: string): Promise<{ completed: boolean }> {
     await this.cooldowns.ready();
     const player = this.sessions.get(sessionId); if (!player) throw new Error('找不到玩家会话，请重新连接');
     const cooling = this.cooldowns.error(player.capability.request.kind); if (cooling) throw cooling;
@@ -126,12 +120,12 @@ export class LocalBridge extends EventEmitter {
     const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 180_000);
     const stopTimer = () => clearTimeout(timer); controller.signal.addEventListener('abort', stopTimer, { once: true });
     active.done = this.runTurn(sessionId, player, prompt, controller.signal, resolved);
-    try { await active.done; player.capability.conversation.record('event', decisionId?'本次决策结束':'通知已送达', decisionId?'Agent 已结束本次任务。':'私有通知已送达，未授予行动权限，也不要求回复。'); return { completed: true }; }
+    try { await active.done; player.capability.conversation.record('event', '本次决策结束', 'Agent 已结束本次任务。'); return { completed: true }; }
     catch (error) {
       const notice = rateLimitNotice({ message: (error as Error)?.message });
       if (notice && !(controller.signal.reason instanceof UpstreamCooldownError)) this.rateLimited(player.capability, notice);
       const limited = controller.signal.reason instanceof UpstreamCooldownError;
-      const failure = limited ? this.cooldowns.error(player.capability.request.kind) ?? controller.signal.reason : timedOut ? new Error(`${decisionId?'本次决策':'通知发送'}超过 180 秒，已取消上游任务。点击继续可重试。`) : error as Error;
+      const failure = limited ? this.cooldowns.error(player.capability.request.kind) ?? controller.signal.reason : timedOut ? new Error('本次决策超过 180 秒，已取消上游任务。点击继续可重试。') : error as Error;
       const paused = controller.signal.aborted && !timedOut && !limited;
       if (limited) await this.cooldowns.flush();
       player.capability.conversation.record(paused ? 'event' : 'error', paused ? '推理已暂停' : '推理失败', failure.message); throw failure;

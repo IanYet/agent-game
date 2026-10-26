@@ -4,6 +4,7 @@ export const ACTION_HELP=`action 用法：
 draft：{type:"choose",role:1…8}，从本人 available 选身份。
 income：{type:"income",source:"gold"|"cards"}；keep：{type:"keep",cards:[pendingCards中的ID,...]}，恰好 keepCount 张。
 income/main 的身份技能：{type:"assassinate",role:2…8}、{type:"steal",role:3…8}、{type:"tax"}、{type:"magic_swap",target:另一玩家seat}、{type:"magic_cycle",cards:[自己手牌ID,...]}（可空）。须符合 called 身份与 powerUsed/taxUsed。
+assassinate/steal 的 role 是本轮身份牌编号，不是玩家 seat；steal 的 role:4 针对本轮国王牌，不能把 crown 王冠持有人当作国王。国王牌可能暗弃，无人持有时偷盗落空；不能偷已被刺杀的身份。
 income/main 的建筑技能：{type:"laboratory",card:自己手牌ID}、{type:"smithy"}，须拥有建筑并检查 labUsed/smithyUsed；每个身份重置次数。
 main：{type:"build",card:自己手牌ID}，限 built<buildLimit；{type:"end"} 结束身份回合；军阀可 {type:"destroy",target:玩家seat,card:该玩家城市建筑ID}，拆除会自动结束回合。
 graveyard：{type:"recover",take:true|false}，决定是否支付 1 金币收回 graveyard。

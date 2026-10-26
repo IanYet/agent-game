@@ -71,10 +71,6 @@
 .ct-operation-confirm{grid-column:2;grid-row:3;display:flex;align-items:stretch;justify-content:flex-end;gap:7px;min-width:0}
 .ct-operation-confirm>.primary{flex:1;background:var(--fg);color:#12131a}
 .ct-progress{padding:16px}.ct-progress h3{font-size:12px;font-weight:400;margin:12px 0}
-.ct-private-notice{margin:0 0 16px;padding:12px;border:1px solid #e7b7a240;border-radius:8px;background:#e7b7a20a}
-.ct-private-notice strong{font-size:12px;font-weight:400;color:var(--warm)}
-.ct-progress .ct-private-notice p{margin:8px 0;font-size:11px;line-height:1.8;color:var(--fg)}
-.ct-private-notice small{font-size:10px;color:var(--muted)}
 .ct-progress>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;padding:9px 0;border-bottom:1px solid #ffffff0c}
 .ct-progress>div>span{font-size:12px}.ct-progress b{font-size:13px;color:var(--ct-gold)}.ct-progress>div>small{grid-column:1/-1;font-size:9px;color:#969aa4}
 .ct-progress p,.ct-results p{font-size:11px;line-height:1.8;color:#b0a99f;margin-top:15px}

@@ -8,9 +8,9 @@ export const readOnly={readOnlyHint:true,destructiveHint:false,openWorldHint:fal
 export const agentObservation=(view:any)=>{const {legalActions:_,legalMoves:__,...observation}=view;return observation;};
 export const agentIdentity=(run:StoredRun,actor:string)=>`${run.roster[seatFor(run,actor)].name}（playerId=${actor}，seat=${seatFor(run,actor)}）`;
 export const historyCursor=(run:StoredRun<{events:{seq:number}[]}>)=>run.state.events.at(-1)?.seq??0;
-export const historyInstructions='首次消息提供当前可见局面和本局完整公开记录；后续消息保留当前局面，events 仅含 eventsAfter 之后的新记录，eventsThrough 是本次记录截止序号。需要完整历史时调用 game_get_state。技能通知仅供知悉，无需回复或行动，等待决策消息再操作。';
-export function incrementalObservation<T extends {events:{seq:number}[];notifications?:{seq:number}[]}>(view:T,afterEvent=0){
-  return {...view,eventsAfter:afterEvent,eventsThrough:view.events.at(-1)?.seq??0,events:view.events.filter(e=>e.seq>afterEvent),...(view.notifications?{notifications:view.notifications.filter(n=>n.seq>afterEvent)}:{})};
+export const historyInstructions='首次决策消息提供当前可见局面和本局完整公开记录；后续消息保留当前局面，events 仅含 eventsAfter 之后的新记录，eventsThrough 是本次记录截止序号。需要完整历史时调用 game_get_state。';
+export function incrementalObservation<T extends {events:{seq:number}[]}>(view:T,afterEvent=0){
+  return {...view,eventsAfter:afterEvent,eventsThrough:view.events.at(-1)?.seq??0,events:view.events.filter(e=>e.seq>afterEvent)};
 }
 export const decisionKey=(run:StoredRun,revision:number,seat:number)=>`${run.runId}:${revision}:${run.roster[seat].playerId}`;
 export function checkRevision(state:{revision:number},args:Record<string,unknown>){if(args.revision!==state.revision)throw new Error('状态已更新，请重新读取当前决策');}

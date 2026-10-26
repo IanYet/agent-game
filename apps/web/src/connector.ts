@@ -17,7 +17,7 @@ export class ConnectorClient {
   private async request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
     let response: Response;
     try {
-      response = await this.fetcher(`${this.endpoint}${path}`, { method, headers: { ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(path.endsWith('/turn')||path.endsWith('/notify') ? 200_000 : 100_000) });
+      response = await this.fetcher(`${this.endpoint}${path}`, { method, headers: { ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(path.endsWith('/turn') ? 200_000 : 100_000) });
     } catch { throw new Error('无法连接本机连接器。请双击启动连接器，并在浏览器提示时允许访问本地网络。'); }
     const data = await response.json();
     if (!response.ok) throw new Error(data.error ?? '连接器请求失败');
@@ -65,7 +65,6 @@ export class ConnectorClient {
   }
   createSession(request: SessionRequest): Promise<{ sessionId: string }> { return this.request('/api/sessions', 'POST', request); }
   playTurn(sessionId: string, prompt: string, decisionId: string, settings?: AgentSettings): Promise<{ completed: boolean }> { return this.request(`/api/sessions/${encodeURIComponent(sessionId)}/turn`, 'POST', { prompt, decisionId, settings }); }
-  notify(sessionId: string, prompt: string, settings?: AgentSettings): Promise<{ completed: boolean }> { return this.request(`/api/sessions/${encodeURIComponent(sessionId)}/notify`, 'POST', { prompt, settings }); }
   async pauseTurn(): Promise<void> { if (this.token) await this.request('/api/pause', 'POST'); }
   async stopSessions(ids?: string[]): Promise<void> { if (this.token) await this.request('/api/sessions', 'DELETE', ids ? { ids } : undefined); }
   async disconnect(): Promise<void> {
