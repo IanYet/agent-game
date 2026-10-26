@@ -82,7 +82,7 @@ describe('皇位、侍卫与私有观察',()=>{
       expect(view.players[s.guard].role).toBe(at===s.guard?'guard':null);
       const result=module.handleTool(run,{id:'read',scopeId:'run',playerId:`p${at}`,tool:'game_get_state',args:{}}).result.structuredContent as any;
       expect(result.guard).toBe(at===s.guard?s.guard:null);expect(result.players.filter((p:any)=>p.hand).map((p:any)=>p.seat)).toEqual([at]);
-      const prompt=JSON.parse(module.initializePrompt(run,`p${at}`).split('初始观察：')[1]);expect(prompt.guard).toBe(view.guard);
+      const prompt=JSON.parse(module.decisionPrompt(run,{decisionId:'view',actorId:`p${at}`}).split('当前观察：')[1]);expect(prompt.guard).toBe(view.guard);
     }
     const before=structuredClone(s),table=module.tableView(run,null,{revealHands:true});expect(table.players.every(p=>p.hand)).toBe(true);expect(table.guard).toBeNull();expect(s).toEqual(before);
     const publicView=module.observe(run,null);expect(publicView.players.every(p=>!p.hand)).toBe(true);expect(publicView.legalActions).toEqual([]);expect(publicView.events).toEqual(s.events);

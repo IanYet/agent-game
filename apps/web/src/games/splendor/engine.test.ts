@@ -2,8 +2,8 @@ import {describe,expect,it} from 'vitest';
 import type {StoredRun} from '../../runtime/types';
 import {CARDS,CARD_BY_ID,NOBLES} from './data';
 import {splendorModule} from './definition';
-import {applyAction,assertSplendor,bonuses,createSplendor,defaultPayment,eligibleNobles,emptyTokens,legalActions,nextSplendor,points,tokenCount,viewSplendor} from './engine';
-import {COLORS,GEMS,LEVELS,type Action,type Card,type Color,type Level,type SplendorState,type Tokens} from './types';
+import {applyAction,assertSplendor,bonuses,cardName,createSplendor,defaultPayment,eligibleNobles,emptyTokens,legalActions,nextSplendor,points,tokenCount,viewSplendor} from './engine';
+import {COLORS,GEMS,LEVELS,type Action,type Card,type Color,type Level,type SplendorState,type SplendorView,type Tokens} from './types';
 
 const rng=(seed=1)=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
 const identities=(n=2)=>Array.from({length:n},(_,i)=>({playerId:'p'+i,name:'玩家'+i,kind:i===0?'human' as const:'agent' as const}));
@@ -86,14 +86,49 @@ describe('拿取、支付与资源守恒',()=>{
 describe('预留、暗库和信息可见范围',()=>{
   it('公开预留获得黄金，市场立即补牌，并可在以后购买',()=>{
     const s=game();marketCard(s,'1-white-01');giveTokens(s,0,{red:2,black:1});let next=applyAction(s,0,{type:'reserve',cardId:'1-white-01'});expect(next.players[0].reserved[0].cardId).toBe('1-white-01');expect(next.players[0].tokens.gold).toBe(1);expect(next.market[1]).not.toContain('1-white-01');expect(next.events.find(e=>e.type==='reserve')?.cards).toEqual(['1-white-01']);
+    for(const viewer of [0,1,null])expect(viewSplendor(next,viewer).players[0].reserved[0].card).toEqual(CARD_BY_ID['1-white-01']);
+    const run=runFor(next);expect((splendorModule.observe(run,'p1') as SplendorView).players[0].reserved[0].card?.id).toBe('1-white-01');
     expect(()=>applyAction(next,1,{type:'buy',cardId:'1-white-01'})).toThrow();next=applyAction(next,1,primary(next));next=applyAction(next,0,{type:'buy',cardId:'1-white-01'});expect(next.players[0].reserved).toHaveLength(0);expect(next.players[0].bought).toContain('1-white-01');
   });
   it('暗抽不换市场，不公开卡或剩余暗库顺序；牌桌揭示不能污染 Agent 观察',()=>{
     const s=game(),secret=s.decks[3][0],market=s.market[3].slice(),next=applyAction(s,0,{type:'reserveDeck',level:3});
-    expect(next.market[3]).toEqual(market);expect(next.decks[3]).toHaveLength(s.decks[3].length-1);expect(next.events.find(e=>e.type==='reserve')?.cards).toBeUndefined();
+    expect(next.market[3]).toEqual(market);expect(next.decks[3]).toHaveLength(s.decks[3].length-1);
     const self=viewSplendor(next,0),other=viewSplendor(next,1),pub=viewSplendor(next,null),table=viewSplendor(next,null,true);
+    expect(next.events.find(e=>e.type==='reserveDeck')?.cards).toEqual([secret]);
+    expect(other.events.find(e=>e.type==='reserveDeck')).toMatchObject({text:'暗抽 3 级卡并预留，获得 1 黄金',level:3});
+    expect(other.events.find(e=>e.type==='reserveDeck')?.cards).toBeUndefined();
+    expect(table.events.find(e=>e.type==='reserveDeck')).toMatchObject({cards:[secret],text:expect.stringContaining(`暗抽 ${cardName(CARD_BY_ID[secret])}`)});
     expect(self.players[0].reserved[0].card?.id).toBe(secret);expect(other.players[0].reserved[0].card).toBeNull();expect(pub.players[0].reserved[0].card).toBeNull();expect(table.players[0].reserved[0].card?.id).toBe(secret);expect(JSON.stringify(other)).not.toContain(secret);expect('decks' in pub).toBe(false);expect(other.legalActions.every(a=>a.action.type!=='buy'||a.action.cardId!==secret)).toBe(true);
-    const run=runFor(next);expect(splendorModule.initializePrompt(run,'p1')).not.toContain(secret);expect(splendorModule.initializePrompt(run,'p0')).toContain(secret);expect(JSON.stringify(splendorModule.observe(run,null))).not.toContain(secret);expect(JSON.stringify(splendorModule.tableView(run,null,{revealHands:true}))).toContain(secret);
+    const run=runFor(next);expect(splendorModule.decisionPrompt(run,{decisionId:'view',actorId:'p1'})).not.toContain(secret);expect(splendorModule.decisionPrompt(run,{decisionId:'view',actorId:'p0'})).toContain(secret);expect(JSON.stringify(splendorModule.observe(run,null))).not.toContain(secret);expect(JSON.stringify(splendorModule.tableView(run,null,{revealHands:true}))).toContain(secret);
+  });
+  it('市场与暗抽预留混合时，真人和 Agent 只见公开牌；观战显示暗抽牌面及完整记录',()=>{
+    let s=game();const publicCard=s.market[1][0]!,secret=s.decks[3][0];
+    s=applyAction(s,0,{type:'reserve',cardId:publicCard});s=applyAction(s,1,primary(s));s=applyAction(s,0,{type:'reserveDeck',level:3});
+    const run=runFor(s);
+    for(const view of [viewSplendor(s,1),viewSplendor(s,null),splendorModule.tableView(run,'p1',{revealHands:false}),splendorModule.observe(run,'p1')] as SplendorView[]){
+      expect(view.players[0].reserved.map(r=>r.card?.id??null)).toEqual([publicCard,null]);expect(JSON.stringify(view)).not.toContain(secret);
+      expect(view.events.find(e=>e.type==='reserve')?.cards).toEqual([publicCard]);expect(view.events.find(e=>e.type==='reserveDeck')?.cards).toBeUndefined();
+    }
+    const spectator=splendorModule.tableView(run,null,{revealHands:true}) as SplendorView;
+    expect(spectator.players[0].reserved.map(r=>[r.source,r.card?.id])).toEqual([['market',publicCard],['deck',secret]]);
+    expect(spectator.events.find(e=>e.type==='reserveDeck')?.text).toContain(secret);expect(spectator.events.find(e=>e.type==='reserveDeck')?.text).toContain('暗抽');
+    expect(splendorModule.decisionPrompt(run,splendorModule.decisions(run)[0])).not.toContain(secret);
+    const after=s.events.find(e=>e.type==='reserve')!.seq;
+    const delta=JSON.parse(splendorModule.decisionPrompt(run,splendorModule.decisions(run)[0],after).split('当前观察：')[1]);
+    expect(delta.events.every((e:any)=>e.seq>after)).toBe(true);expect(delta.events.some((e:any)=>e.type==='reserveDeck')).toBe(true);expect(JSON.stringify(delta)).not.toContain(secret);
+    const observation=splendorModule.handleTool(run,{id:'read',scopeId:run.runId,playerId:'p1',tool:'game_get_state',args:{}});
+    expect(JSON.stringify(observation)).not.toContain(secret);expect(JSON.stringify(splendorModule.observe(run,'p1'))).not.toContain(secret);
+    const agents=structuredClone(run);agents.roster.forEach(player=>{player.kind='codex';});agents.state.players.forEach(player=>{player.kind='agent';});
+    expect((splendorModule.tableView(agents,null,{revealHands:true}) as SplendorView).events.find(e=>e.type==='reserveDeck')?.cards).toEqual([secret]);
+    expect(JSON.stringify(splendorModule.observe(agents,'p1'))).not.toContain(secret);expect(splendorModule.decisionPrompt(agents,{decisionId:'view',actorId:'p1'})).not.toContain(secret);
+  });
+  it('暗抽购买后，公开记录只在购买时显示牌名，观战仍保留暗抽来源',()=>{
+    const s=game();giveTokens(s,0,{red:2,black:1});takeOut(s,'1-white-01');s.decks[1].unshift('1-white-01');
+    let next=applyAction(s,0,{type:'reserveDeck',level:1});next=applyAction(next,1,primary(next));next=applyAction(next,0,{type:'buy',cardId:'1-white-01'});
+    const publicView=viewSplendor(next,1),spectator=viewSplendor(next,null,true);
+    expect(publicView.players[0].reserved).toHaveLength(0);expect(publicView.events.find(e=>e.type==='reserveDeck')?.cards).toBeUndefined();
+    expect(publicView.events.find(e=>e.type==='reserveDeck')?.text).not.toContain('1-white-01');expect(publicView.events.find(e=>e.type==='buy')?.cards).toEqual(['1-white-01']);
+    expect(spectator.events.find(e=>e.type==='reserveDeck')?.cards).toEqual(['1-white-01']);
   });
   it('预留上限三张且不可丢弃；黄金空仍可预留',()=>{
     let s=game();for(let i=0;i<3;i++){s=applyAction(s,0,{type:'reserveDeck',level:3});s=applyAction(s,1,primary(s));}

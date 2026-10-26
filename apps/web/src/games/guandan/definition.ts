@@ -1,6 +1,6 @@
 import {toolResult,type ToolDefinition} from '@agent-game/protocol';
 import type {GameModule,StoredRun} from '../../runtime/types';
-import {agentObservation,checkRevision,decisionKey,decorateView,emptySchema,enginePlayers,readOnly,seatFor} from '../shared';
+import {historyCursor,historyInstructions,incrementalObservation,agentObservation,checkRevision,decisionKey,decorateView,emptySchema,enginePlayers,readOnly,seatFor} from '../shared';
 import {applyAction,createGame,getLegalActions,restoreState,viewGame,LEGAL_NOTE} from './engine';
 import {label,teamName} from './cards';
 import {GUANDAN_RULES} from './rules';
@@ -26,8 +26,9 @@ export const guandanModule:GameModule<GuandanState>={
   tableView:(run,actor,{revealHands})=>decorateView(viewGame(run.state,actor===null?null:seatFor(run,actor),revealHands),run.roster),
   decisions:run=>run.state.phase==='finished'?[]:[{decisionId:decisionKey(run,run.state.revision,run.state.turn),actorId:run.roster[run.state.turn].playerId,allowedTools:run.state.phase==='playing'?['game_act','game_play']:['game_act']}],
   tools:()=>descriptors,
-  initializePrompt:(run,actor)=>`你是掼蛋玩家 ${run.roster[seatFor(run,actor)].name}，${teamName(seatFor(run,actor)%2)}。对面座位是搭档，只共享公开信息。\n${GUANDAN_RULES}\n仅使用游戏工具，不执行文件、网络或终端任务。此会话仅用于本副；events 是本副全部公开记录，按 seq 递增。先读观察与合法行动，每次决策提交一次有效行动后结束任务。\n初始观察：${JSON.stringify(agentObservation(observe(run,actor)))}`,
-  decisionPrompt:(run,decision)=>`掼蛋第 ${run.index} 副，决策 ${decision.decisionId}。先确认阶段和当前级牌；可分页获取合法行动。完成一次进贡、还牌、出牌或不出后结束任务。\n当前私有观察：${JSON.stringify(agentObservation(observe(run,decision.actorId)))}`,
+  historyCursor,
+  initializePrompt:(run,actor)=>`你是掼蛋玩家 ${run.roster[seatFor(run,actor)].name}，${teamName(seatFor(run,actor)%2)}。对面座位是搭档，只共享公开信息。\n${GUANDAN_RULES}\n仅使用游戏工具，不执行文件、网络或终端任务。此会话仅用于本副；events 记录本副公开行动，按 seq 递增。先读观察与合法行动，每次决策提交一次有效行动后结束任务。\n${historyInstructions}`,
+  decisionPrompt:(run,decision,afterEvent=0)=>`掼蛋第 ${run.index} 副，决策 ${decision.decisionId}。先确认阶段和当前级牌；可分页获取合法行动。完成一次进贡、还牌、出牌或不出后结束任务。\n当前私有观察：${JSON.stringify(incrementalObservation(agentObservation(observe(run,decision.actorId)),afterEvent))}`,
   handleTool:(run,request)=>{
     try{
       const seat=seatFor(run,request.playerId),state=run.state;

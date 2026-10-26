@@ -3,7 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 // Wire contract only. Game engines, React, rules and game lists do not belong here.
 export const CONNECTOR_PORT = 3211;
 export const PROTOCOL_VERSION = 5;
-export const CONNECTOR_CAPABILITIES = ['dynamic-tools-v1', 'json-schema-2020-12', 'player-scopes-v1', 'concurrent-decisions-v1', 'structured-results-v1', 'local-conversations-v1'] as const;
+export const CONNECTOR_CAPABILITIES = ['dynamic-tools-v1', 'json-schema-2020-12', 'player-scopes-v1', 'concurrent-decisions-v1', 'structured-results-v1', 'local-conversations-v1', 'agent-notifications-v1'] as const;
 export type HarnessId = 'codex' | 'codex-acp' | 'dsh' | 'workbuddy';
 export type PlayerKind = HarnessId | 'human';
 export interface AgentSettings { model?: string; reasoningEffort?: string }

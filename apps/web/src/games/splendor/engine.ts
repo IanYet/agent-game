@@ -164,7 +164,7 @@ export function applyAction(previous:SplendorState,seat:number,input:unknown):Sp
         }
         const card=CARD_BY_ID[cardId];player.reserved.push({cardId,level:card.level,source:action.type==='reserve'?'market':'deck',revealed:false});
         const gold=state.bank.gold>0?1:0;state.bank.gold-=gold;player.tokens.gold+=gold;
-        record(state,{type:'reserve',seat,text:(action.type==='reserve'?`预留 ${cardName(card)}`:`暗抽 ${card.level} 级卡并预留`)+(gold?'，获得 1 黄金':'，黄金已空'),level:card.level,tokens:{gold},...(action.type==='reserve'?{cards:[cardId]}:{})});
+        record(state,{type:action.type,seat,text:(action.type==='reserve'?`市场预留 ${cardName(card)}`:`暗抽 ${cardName(card)} 并预留`)+(gold?'，获得 1 黄金':'，黄金已空'),level:card.level,tokens:{gold},cards:[cardId]});
         revealReplacement(state,replacement);break;
       }
       case 'buy':{
@@ -189,12 +189,21 @@ export function applyAction(previous:SplendorState,seat:number,input:unknown):Sp
   state.revision++;assertSplendor(state);return state;
 }
 
+// The local history retains draws for full-table spectating. Player observations
+// and public replays must go through this projection before exposing any events.
+export function splendorEvents(state:SplendorState,revealHands=false):Event[] {
+  return state.events.map(stored=>{
+    if(stored.type!=='reserveDeck'||revealHands)return {...stored};
+    const {cards:_,...event}=stored;
+    return {...event,text:`暗抽 ${event.level} 级卡并预留${event.tokens?.gold?'，获得 1 黄金':'，黄金已空'}`};
+  });
+}
 export function viewSplendor(state:SplendorState,viewer:number|null,revealHands=false):SplendorView {
   const player=viewer===null?null:state.players[viewer];
   return structuredClone({gameId:state.gameId,id:state.id,round:state.round,revision:state.revision,phase:state.phase,turn:state.turn,firstSeat:state.firstSeat,turnsTaken:state.turnsTaken,finalRound:state.finalRound,viewer,
-    players:state.players.map(p=>({...p,bought:p.bought.map(id=>CARD_BY_ID[id]),reserved:p.reserved.map(r=>({level:r.level,source:r.source,card:p.seat===viewer||revealHands||r.revealed?CARD_BY_ID[r.cardId]:null})),nobles:p.nobles.map(id=>NOBLE_BY_ID[id]),bonuses:bonuses(p),points:points(p)})),
+    players:state.players.map(p=>({...p,bought:p.bought.map(id=>CARD_BY_ID[id]),reserved:p.reserved.map(r=>({level:r.level,source:r.source,card:r.source==='market'||p.seat===viewer||revealHands||r.revealed?CARD_BY_ID[r.cardId]:null})),nobles:p.nobles.map(id=>NOBLE_BY_ID[id]),bonuses:bonuses(p),points:points(p)})),
     bank:state.bank,deckCounts:Object.fromEntries(LEVELS.map(level=>[level,state.decks[level].length])) as Record<Level,number>,market:Object.fromEntries(LEVELS.map(level=>[level,state.market[level].map(id=>id?CARD_BY_ID[id]:null)])) as SplendorView['market'],
-    nobles:state.nobles.map(id=>NOBLE_BY_ID[id]),events:state.events,result:state.result,legalActions:viewer===null?[]:legalActions(state,viewer),returnCount:player&&state.phase==='return'&&viewer===state.turn?tokenCount(player.tokens)-10:0,eligibleNobles:state.phase==='noble'&&viewer===state.turn?eligibleNobles(state,state.turn):[]});
+    nobles:state.nobles.map(id=>NOBLE_BY_ID[id]),events:splendorEvents(state,revealHands),result:state.result,legalActions:viewer===null?[]:legalActions(state,viewer),returnCount:player&&state.phase==='return'&&viewer===state.turn?tokenCount(player.tokens)-10:0,eligibleNobles:state.phase==='noble'&&viewer===state.turn?eligibleNobles(state,state.turn):[]});
 }
 
 // Domain invariants are shared by action transitions and browser-state restoration.
@@ -202,7 +211,7 @@ export function assertSplendor(state:SplendorState){
   const validInt=(n:unknown)=>Number.isSafeInteger(n)&&(n as number)>=0;
   if(state.gameId!=='splendor'||typeof state.id!=='string'||!state.id||!validInt(state.round)||state.round<1||!Number.isFinite(Date.parse(state.createdAt))||typeof state.finalRound!=='boolean'||!Array.isArray(state.players)||state.players.length<2||state.players.length>4||!['action','return','noble','finished'].includes(state.phase)||!validInt(state.revision)||state.revision<1)throw Error('璀璨宝石存档格式无效');
   if(!validInt(state.turn)||state.turn>=state.players.length||!validInt(state.firstSeat)||state.firstSeat>=state.players.length||!Array.isArray(state.turnsTaken)||state.turnsTaken.length!==state.players.length||!state.turnsTaken.every(validInt))throw Error('回合数据无效');
-  if(!Array.isArray(state.events)||!state.events.length||!state.events.every((e,i)=>e.seq===i+1&&typeof e.text==='string'&&Number.isFinite(Date.parse(e.time))&&(e.seat===undefined||validInt(e.seat)&&e.seat<state.players.length)&&(!e.cards||Array.isArray(e.cards)&&e.cards.every(id=>!!CARD_BY_ID[id]))))throw Error('公开记录无效');
+  if(!Array.isArray(state.events)||!state.events.length||!state.events.every((e,i)=>e.seq===i+1&&typeof e.text==='string'&&Number.isFinite(Date.parse(e.time))&&(e.seat===undefined||validInt(e.seat)&&e.seat<state.players.length)&&(!e.cards||Array.isArray(e.cards)&&e.cards.every(id=>!!CARD_BY_ID[id]))))throw Error('行动记录无效');
   if(state.phase!=='finished'){
     const count=state.players.length,completed=state.turnsTaken.reduce((n,t)=>n+t,0),rounds=Math.floor(completed/count),extra=completed%count;
     if(state.turn!==(state.firstSeat+extra)%count||state.turnsTaken.some((n,seat)=>n!==rounds+((seat-state.firstSeat+count)%count<extra?1:0)))throw Error('行动次数与当前回合不一致');

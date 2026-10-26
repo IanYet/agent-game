@@ -55,7 +55,7 @@ describe('无限注流程、底池与隔离', () => {
       expect(view.events).toEqual(expected);
       expect(view.players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
       expect('deck' in view).toBe(false);expect('burned' in view).toBe(false);
-      expect(JSON.parse(holdemModule.initializePrompt(run,player.playerId).split('初始观察：')[1]).events).toEqual(expected);
+      expect(JSON.parse(holdemModule.decisionPrompt(run,{decisionId:'view',actorId:player.playerId}).split('当前观察：')[1]).events).toEqual(expected);
     }
     const decision=holdemModule.decisions(run)[0];
     expect(JSON.parse(holdemModule.decisionPrompt(run,decision).split('当前观察：')[1]).events).toEqual(expected);
@@ -73,7 +73,7 @@ describe('无限注流程、底池与隔离', () => {
     expect('deck' in table).toBe(false);expect('burned' in table).toBe(false);expect(table.legalActions).toEqual([]);expect(table.betting).toBe(null);
     for(const player of run.roster){
       expect(holdemModule.observe(run,player.playerId).players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
-      expect(JSON.parse(holdemModule.initializePrompt(run,player.playerId).split('初始观察：')[1]).players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
+      expect(JSON.parse(holdemModule.decisionPrompt(run,{decisionId:'view',actorId:player.playerId}).split('当前观察：')[1]).players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
       const result=holdemModule.handleTool(run,{id:'read',scopeId:'run',playerId:player.playerId,tool:'game_get_state',args:{}}).result.structuredContent as any;
       expect(result.players.filter((p:any)=>p.hand).map((p:any)=>p.playerId)).toEqual([player.playerId]);
     }

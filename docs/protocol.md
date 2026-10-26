@@ -21,6 +21,7 @@
 - `concurrent-decisions-v1`
 - `structured-results-v1`
 - `local-conversations-v1`
+- `agent-notifications-v1`（连接器 0.5.3 起提供）
 
 ## HTTP 与事件
 
@@ -33,6 +34,7 @@
 | GET /api/events | 授权 SSE：ready、tool、activity、usage、conversation |
 | POST /api/sessions | 创建单玩家原生会话及固定工具注册表 |
 | POST /api/sessions/:id/turn | 传 decisionId、模块提示词和可选模型/强度；按玩家并发 |
+| POST /api/sessions/:id/notify | 传私有通知与可选模型/强度，不授予行动权限、不要求回复 |
 | POST /api/tool-results | 网页返回标准 MCP 结果 |
 | POST /api/pause | 取消并等待全部活动推理 |
 | DELETE /api/sessions | 撤销全部会话；可用 ids 数组只关闭指定会话 |
@@ -56,7 +58,9 @@ interface SessionRequest {
 
 没有 gameId 枚举、座位上界、牌类规则、固定行动参数或网页代码。创建时给会话生成随机 capability 和隔离工作目录。capability 封装玩家和作用域；MCP 参数不能改变绑定。
 
-`/turn` 接受 `{decisionId,prompt,settings?}`。同一原生会话不允许重叠任务，不同会话可并发。桥只报告原生任务 completed，决策完成与否由网页模块检查。
+`/turn` 接受 `{decisionId,prompt,settings?}`，`/notify` 接受 `{prompt,settings?}`，后者不接受 decisionId。通知与决策在同一原生会话中不能重叠，不同玩家可并发。桥只报告原生任务 completed；决策是否完成由网页模块检查，通知不要求行动或回复。两类消息使用相同的取消、超时与限流处理。
+
+初始化不携带局面快照。网页为每个实际会话维护记录游标：首条消息包含完整可见上下文，之后只发新增记录；成功才确认本次快照的截止序号。更换 Agent、模型设置或重建会话时重新同步，连接器不在原句柄下隐式恢复已关闭的会话。
 
 转发的工具请求是 `{id,scopeId,playerId,decisionId?,tool,args}`；控制事件用 playerId 路由。工具结果通过 id 与原请求关联，默认 20 秒未得到网页响应即失败。
 
@@ -88,7 +92,7 @@ dsh 的 tools.guard 与 WorkBuddy 的 allowedTools 来自当前注册表。Codex
 
 ## 决策授权
 
-requiresDecision 工具必须存在该原生会话正在处理的 decision。桥将该 ID 附到请求，网页检查它仍属于当前 scope/player、仍在 pending 集合中且工具在 allowedTools 内。
+requiresDecision 工具必须存在该原生会话正在处理且带 decisionId 的 decision；只有通知任务时没有行动权限。桥将该 ID 附到请求，网页检查它仍属于当前 scope/player、仍在 pending 集合中且工具在 allowedTools 内。
 
 旧 scope、完成的 decision、重复动作、暂停后的行动和其他玩家的请求都会被拒绝。只读工具可在暂停中读取当前模块允许的私有观察。会话撤销立即删除 capability，并取消其未完成的工具请求。
 

@@ -1,6 +1,8 @@
 import {describe,it,expect} from 'vitest';
 import {applyCitadels,assertCitadels,createCitadels,legalCitadels,nextCitadels,scoreCitadels,viewCitadels,type CitadelsState,type PlayerInput} from './engine';
 import {district,makeDeck,type BuiltDistrict,type District} from './cards';
+import {definition as module} from './definition';
+import type {StoredRun} from '../../runtime/types';
 const players=(n=4):PlayerInput[]=>Array.from({length:n},(_,i)=>({playerId:`p${i}`,name:`城主${i+1}`,kind:i===0?'human':'agent'}));
 const seeded=(seed:number)=>()=>{seed=Math.imul(seed,1664525)+1013904223|0;return (seed>>>0)/4294967296;};
 function stage(role=4){
@@ -20,6 +22,48 @@ function city(s:CitadelsState,seat:number,keys:string[],round=1){keys.forEach(ke
 function hand(s:CitadelsState,seat:number,key:string){const c=take(s,key);s.players[seat].hand.push(c);return c;}
 function main(s:CitadelsState){return applyCitadels(s,s.turn,{type:'income',source:'gold'});}
 function draft(s:CitadelsState){while(s.phase==='draft')s=applyCitadels(s,s.turn,legalCitadels(s,s.turn)[0].action);return s;}
+function runFor(state:CitadelsState):StoredRun<CitadelsState>{return {moduleId:module.id,moduleVersion:module.version,stateVersion:module.stateVersion,roomId:'room',runId:state.id,index:state.gameNumber,config:state.config,roster:state.players.map(p=>({playerId:p.playerId,name:p.name,kind:'codex' as const})),state};}
+
+describe('私有技能通知与信息范围',()=>{
+  it('刺杀只通知实际持有人，不新增决策，也不向其他玩家公开持有人',()=>{
+    let s=stage(1);assign(s,1,6);assign(s,2,8);const before=s.events.length;
+    s=applyCitadels(s,0,{type:'assassinate',role:6});
+    const run=runFor(s),own=viewCitadels(s,1),prompt=module.notificationPrompt!(run,'p1',before)!;
+    expect(own.notifications).toEqual([expect.objectContaining({seq:s.events.length,round:1,kind:'assassinate',text:expect.stringContaining('商人被刺杀')})]);
+    for(const viewer of [0,2,3,null])expect(viewCitadels(s,viewer).notifications).toEqual([]);
+    expect(viewCitadels(s,0).players[1].roles).toEqual([]);expect(s.events.at(-1)).not.toHaveProperty('target');expect(s.players[1].revealed).toEqual([]);
+    expect(module.decisions(run).map(d=>d.actorId)).toEqual(['p0']);expect(legalCitadels(s,1)).toEqual([]);
+    expect(prompt).toContain('无需回复');expect(JSON.parse(prompt.split('当前私有观察：')[1]).legalActions).toEqual([]);
+    expect(module.notificationPrompt!(run,'p0',before)).toBeNull();expect(module.notificationPrompt!(run,'p1',s.events.length)).toBeNull();
+    s=main(s);s=applyCitadels(s,0,{type:'end'});expect(s.called).toBe(8);expect(s.players[1].revealed).toEqual([]);
+  });
+  it('被选为偷盗目标时尚未扣钱，叫号时再通知实际转移；暗弃身份不通知任何玩家',()=>{
+    let s=stage(2);assign(s,1,6);gold(s,1,7);s=applyCitadels(s,0,{type:'steal',role:6});
+    const selected=s.events.length;expect(s.players[1].gold).toBe(7);expect(viewCitadels(s,1).notifications.map(n=>n.kind)).toEqual(['steal']);
+    s=main(s);s=applyCitadels(s,0,{type:'end'});expect(s.players[1].gold).toBe(0);
+    const notice=module.notificationPrompt!(runFor(s),'p1',selected)!;
+    const view=JSON.parse(notice.split('当前私有观察：')[1]);expect(view.notifications.map((n:any)=>n.kind)).toEqual(['robbed']);expect(view.notifications[0].text).toContain('7 金币');expect(view.events.every((e:any)=>e.seq>selected)).toBe(true);
+    const abandoned=applyCitadels(stage(2),0,{type:'steal',role:6});expect(abandoned.notifications).toEqual([]);
+    expect(applyCitadels(stage(1),0,{type:'assassinate',role:6}).notifications).toEqual([]);
+  });
+  it('换牌只把换后的手牌通知目标；其他人、公开导出和回放看不到私有牌',()=>{
+    const before=stage(3),newHand=structuredClone(before.players[0].hand),s=applyCitadels(before,0,{type:'magic_swap',target:1});
+    const run=runFor(s),notice=viewCitadels(s,1).notifications[0];expect(notice.hand).toEqual(newHand);expect(s.players[1].hand).toEqual(newHand);
+    for(const viewer of [0,2,3,null])expect(viewCitadels(s,viewer).notifications).toEqual([]);
+    expect(s.events.at(-1)?.cards).toBeUndefined();expect(JSON.stringify(module.observe(run,null))).not.toContain(newHand[0].id);
+    const first=JSON.parse(module.notificationPrompt!(run,'p1',0)!.split('当前私有观察：')[1]);expect(first.events).toEqual(s.events);expect(first.notifications[0].hand).toEqual(newHand);
+    const tool=module.handleTool(run,{id:'read',scopeId:run.runId,playerId:'p1',tool:'game_get_state',args:{}}).result.structuredContent as any;expect(tool.notifications).toEqual(viewCitadels(s,1).notifications);expect(tool.events).toEqual(s.events);
+    const delta=JSON.parse(module.decisionPrompt(run,{decisionId:'view',actorId:'p1'},s.events.length).split('当前私有观察：')[1]);expect(delta.notifications).toEqual([]);expect(delta.events).toEqual([]);expect(delta.players[1].hand).toEqual(newHand);
+    expect(module.restore(structuredClone(s),2)).toEqual(s);expect(()=>module.restore(s,1)).toThrow();
+    const empty=stage(3);empty.deck.push(...empty.players[0].hand);empty.players[0].hand=[];expect(viewCitadels(applyCitadels(empty,0,{type:'magic_swap',target:1}),1).notifications[0].hand).toEqual([]);
+  });
+  it('同一玩家的另一个身份被技能选中时仍能收到自己的通知，跨轮不串给新持有人',()=>{
+    let s=stage(1);assign(s,0,6);assign(s,1,8);s=applyCitadels(s,0,{type:'assassinate',role:6});expect(viewCitadels(s,0).notifications).toHaveLength(1);
+    s=main(s);s=applyCitadels(s,0,{type:'end'});s=main(s);s=applyCitadels(s,1,{type:'end'});expect(s.round).toBe(2);
+    expect(viewCitadels(s,0).notifications[0].round).toBe(1);expect(viewCitadels(s,1).notifications).toEqual([]);
+    expect(nextCitadels({...s,phase:'finished'},'next',players(),seeded(9)).notifications).toEqual([]);
+  });
+});
 
 describe('经典八身份 · 人数与秘密选角',()=>{
   it('只允许 3–7 人，开局 66 张建筑与金币守恒',()=>{

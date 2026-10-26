@@ -13,7 +13,7 @@ export interface StoredRun<S = any> {
 export interface PendingDecision { decisionId: string; actorId: string; allowedTools?: string[]; deadline?: number }
 export interface MatchSummary { id: string; gameId: string; round: number; endedAt: string; title: string; subtitle: string; entries: Array<{ label: string; value: string; positive?: boolean }> }
 export interface SeatRuntime { playerId: string; seat: number; kind: PlayerKind; status: 'idle'|'connecting'|'ready'|'thinking'|'error'|'paused'; sessionId?:string; message?:string; lastTool?:string; turns:number; tokens:number }
-export interface AppSnapshot<V = any> { connector:ConnectorInfo|null; connected:boolean; connectorUpdateRequired:boolean; game:V|null; room:Omit<StoredRun,'state'> & {finished:boolean} | null; seats:SeatRuntime[]; paused:boolean; curiosityMode:boolean; conversations:Record<string,ConversationEntry[]>; conversationError:string|null; error:string|null; history:MatchSummary[]; activity:{phase:string;detail?:string;actors:string[]} | null }
+export interface AppSnapshot<V = any> { connector:ConnectorInfo|null; connected:boolean; connectorUpdateRequired:boolean; game:V|null; room:Omit<StoredRun,'state'> & {finished:boolean;notificationsPending?:boolean} | null; seats:SeatRuntime[]; paused:boolean; curiosityMode:boolean; conversations:Record<string,ConversationEntry[]>; conversationError:string|null; error:string|null; history:MatchSummary[]; activity:{phase:string;detail?:string;actors:string[]} | null }
 export interface CreateOptions { gameId?:string; config?:any; curiosityMode?:boolean }
 export interface TableViewOptions { revealHands:boolean }
 export interface GameUiProps { state:AppSnapshot; controller:GameController; onError:(message:string)=>void; tableActions?:ReactNode }
@@ -33,7 +33,9 @@ export interface GameModule<S = any,V = any> {
   decisions:(run:StoredRun<S>)=>PendingDecision[];
   tools:(run:StoredRun<S>,playerId:string)=>ToolDefinition[];
   initializePrompt:(run:StoredRun<S>,playerId:string)=>string;
-  decisionPrompt:(run:StoredRun<S>,decision:PendingDecision)=>string;
+  historyCursor:(run:StoredRun<S>)=>number;
+  decisionPrompt:(run:StoredRun<S>,decision:PendingDecision,afterEvent?:number)=>string;
+  notificationPrompt?:(run:StoredRun<S>,playerId:string,afterEvent:number)=>string|null;
   handleTool:(run:StoredRun<S>,request:BrowserToolRequest)=>{state?:S;result:ToolResponse};
   humanAction:(run:StoredRun<S>,playerId:string,input:unknown)=>S;
   timeout?:(run:StoredRun<S>,decision:PendingDecision)=>S;

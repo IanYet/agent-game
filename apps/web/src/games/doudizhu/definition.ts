@@ -3,7 +3,7 @@ import {DOUDIZHU_RULES} from './rules';
 import type {DoudizhuState,GameAction} from './types';
 import {toolResult} from '@agent-game/protocol';
 import type {GameModule,StoredRun} from '../../runtime/types';
-import {enginePlayers,seatFor,decorateView,emptySchema,readOnly,decisionKey,checkRevision,agentObservation} from '../shared';
+import {historyCursor,historyInstructions,incrementalObservation,enginePlayers,seatFor,decorateView,emptySchema,readOnly,decisionKey,checkRevision,agentObservation} from '../shared';
 const descriptors=[
  {name:'game_get_state',description:'读取自己的手牌、公开状态及 events 中从本局发牌开始的完整记录。记录按 seq 递增，包含叫分、地主底牌、每次出牌的玩家与牌、牌型、不出和结算，不限制为最近几次行动；隐藏其他玩家尚未公开的手牌。',inputSchema:emptySchema,annotations:readOnly},
  {name:'game_legal_actions',description:'分页获取当前玩家的合法叫分、出牌或不出，返回 actionId。',inputSchema:{type:'object' as const,properties:{offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:100}},additionalProperties:false},annotations:readOnly},
@@ -22,8 +22,9 @@ export const doudizhuModule:GameModule<DoudizhuState>={
  tableView:(run,actor,{revealHands})=>decorateView(viewGame(run.state,actor===null?null:seatFor(run,actor),revealHands),run.roster),
  decisions:run=>run.state.phase==='finished'?[]:[{decisionId:decisionKey(run,run.state.revision,run.state.turn),actorId:run.roster[run.state.turn].playerId,allowedTools:['game_act']}],
  tools:()=>descriptors,
- initializePrompt:(run,actor)=>`你是斗地主玩家 ${run.roster[seatFor(run,actor)].name}。\n${DOUDIZHU_RULES}\n只通过游戏工具游玩；此会话仅用于本局。观察中的 events 是本局按 seq 排序的完整公开记录，包含叫分、出牌与不出；可通过 game_get_state 随时重新读取。\n初始观察：${JSON.stringify(agentObservation(observe(run,actor)))}`,
- decisionPrompt:(run,d)=>`斗地主第 ${run.index} 局，决策 ${d.decisionId}。读取自己的状态，执行一次合法行动，然后结束任务。当前观察：${JSON.stringify(agentObservation(observe(run,d.actorId)))}`,
+  historyCursor,
+ initializePrompt:(run,actor)=>`你是斗地主玩家 ${run.roster[seatFor(run,actor)].name}。\n${DOUDIZHU_RULES}\n只通过游戏工具游玩；此会话仅用于本局。events 记录本局叫分、出牌与不出，按 seq 递增。\n${historyInstructions}`,
+ decisionPrompt:(run,d,afterEvent=0)=>`斗地主第 ${run.index} 局，决策 ${d.decisionId}。读取自己的状态，执行一次合法行动，然后结束任务。当前观察：${JSON.stringify(incrementalObservation(agentObservation(observe(run,d.actorId)),afterEvent))}`,
  handleTool:(run,request)=>{
    const seat=seatFor(run,request.playerId),state=run.state;
    if(request.tool==='game_rules')return{result:toolResult({rules:DOUDIZHU_RULES})};

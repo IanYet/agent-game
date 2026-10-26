@@ -1,7 +1,7 @@
 import {toolResult} from '@agent-game/protocol';
 import {Chess} from 'chess.js';
 import type {GameModule,StoredRun} from '../../runtime/types';
-import {decorateView,decisionKey,emptySchema,enginePlayers,readOnly,seatFor,checkRevision} from '../shared';
+import {historyCursor,historyInstructions,incrementalObservation,decorateView,decisionKey,emptySchema,enginePlayers,readOnly,seatFor,checkRevision} from '../shared';
 import {applyChessAction,CHESS_RULES,COLOR_NAMES,createChess,DEFAULT_CHESS_OPTIONS,legalChessActions,restoreChess,validateChessOptions,viewChess,type ChessState} from './engine';
 
 const tools=[
@@ -24,8 +24,9 @@ export const definition:GameModule<ChessState>={
   tableView:(run,actor)=>decorateView(observe(run,actor),run.roster),
   decisions:run=>run.state.phase==='finished'?[]:[{decisionId:decisionKey(run,run.state.revision,run.state.turn),actorId:run.roster[run.state.turn].playerId,allowedTools:['game_act']}],
   tools:()=>tools,
-  initializePrompt:(run,actor)=>`你是国际象棋玩家 ${run.roster[seatFor(run,actor)].name}，执${COLOR_NAMES[run.state.players[seatFor(run,actor)].color]}。\n${CHESS_RULES}\n所有棋子公开。请认真争胜，不为尽快结束而随意认输。通过 game_legal_actions 取得当前可靠棋步；只使用列表中的 actionId。完成一个行动后结束本次任务。初始观察：${JSON.stringify(promptView(run,actor))}`,
-  decisionPrompt:(run,d)=>`国际象棋第 ${run.index} 局，决策 ${d.decisionId}。选择当前合法 actionId，调用 game_act 完成行动，然后结束任务。预定棋步的和棋申请不会落子，拒绝提和后仍由你走棋。观察：${JSON.stringify(promptView(run,d.actorId))}`,
+  historyCursor,
+  initializePrompt:(run,actor)=>`你是国际象棋玩家 ${run.roster[seatFor(run,actor)].name}，执${COLOR_NAMES[run.state.players[seatFor(run,actor)].color]}。\n${CHESS_RULES}\n所有棋子公开。请认真争胜，不为尽快结束而随意认输。通过 game_legal_actions 取得当前可靠棋步；只使用列表中的 actionId。完成一个行动后结束本次任务。${historyInstructions}`,
+  decisionPrompt:(run,d,afterEvent=0)=>`国际象棋第 ${run.index} 局，决策 ${d.decisionId}。选择当前合法 actionId，调用 game_act 完成行动，然后结束任务。预定棋步的和棋申请不会落子，拒绝提和后仍由你走棋。观察：${JSON.stringify(incrementalObservation(promptView(run,d.actorId),afterEvent))}`,
   handleTool:(run,request)=>{
     const seat=seatFor(run,request.playerId),state=run.state;
     if(request.tool==='game_rules')return {result:toolResult({rules:CHESS_RULES})};

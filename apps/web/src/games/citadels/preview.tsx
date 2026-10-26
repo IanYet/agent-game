@@ -21,14 +21,14 @@ const roster:StablePlayer[]=[
   {playerId:'preview-echo',name:'回声',kind:'codex-acp'},
   {playerId:'preview-hill',name:'远山',kind:'codex-acp'},
 ];
-type PreviewScene='main'|'draft'|'keep'|'income'|'assassin'|'thief'|'magician'|'magician-income'|'king'|'bishop'|'merchant'|'architect'|'warlord'|'warlord-income'|'keep-three-one'|'keep-three-two'|'graveyard'|'paused'|'finished';
+type PreviewScene='main'|'draft'|'keep'|'income'|'assassin'|'thief'|'magician'|'magician-income'|'king'|'bishop'|'merchant'|'architect'|'warlord'|'warlord-income'|'keep-three-one'|'keep-three-two'|'graveyard'|'notification'|'paused'|'finished';
 const extraScenes:readonly {id:PreviewScene;label:string}[]=[
   {id:'income',label:'正常收入与建筑技能'},{id:'assassin',label:'刺客技能'},{id:'thief',label:'盗贼技能'},
   {id:'magician',label:'魔术师技能'},{id:'magician-income',label:'魔术师收入前'},
   {id:'king',label:'国王技能'},{id:'bishop',label:'主教技能'},{id:'merchant',label:'商人技能'},
   {id:'architect',label:'建筑师技能'},{id:'warlord',label:'军阀拆除'},{id:'warlord-income',label:'军阀收入前'},
   {id:'keep-three-one',label:'抽三留一'},{id:'keep-three-two',label:'抽三留二'},{id:'graveyard',label:'墓地收回'},
-  {id:'paused',label:'暂停状态'},{id:'finished',label:'结算状态'},
+  {id:'notification',label:'收到换牌通知'},{id:'paused',label:'暂停状态'},{id:'finished',label:'结算状态'},
 ];
 function displayGame(scene:PreviewScene,revision:number){
   const draft=scene==='draft',drawing=scene==='keep'||scene.startsWith('keep-three');
@@ -58,6 +58,12 @@ function displayGame(scene:PreviewScene,revision:number){
     state.winners=[[...state.scores].sort((a,b)=>b.total-a.total||b.districts-a.districts||b.gold-a.gold)[0].seat];
   }
   state.events=[];
+  if(scene==='notification'){
+    state.turn=1;state.called=3;
+    state.players[0].revealed=[];state.players[1].roles=[3];state.players[1].revealed=[3];state.faceDown=state.faceDown.map(role=>role===3?1:role);
+    state.events=[{seq:1,round:8,time:new Date().toISOString(),seat:1,role:3,text:'魔术师与 你 交换全部手牌（内容保密）。'}];
+    state.notifications=[{seq:1,round:8,recipient:0,kind:'magic_swap',text:'魔术师 北河 已与你交换全部手牌，你现在有 4 张手牌。',hand:state.players[0].hand.map(card=>({...card}))}];
+  }
   const view=viewCitadels(state,0);
   return {...view,players:view.players.map((player,seat)=>({...player,...roster[seat]}))};
 }
@@ -67,7 +73,7 @@ function CitadelsPreview(){
   const effects=useEffectsPreference();
   useEffect(()=>{document.documentElement.dataset.reducedMotion=String(effects.reduced);},[effects.reduced]);
   const game=useMemo(()=>displayGame(scene,revision),[scene,revision]);
-  const state:AppSnapshot={connector:null,connected:false,connectorUpdateRequired:false,game,room:{moduleId:'citadels',moduleVersion:'1.0.0',stateVersion:1,roomId:game.id,runId:game.id,index:1,roster,config:{firstCrown:1},finished:game.phase==='finished'},seats:roster.map((player,seat)=>({...player,seat,status:'ready',turns:7,tokens:0})),paused:scene==='paused',curiosityMode:false,conversations:{},conversationError:null,error:null,history:[],activity:{phase:'八城区四手牌展示',actors:[]}};
+  const state:AppSnapshot={connector:null,connected:false,connectorUpdateRequired:false,game,room:{moduleId:'citadels',moduleVersion:'1.1.0',stateVersion:2,roomId:game.id,runId:game.id,index:1,roster,config:{firstCrown:1},finished:game.phase==='finished'},seats:roster.map((player,seat)=>({...player,seat,status:'ready',turns:7,tokens:0})),paused:scene==='paused',curiosityMode:false,conversations:{},conversationError:null,error:null,history:[],activity:{phase:'八城区四手牌展示',actors:[]}};
   const controller={humanAction:()=>setMessage('这是展示场景；可选择卡牌和查看提示，确认行动不会修改正式对局。')} as unknown as GameController;
   return <div className="app-shell"><GameBackground enabled theme="citadels"/><VisualExperience enabled page="table"/><div className="app-content">
     <header className="site-header"><a className="brand" href="/"><Logo/><strong>同桌</strong><small>TONGZHUO</small></a><span style={{fontSize:11,color:'var(--muted)'}}>八张城区 · 四张手牌 · 五位玩家</span></header>

@@ -4,7 +4,7 @@ import type {HolographicPattern} from './holographic-engraving';
 import type {SvgIconName} from './svg-icons';
 import './holographic-card.css';
 
-export type {HolographicPattern} from './holographic-engraving';
+export type {HolographicPattern,HolographicEngraving} from './holographic-engraving';
 type CardTag='div'|'button';
 type CardOptions={
   glowColor?:`#${string}`;

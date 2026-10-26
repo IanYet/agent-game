@@ -1,6 +1,6 @@
 # 公共镭射卡组件
 
-`apps/web/src/visuals/HolographicCard.tsx` 提供暗色镭射卡面、指针光照、鼠标倾角和圆角饰圈。璀璨宝石的发展牌与贵族卡、富饶之城的身份与建筑卡共用它。游戏通过 `children` 提供数字、图标、费用和说明，公共组件不读取游戏数据。
+`apps/web/src/visuals/HolographicCard.tsx` 提供暗色镭射卡面、指针光照、鼠标倾角和圆角饰圈。璀璨宝石的发展牌、贵族卡与暗抽牌背，富饶之城的身份与建筑卡共用它。游戏通过 `children` 提供数字、图标、费用和说明，公共组件不读取游戏数据。
 
 ## 使用
 
@@ -50,7 +50,7 @@ import {HolographicCard} from '../../visuals/HolographicCard';
 | `highlightColor` | 与 `glowColor` 相同 | 悬停、键盘聚焦及选中时的外框颜色，支持 CSS 颜色 |
 | `trimColor` | `"#737d8c66"` | 悬停或键盘聚焦时显示的内圈颜色 |
 | `rainbow` | `false` | 开启彩虹衍射与珠光刻线；关闭时使用 `glowColor` |
-| `pattern` | `"contours"` | `"contours"` 为等高线，`"crowns"` 为错行王冠，`"rings"` 为同心圆，`"symbols"` 为错行平铺的符号，各纹路单独使用 |
+| `pattern` | `"contours"` | `"contours"` 为等高线，`"crowns"` 为错行王冠，`"rings"` 为同心圆，`"symbols"` 为错行平铺的符号；也可传入自定义刻纹对象，各纹路单独使用 |
 | `patternSymbol` | `"sparkle"` | `pattern="symbols"` 时平铺的 SVG 图标名称，例如 `"crown"`；可用图标见 `visuals/svg-icons.ts` |
 | `width` | `112` | 卡片宽度，数字以 CSS px 为单位，也可传入 CSS 长度或变量 |
 | `aspectRatio` | `64 / 91` | 宽高比，例如 `1` 为正方形 |
@@ -67,6 +67,10 @@ import {HolographicCard} from '../../visuals/HolographicCard';
 静止卡面保持正面朝向，默认光点位置不产生常驻倾斜。鼠标越靠近卡面边缘，倾斜越明显，单轴最大 10°，投影角点的位移遵循公共的 20 CSS px 上限。键盘聚焦与触屏输入不驱动倾角；减少动态或静态画面偏好下保持正面朝向。
 
 所有镭射卡统一使用默认的平行炫光，光色由 `glowColor` 和 `rainbow` 决定。富饶之城的身份卡传入 `pattern="symbols"` 和 `patternSymbol={身份的 SVG 图标名称}`，选中或当前叫号身份的 `restingLight` 为 `[0.5,0.5]`，其余为 `[0.09,0.09]`。建筑卡使用 `pattern="rings"` 与类别色，选中时同样将静止光点放在中央。`GoldCoin.tsx` 提供两款游戏共用的金币图标；`engraved` 开启时保留暗色凹刻层，由公共绘制器控制受光后的金色图层。
+
+游戏自己的纹路可通过 `pattern={{key,paint}}` 提供，类型为组件导出的 `HolographicEngraving`。`key` 是纹路的唯一缓存名，`paint(ctx,width,height)` 在已经按像素密度缩放的 Canvas 上绘制白色刻线，尺寸单位是 CSS px，透明度控制刻线强度。对象应定义在组件外，纹路或绘制参数改变时更换缓存名。公共绘制器将这些刻线送入同一镭射材质，不叠加等高线；Canvas 降级也沿用相同纹路和彩虹配色。
+
+璀璨宝石的暗抽牌背由游戏目录的 `reserve-artwork.ts` 绘制五种宝石轮廓，使用固定排列与随机朝向，中央留出金币区域。金币外轮廓是常显的无填充 SVG，币边、内圈与币面细纹直接画进同一镭射纹路层，受光时显现，没有金色填充。金币与周围宝石刻线之间保留间距。预留来源由游戏在卡片下方统一标注，不进入倾斜卡面。
 
 ## 图标随光照显色
 

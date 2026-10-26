@@ -1,6 +1,6 @@
 import {toolResult,type ToolDefinition} from '@agent-game/protocol';
 import type {GameModule,StoredRun,PendingDecision} from '../../runtime/types';
-import {enginePlayers,seatFor,decorateView,emptySchema,readOnly,checkRevision,agentObservation} from '../shared';
+import {historyCursor,historyInstructions,incrementalObservation,enginePlayers,seatFor,decorateView,emptySchema,readOnly,checkRevision,agentObservation} from '../shared';
 import {applyAction,createGame,createBaoDeck,legalActions,pendingSeats,viewGame} from './engine';
 import {BAOHUANG_RULES} from './rules';
 import type {BaoAction,BaoState,BaoView} from './types';
@@ -46,8 +46,9 @@ export const baohuangModule:GameModule<BaoState,BaoView>={
       scores:run.roster.map(p=>previous.state.players.find(old=>old.playerId===p.playerId)?.score??0)});
   },
   finished:s=>s.phase==='finished',observe,tableView:(run,actor,{revealHands})=>decorateView(viewGame(run.state,actor===null?null:seatFor(run,actor),revealHands),run.roster),decisions,tools:()=>tools,
-  initializePrompt:(run,actor)=>`你是山东保皇玩家${run.roster[seatFor(run,actor)].name}。\n${BAOHUANG_RULES}\n仅通过游戏工具行动，不能向其他玩家询问隐藏身份。events是本局全部公开事件。准备阶段全员同时确认，非侍卫只需ready；侍卫选择明或暗。普通副本等效，标记皇牌和侍卫牌可区别使用。\n初始观察：${JSON.stringify(agentObservation(observe(run,actor)))}`,
-  decisionPrompt:(run,d)=>`保皇第${run.index}局，决策${d.decisionId}。读取状态与合法行动，选一个actionId调用game_act，成功后结束任务。如果其他玩家同时准备使revision更新，请重读再提交；你的准备决策仍有效。\n当前观察：${JSON.stringify(agentObservation(observe(run,d.actorId)))}`,
+  historyCursor,
+  initializePrompt:(run,actor)=>`你是山东保皇玩家${run.roster[seatFor(run,actor)].name}。\n${BAOHUANG_RULES}\n仅通过游戏工具行动，不能向其他玩家询问隐藏身份。准备阶段全员同时确认，非侍卫只需ready；侍卫选择明或暗。普通副本等效，标记皇牌和侍卫牌可区别使用。\n${historyInstructions}`,
+  decisionPrompt:(run,d,afterEvent=0)=>`保皇第${run.index}局，决策${d.decisionId}。读取状态与合法行动，选一个actionId调用game_act，成功后结束任务。如果其他玩家同时准备使revision更新，请重读再提交；你的准备决策仍有效。\n当前观察：${JSON.stringify(incrementalObservation(agentObservation(observe(run,d.actorId)),afterEvent))}`,
   handleTool:(run,request)=>{
     try{
       const seat=seatFor(run,request.playerId);

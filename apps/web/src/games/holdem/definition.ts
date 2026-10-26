@@ -1,7 +1,7 @@
 import {applyHoldemAction,createHoldem,nextHoldemHand,viewHoldem,getHoldemLegalActions,holdemBetting,assertHoldemChips,validateHoldemOptions,HOLDEM_RULES,DEFAULT_HOLDEM_OPTIONS,type HoldemState,type HoldemAction} from './engine';
 import {toolResult} from '@agent-game/protocol';
 import type {GameModule,StoredRun} from '../../runtime/types';
-import {enginePlayers,seatFor,decorateView,emptySchema,readOnly,agentObservation,decisionKey,checkRevision} from '../shared';
+import {historyCursor,historyInstructions,incrementalObservation,enginePlayers,seatFor,decorateView,emptySchema,readOnly,agentObservation,decisionKey,checkRevision} from '../shared';
 const descriptors=[
  {name:'game_get_state',description:'读取自己的底牌、公共牌、筹码、底池、轮次、当前下注范围，以及 events 中从本手发牌开始的完整公开记录。记录按 seq 递增，包含盲注、弃牌、过牌、跟注、加注、各轮公共牌、退款和结算，不限制为最近几次行动；隐藏未公开的对手底牌、牌库和烧牌。',inputSchema:emptySchema,annotations:readOnly},
  {name:'game_legal_actions',description:'获取合法行动及 betting 下注范围。',inputSchema:{type:'object' as const,properties:{offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:100}},additionalProperties:false},annotations:readOnly},
@@ -21,8 +21,9 @@ export const holdemModule:GameModule<HoldemState>={
  tableView:(run,actor,{revealHands})=>decorateView(viewHoldem(run.state,actor===null?null:seatFor(run,actor),revealHands),run.roster),
  decisions:run=>run.state.phase==='finished'?[]:[{decisionId:decisionKey(run,run.state.revision,run.state.turn),actorId:run.roster[run.state.turn].playerId,allowedTools:['game_act']}],
  tools:()=>descriptors,
- initializePrompt:(run,actor)=>`你是德州扑克玩家 ${run.roster[seatFor(run,actor)].name}。\n${HOLDEM_RULES}\n本手独立会话。amount 表示本轮下注到的总额，不是额外增加量。观察中的 events 是本手按 seq 排序的完整公开行动与发牌记录，可通过 game_get_state 随时重新读取。初始观察：${JSON.stringify(agentObservation(observe(run,actor)))}`,
- decisionPrompt:(run,d)=>`德州扑克第 ${run.index} 手，决策 ${d.decisionId}。读取自己的状态，执行一次合法行动，然后结束任务。当前观察：${JSON.stringify(agentObservation(observe(run,d.actorId)))}`,
+  historyCursor,
+ initializePrompt:(run,actor)=>`你是德州扑克玩家 ${run.roster[seatFor(run,actor)].name}。\n${HOLDEM_RULES}\n本手独立会话。amount 表示本轮下注到的总额，不是额外增加量。events 记录本手公开行动与发牌，按 seq 递增。${historyInstructions}`,
+ decisionPrompt:(run,d,afterEvent=0)=>`德州扑克第 ${run.index} 手，决策 ${d.decisionId}。读取自己的状态，执行一次合法行动，然后结束任务。当前观察：${JSON.stringify(incrementalObservation(agentObservation(observe(run,d.actorId)),afterEvent))}`,
  handleTool:(run,request)=>{
    const seat=seatFor(run,request.playerId),state=run.state;
    if(request.tool==='game_rules')return{result:toolResult({rules:HOLDEM_RULES})};
