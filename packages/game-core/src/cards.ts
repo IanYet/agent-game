@@ -1,7 +1,7 @@
 import type { Card, Suit } from './types';
 
 export const RANK_LABELS: Record<number, string> = { 11: 'J', 12: 'Q', 13: 'K', 14: 'A', 15: '2', 16: '小王', 17: '大王' };
-export const SUIT_LABELS = { S: '♠', H: '♥', C: '♣', D: '♦', J: '★' };
+export const SUIT_LABELS = { S: '黑桃', H: '红桃', C: '梅花', D: '方块', J: '王牌' };
 export function rankLabel(rank: number): string { return RANK_LABELS[rank] ?? String(rank); }
 export function cardLabel(card: Card): string { return card.suit === 'J' ? rankLabel(card.rank) : `${SUIT_LABELS[card.suit]}${rankLabel(card.rank)}`; }
 export function createDeck(): Card[] {

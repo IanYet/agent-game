@@ -6,7 +6,9 @@ import {TILE_IMAGES} from '../games/azul/artwork';
 import {GemIcon} from '../games/splendor/gem';
 import {COLORS as GEM_COLORS} from '../games/splendor/types';
 import {CARD_SUIT_COLORS,CHESS_COLORS,POKER_CHIP_COLORS,CITADELS_CHIP_COLORS} from './table-palette';
-const fallbackSymbols:Record<'doudizhu'|'chess'|'azul',readonly string[]>={doudizhu:['♠','♥','♦','♣'],chess:['♔','♕','♖','♗','♘','♙'],azul:['']};
+import {SvgIcon} from './SvgIcon';
+import type {SvgIconName} from './svg-icons';
+const fallbackSymbols:Record<'doudizhu'|'chess',readonly SvgIconName[]>={doudizhu:['spade','heart','diamond','club'],chess:['chess-king','chess-queen','chess-rook','chess-bishop','chess-knight','chess-pawn']};
 const chipPalettes={holdem:POKER_CHIP_COLORS,citadels:CITADELS_CHIP_COLORS};
 
 export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme}){
@@ -86,7 +88,7 @@ export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme
       ?Array.from({length:12},(_,i)=><span className="table-fallback-gem" key={i}><GemIcon color={GEM_COLORS[i%GEM_COLORS.length]}/></span>)
       :theme==='holdem'||theme==='citadels'
       ?Array.from({length:12},(_,i)=><span className="table-fallback-chip" key={i} style={{background:chipPalettes[theme][i%chipPalettes[theme].length],textShadow:'none'}}/>)
-      :Array.from({length:12},(_,i)=><span key={i} style={{color:theme==='chess'?CHESS_COLORS[i%2]:CARD_SUIT_COLORS[i%CARD_SUIT_COLORS.length],textShadow:'none',...(theme==='azul'?{backgroundImage:`url("${TILE_IMAGES[i%5]}")`,filter:'none',boxShadow:'none'}:{})}}>{fallbackSymbols[theme][i%fallbackSymbols[theme].length]}</span>)}</div>
+      :Array.from({length:12},(_,i)=><span key={i} style={{color:theme==='chess'?CHESS_COLORS[i%2]:CARD_SUIT_COLORS[i%CARD_SUIT_COLORS.length],textShadow:'none',...(theme==='azul'?{backgroundImage:`url("${TILE_IMAGES[i%5]}")`,filter:'none',boxShadow:'none'}:{})}}>{theme!=='azul'&&<SvgIcon name={fallbackSymbols[theme][i%fallbackSymbols[theme].length]}/>}</span>)}</div>
     <div ref={surface} className="table-object-surface"/>
   </div>;
 }

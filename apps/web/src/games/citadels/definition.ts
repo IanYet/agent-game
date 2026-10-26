@@ -28,7 +28,7 @@ function actTool(run:StoredRun<CitadelsState>,request:BrowserToolRequest){
   const next=applyCitadels(s,seat,action);return {state:next,result:toolResult({success:true,revision:next.revision,message:'行动已完成。结束本次任务，等待新决策。'})};
 }
 export const definition:GameModule<CitadelsState>={
-  id:'citadels',version:'1.0.0',stateVersion:1,name:'富饶之城',description:'暗选身份，依序叫号。让城里的每一枚金币都有去处。',tagline:'经典八身份 · 3–7 人',presentation:{english:'CITADELS',symbol:'🏰',tone:'warm'},
+  id:'citadels',version:'1.0.0',stateVersion:1,name:'富饶之城',description:'暗选身份，依序叫号。让城里的每一枚金币都有去处。',tagline:'经典八身份 · 3–7 人',presentation:{english:'CITADELS',symbol:'castle',tone:'warm'},
   minPlayers:3,maxPlayers:7,defaultPlayers:4,defaultConfig:DEFAULT_CONFIG,runNoun:'局',validateConfig,
   rules:()=>RULES,lifecycle:{sessionScope:'run',eagerAgents:false},
   activity:run=>({phase:({draft:'秘密选角',income:'正常收入',keep:'保留收入牌',main:'建造与技能',graveyard:'墓地收回',finished:'本局已结算'})[run.state.phase],detail:`第 ${run.state.round} 轮${run.state.phase==='draft'?'':` · ${roleName(run.state.called)}`}`}),

@@ -51,7 +51,7 @@ import {HolographicCard} from '../../visuals/HolographicCard';
 | `trimColor` | `"#737d8c66"` | 悬停或键盘聚焦时显示的内圈颜色 |
 | `rainbow` | `false` | 开启彩虹衍射与珠光刻线；关闭时使用 `glowColor` |
 | `pattern` | `"contours"` | `"contours"` 为等高线，`"crowns"` 为错行王冠，`"rings"` 为同心圆，`"symbols"` 为错行平铺的符号，各纹路单独使用 |
-| `patternSymbol` | `""` | `pattern="symbols"` 时平铺的字符或 emoji，例如 `"👑"` |
+| `patternSymbol` | `"sparkle"` | `pattern="symbols"` 时平铺的 SVG 图标名称，例如 `"crown"`；可用图标见 `visuals/svg-icons.ts` |
 | `width` | `112` | 卡片宽度，数字以 CSS px 为单位，也可传入 CSS 长度或变量 |
 | `aspectRatio` | `64 / 91` | 宽高比，例如 `1` 为正方形 |
 | `radius` | `12` | 外圆角半径，单位为 CSS px，最小为 2 |
@@ -66,7 +66,7 @@ import {HolographicCard} from '../../visuals/HolographicCard';
 
 静止卡面保持正面朝向，默认光点位置不产生常驻倾斜。鼠标越靠近卡面边缘，倾斜越明显，单轴最大 10°，投影角点的位移遵循公共的 20 CSS px 上限。键盘聚焦与触屏输入不驱动倾角；减少动态或静态画面偏好下保持正面朝向。
 
-所有镭射卡统一使用默认的平行炫光，光色由 `glowColor` 和 `rainbow` 决定。富饶之城的身份卡传入 `pattern="symbols"` 和 `patternSymbol={身份 emoji}`，选中或当前叫号身份的 `restingLight` 为 `[0.5,0.5]`，其余为 `[0.09,0.09]`。建筑卡使用 `pattern="rings"` 与类别色，选中时同样将静止光点放在中央。`GoldCoin.tsx` 提供两款游戏共用的金币图标；`engraved` 开启时保留暗色凹刻层，由公共绘制器控制受光后的金色图层。
+所有镭射卡统一使用默认的平行炫光，光色由 `glowColor` 和 `rainbow` 决定。富饶之城的身份卡传入 `pattern="symbols"` 和 `patternSymbol={身份的 SVG 图标名称}`，选中或当前叫号身份的 `restingLight` 为 `[0.5,0.5]`，其余为 `[0.09,0.09]`。建筑卡使用 `pattern="rings"` 与类别色，选中时同样将静止光点放在中央。`GoldCoin.tsx` 提供两款游戏共用的金币图标；`engraved` 开启时保留暗色凹刻层，由公共绘制器控制受光后的金色图层。
 
 ## 图标随光照显色
 

@@ -10,7 +10,7 @@ const descriptors=[
 ];
 const observe=(run:StoredRun<HoldemState>,actor:string|null)=>decorateView(viewHoldem(run.state,actor===null?null:seatFor(run,actor)),run.roster);
 export const holdemModule:GameModule<HoldemState>={
- presentation:{english:'TEXAS HOLD’EM',symbol:'♠',tone:'cool'},
+ presentation:{english:'TEXAS HOLD’EM',symbol:'spade',tone:'cool'},
  id:'holdem',version:'1.0.0',stateVersion:1,name:'德州扑克',description:'读牌、下注、全下。筹码留在桌上，下一手重新思考。',tagline:'无限注',minPlayers:2,maxPlayers:9,defaultPlayers:4,defaultConfig:DEFAULT_HOLDEM_OPTIONS,runNoun:'手',
  validateConfig:validateHoldemOptions,
  activity:run=>({phase:({preflop:'翻牌前',flop:'翻牌',turn:'转牌',river:'河牌',finished:'本手已结算'})[run.state.phase],detail:`第 ${run.index} 手 · 盲注 ${run.state.options.smallBlind}/${run.state.options.bigBlind}`}),

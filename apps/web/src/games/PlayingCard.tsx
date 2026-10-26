@@ -1,7 +1,11 @@
 import {useLayoutEffect,useRef,type HTMLAttributes,type ReactNode} from 'react';
-import {cardLabel,rankLabel,SUIT_LABELS,type Card} from '@agent-game/core';
+import {cardLabel,rankLabel,type Card} from '@agent-game/core';
 import {useEffectsPreference} from '../visuals/preferences';
+import {SvgIcon} from '../visuals/SvgIcon';
+import type {SvgIconName} from '../visuals/svg-icons';
 import './PlayingCard.css';
+
+const SUIT_ICONS:Record<Card['suit'],SvgIconName>={S:'spade',H:'heart',C:'club',D:'diamond',J:'joker'};
 
 export type PlayingCardProps={
   card?:Card;
@@ -19,10 +23,10 @@ export function PlayingCard({card,size='large',selected=false,disabled=false,onC
   const label=marker?`${name} · ${marker.label}`:name;
   const cls=`playing-card ${size==='small'?'mini':'large'}${red?' red':''}${!card?' card-back':''}${selected?' selected':''}${marker?' card-marked':''} ${className}`;
   const content=card?<>
-    <span className={`card-corner${joker?' card-joker-corner':''}`} aria-hidden="true"><b>{joker?'JOKER':rankLabel(card.rank)}</b>{!joker&&<i>{SUIT_LABELS[card.suit]}</i>}</span>
-    <span className={`card-pip${joker?' card-joker':''}`} aria-hidden="true">{joker?'🃏\uFE0E':SUIT_LABELS[card.suit]}</span>
+    <span className={`card-corner${joker?' card-joker-corner':''}`} aria-hidden="true"><b>{joker?'JOKER':rankLabel(card.rank)}</b>{!joker&&<i><SvgIcon name={SUIT_ICONS[card.suit]}/></i>}</span>
+    <span className={`card-pip${joker?' card-joker':''}`} aria-hidden="true"><SvgIcon name={SUIT_ICONS[card.suit]}/></span>
     {marker&&<em className="card-marker" aria-hidden="true">{marker.symbol}</em>}
-  </>:<span className="card-back-pattern" aria-hidden="true">✦</span>;
+  </>:<span className="card-back-pattern" aria-hidden="true"><SvgIcon name="sparkle"/></span>;
   return onClick?<button type="button" className={cls} title={label} aria-label={label} aria-pressed={selected} disabled={disabled} onClick={onClick}>{content}</button>:<span className={cls} role="img" title={label} aria-label={label}>{content}</span>;
 }
 

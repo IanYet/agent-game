@@ -1,6 +1,7 @@
 import {createElement,type ComponentPropsWithRef,type CSSProperties} from 'react';
 import {HolographicMaterial} from './HolographicMaterial';
 import type {HolographicPattern} from './holographic-engraving';
+import type {SvgIconName} from './svg-icons';
 import './holographic-card.css';
 
 export type {HolographicPattern} from './holographic-engraving';
@@ -11,7 +12,7 @@ type CardOptions={
   trimColor?:string;
   rainbow?:boolean;
   pattern?:HolographicPattern;
-  patternSymbol?:string;
+  patternSymbol?:SvgIconName;
   width?:CSSProperties['width'];
   aspectRatio?:CSSProperties['aspectRatio'];
   radius?:number;
@@ -25,7 +26,7 @@ export type HolographicCardProps<T extends CardTag='div'>=CardOptions&{as?:T}&Om
 // dark card, its frame, moving reflection and shared lens paint surface.
 export function HolographicCard<T extends CardTag='div'>({
   as,children,className='',style,glowColor='#c3cbd6',highlightColor=glowColor,trimColor='#737d8c66',
-  rainbow=false,pattern='contours',patternSymbol='',width=112,aspectRatio=64/91,radius=12,restingLight=[.09,.09],tilt=true,selected=false,...props
+  rainbow=false,pattern='contours',patternSymbol='sparkle',width=112,aspectRatio=64/91,radius=12,restingLight=[.09,.09],tilt=true,selected=false,...props
 }:HolographicCardProps<T>){
   const cardStyle:CSSProperties&Record<`--holographic-${string}`,string|number>={
     width,aspectRatio,'--holographic-radius':`${Math.max(2,radius)}px`,

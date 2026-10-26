@@ -1,9 +1,11 @@
+import {paintSvgIcon,type SvgIconName} from './svg-icons';
+
 export type HolographicPattern='contours'|'crowns'|'rings'|'symbols';
 export type EngravingBitmap={width:number;height:number;mark:HTMLCanvasElement;pixels:Uint8Array};
 const CROWN_OUTLINE:Array<[number,number]>=[[0,-.78],[.34,-.18],[.82,-.55],[.6,.5],[-.6,.5],[-.82,-.55],[-.34,-.18]];
 
 // Contours and rings are generated in the shader; repeated motifs use a mask.
-export function createCardEngraving(pattern:HolographicPattern,width:number,height:number,dpr:number,symbol=''):EngravingBitmap{
+export function createCardEngraving(pattern:HolographicPattern,width:number,height:number,dpr:number,symbol:SvgIconName='sparkle'):EngravingBitmap{
   const pixelWidth=Math.max(1,Math.round(width*dpr)),pixelHeight=Math.max(1,Math.round(height*dpr));
   const mark=document.createElement('canvas');mark.width=pixelWidth;mark.height=pixelHeight;
   const ctx=mark.getContext('2d',{willReadFrequently:true})!;ctx.scale(dpr,dpr);ctx.strokeStyle='#fff';ctx.lineJoin='round';
@@ -19,16 +21,15 @@ export function createCardEngraving(pattern:HolographicPattern,width:number,heig
     }
   }else if(pattern==='symbols'){
     const spacing=28;
-    ctx.font='18px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='#fff';ctx.globalAlpha=.6;
     for(let row=-1;row<=Math.ceil(height/spacing);row++)for(let col=-1;col<=Math.ceil(width/spacing);col++){
-      ctx.fillText(symbol||'✦',(col+.5+(row&1)*.5)*spacing,(row+.5)*spacing);
+      ctx.save();ctx.translate((col+.5+(row&1)*.5)*spacing,(row+.5)*spacing);ctx.scale(.09,.09);ctx.lineWidth=5;paintSvgIcon(ctx,symbol);ctx.restore();
     }
   }
   const image=ctx.getImageData(0,0,pixelWidth,pixelHeight),channel=image.data;
   const pixels=new Uint8Array(pixelWidth*pixelHeight*4);
   for(let i=0;i<pixels.length;i+=4){
-    const detail=pattern==='symbols'?1-(channel[i]*.2126+channel[i+1]*.7152+channel[i+2]*.0722)/255*.8:1;
-    pixels[i]=Math.round(channel[i+3]*detail);pixels[i+3]=255;
+    pixels[i]=channel[i+3];pixels[i+3]=255;
     channel[i]=channel[i+1]=channel[i+2]=255;channel[i+3]=pixels[i];
   }
   ctx.putImageData(image,0,0);
