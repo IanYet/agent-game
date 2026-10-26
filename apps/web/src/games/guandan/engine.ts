@@ -1,5 +1,5 @@
 import type {Card,PlayerConfig} from '@agent-game/core';
-import {beats,candidatePlays,classify} from './combinations';
+import {beats,candidatePlays,classify,declaration} from './combinations';
 import {cardsText,isWild,label,makeDeck,shuffledDeck,sortHand,strength,teamName} from './cards';
 import type {Action,GameEvent,GameView,GuandanState,LegalAction,Result,Team} from './types';
 
@@ -122,9 +122,11 @@ export function applyAction(current:GuandanState,seat:number,input:unknown):Guan
     }else state.turn=nextActive(state,seat);
     return state;
   }
-  if(action.type!=='play'||!Array.isArray(action.cards)||!action.cards.length||action.cards.some(id=>typeof id!=='string')||new Set(action.cards).size!==action.cards.length||typeof action.combination!=='string')throw new Error('请选择手牌并声明牌型');
+  if(action.type!=='play'||!Array.isArray(action.cards)||!action.cards.length||action.cards.some(id=>typeof id!=='string')||new Set(action.cards).size!==action.cards.length)throw new Error('请选择不重复的实体手牌并声明牌型');
+  const declared=action.combination;
+  if(!declared||typeof declared!=='object'||Array.isArray(declared)||typeof declared.kind!=='string'||!Number.isInteger(declared.rank)||Object.keys(declared).some(k=>!['kind','rank','suit','pairRank'].includes(k)))throw new Error('牌型声明须包含 kind、rank；三带对另填 pairRank，同花顺另填 suit');
   const cards=action.cards.map(id=>{const card=current.players[seat].hand.find(c=>c.id===id);if(!card)throw new Error('所选牌不在你的手中');return card;});
-  const combination=classify(cards,current.level).find(c=>c.key===action.combination);
+  const combination=classify(cards,current.level).find(c=>c.kind===declared.kind&&c.rank===declared.rank&&c.suit===declared.suit&&c.pairRank===declared.pairRank);
   if(!combination)throw new Error('所选牌无法组成声明的牌型；逢人配不能代替大小王');
   if(!beats(combination,current.lastPlay?.combination??null,current.level))throw new Error('必须出更大的同类牌型或更大的炸弹');
   const state=structuredClone(current);state.revision++;
@@ -145,14 +147,13 @@ export function getLegalActions(state:GuandanState,seat:number):LegalAction[]{
     return choices.map(card=>({id:`${type}:${card.id}`,action:{type,card:card.id},label:`${type==='tribute'?'进贡':'还牌'} ${cardsText([card])}`,cards:[card]}));
   }
   const result:LegalAction[]=candidatePlays(state.players[seat].hand,state.level,state.lastPlay?.combination??null).map(({cards,combination})=>({
-    id:`play:${cards.map(c=>c.id).sort().join(',')}|${combination.key}`,action:{type:'play',cards:cards.map(c=>c.id),combination:combination.key},label:combination.label,cards,combination,
+    id:`play:${cards.map(c=>c.id).sort().join(',')}|${combination.key}`,action:{type:'play',cards:cards.map(c=>c.id),combination:declaration(combination)},label:combination.label,cards,combination,
   }));
   if(state.lastPlay)result.unshift({id:'pass',action:{type:'pass'},label:'不出',cards:[]});
   return result;
 }
 
-export const LEGAL_NOTE='行动列表为每种点数组合、逢人配用量和声明牌型提供代表；同点不同花色可自行选择，用 game_play 提交，仍由相同规则校验。同花顺单独列出。';
-export function viewGame(state:GuandanState,viewer:number|null,revealHands=false):GameView {
+export function viewGame(state:GuandanState,viewer:number|null,revealHands=false,includeActions=true):GameView {
   if(viewer!==null)requireSeat(state,viewer);
   const {players,played:_,...publicState}=structuredClone(state);
   return {...publicState,players:players.map(p=>{
@@ -163,7 +164,7 @@ export function viewGame(state:GuandanState,viewer:number|null,revealHands=false
     state.tribute?.offers.filter(o=>o.seat===p.seat).forEach(o=>knownIds.add(o.card.id));
     const at=state.finishOrder.indexOf(p.seat),double=state.result?.doubleDown&&!state.finishOrder.includes(p.seat);
     return {...rest,count:hand.length,knownCards:hand.filter(c=>knownIds.has(c.id)),place:double?'双下':at>=0?['头游','二游','三游'][at]:state.phase==='finished'?'末游':'',...(viewer===p.seat||revealHands?{hand}: {})};
-  }),viewer,legalActions:viewer===null?[]:getLegalActions(state,viewer),legalActionNote:LEGAL_NOTE};
+  }),viewer,legalActions:viewer===null||!includeActions?[]:getLegalActions(state,viewer)};
 }
 
 export function restoreState(data:unknown,version:number):GuandanState {

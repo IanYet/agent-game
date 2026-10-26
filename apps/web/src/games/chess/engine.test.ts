@@ -155,11 +155,11 @@ describe('国际象棋 · 申请和棋与自动和棋严格区分',()=>{
 describe('国际象棋 · 公开信息、保存棋局与跨局积分',()=>{
   it('双方与观众看到相同棋盘与完整公开记录，观察没有 Harness 私有对话',()=>{
     const s=play(create(),'e2e4','d7d5','e4d5'),a=definition.observe(run(s),'alice'),b=definition.observe(run(s),'bob'),publicView=definition.observe(run(s),null);
-    expect(a.board).toEqual(b.board);expect(a.board).toEqual(publicView.board);expect(a.events).toEqual(s.events);expect(b.events).toEqual(s.events);expect(b.players[1]).not.toHaveProperty('model');expect(a).not.toHaveProperty('conversations');expect(b.legalActions.length).toBeGreaterThan(0);expect(a.legalActions).toEqual([]);expect(()=>definition.observe(run(s),'outsider')).toThrow();
+    expect(a.board).toEqual(b.board);expect(a.board).toEqual(publicView.board);expect(a.events).toEqual(s.events);expect(b.events).toEqual(s.events);expect(b.players[1]).not.toHaveProperty('model');expect(a).not.toHaveProperty('conversations');expect(b).not.toHaveProperty('legalActions');expect(b).not.toHaveProperty('legalMoves');expect(definition.tableView(run(s),'bob',{revealHands:false}).legalActions.length).toBeGreaterThan(0);expect(()=>definition.observe(run(s),'outsider')).toThrow();
   });
   it('只给当前行棋方领域决策，旧决策与错误玩家不能落子',()=>{
     const s=create(),r=run(s),d=definition.decisions(r)[0];expect(d.actorId).toBe('alice');
-    const req={id:'req',scopeId:'game-1',playerId:'bob',decisionId:d.decisionId,tool:'game_act',args:{revision:1,actionId:'move:e2e4'}};
+    const req={id:'req',scopeId:'game-1',playerId:'bob',decisionId:d.decisionId,tool:'game_act',args:{revision:1,action:{type:'move',uci:'e2e4'}}};
     expect(()=>definition.handleTool(r,req)).toThrow();expect(()=>definition.handleTool(r,{...req,playerId:'alice',decisionId:'old'})).toThrow();
     expect(definition.handleTool(r,{...req,playerId:'alice'}).state?.moves.at(-1)?.uci).toBe('e2e4');
   });

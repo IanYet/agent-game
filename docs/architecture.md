@@ -95,6 +95,8 @@ sequenceDiagram
 
 工具参数不能提供可切换的玩家、scope 或 decision 身份。桥从 capability 与当前原生任务绑定它们；网页再校验该 actor 的 decision 仍在集合中。模块自己的行动参数可以包括业务 revision，但平台不以全局 revision 使其他并行决策失效。
 
+八款游戏让 Agent 直接提交 `game_act({revision,action})`，行动字段由各模块的 `actions.ts` 声明。初始化提供完整规则和字段说明，当前观察提供自行判断所需的手牌、市场、棋盘、费用和次数等信息；Agent 观察不生成合法行动列表。真人牌桌保留候选生成与操作提示。两个入口调用同一规则引擎，按具体选择校验，不以候选列表是否收录为准；拒绝返回原因，状态和待决策保持不变。
+
 ## 串行提交与超时
 
 `handleTool` 和 `humanAction` 是同步状态转换。工具入参校验、存活决策校验、模块计算、MCP 结果/schema 校验和提交之间没有 await；因此并发请求在浏览器事件循环中串行提交。传给工具 handler 的 run 是副本，失败不能修改已发布状态。

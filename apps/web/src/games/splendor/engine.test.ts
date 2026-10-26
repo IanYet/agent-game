@@ -188,7 +188,7 @@ describe('贵族、最后一轮与跨局',()=>{
 describe('领域决策与恢复',()=>{
   it('游戏决策绑定当前身份、阶段和修订，工具能力固定',()=>{
     const run=runFor(game()),d=splendorModule.decisions(run)[0],choice=legalActions(run.state,0)[0];
-    const request={id:'req',scopeId:'game',playerId:'p0',decisionId:d.decisionId,tool:'game_act',args:{revision:1,actionId:choice.id}};
+    const request={id:'req',scopeId:'game',playerId:'p0',decisionId:d.decisionId,tool:'game_act',args:{revision:1,action:choice.action}};
     expect(()=>splendorModule.handleTool(run,{...request,playerId:'p1'})).toThrow();expect(()=>splendorModule.handleTool(run,{...request,decisionId:'old'})).toThrow();expect(()=>splendorModule.handleTool(run,{...request,scopeId:'other'})).toThrow();expect(()=>splendorModule.handleTool(run,{...request,args:{...request.args,revision:0}})).toThrow();
     const after=splendorModule.handleTool(run,request).state!;expect(after.turn).toBe(1);expect(splendorModule.tools({...run,state:after},'p0')).toEqual(splendorModule.tools(run,'p0'));expect(splendorModule.decisions({...run,state:after})[0].decisionId).not.toBe(d.decisionId);
   });

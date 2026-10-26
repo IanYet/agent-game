@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import type {Card} from '@agent-game/core';
-import {beats,candidatePlays,classify,windows} from './combinations';
+import {beats,candidatePlays,classify,declaration,windows} from './combinations';
 import {applyAction,createGame,getLegalActions,restoreState,returnChoices,tributeChoices,viewGame} from './engine';
 import {isWild,makeDeck,strength} from './cards';
 import type {GuandanState,Result} from './types';
@@ -18,7 +18,7 @@ function rig(hands:Card[][],level=2):GuandanState {
 }
 function play(state:GuandanState,seat:number,cards=state.players[seat].hand,kind?:string){
   const combo=classify(cards,state.level).find(c=>!kind||c.kind===kind);if(!combo)throw new Error('测试出牌没有牌型');
-  return applyAction(state,seat,{type:'play',cards:cards.map(c=>c.id),combination:combo.key});
+  return applyAction(state,seat,{type:'play',cards:cards.map(c=>c.id),combination:declaration(combo)});
 }
 function result(order:number[],doubleDown=false,levels:[number,number]=[2,2]):Result {
   const winner=order[0]%2 as 0|1;return {order,doubleDown,winner,advance:doubleDown?3:order.indexOf((order[0]+2)%4)===2?2:1,levelsBefore:levels,levelsAfter:levels,matchWinner:null};
@@ -106,7 +106,7 @@ describe('掼蛋牌型与声明',()=>{
     const combos=classify([c(4),c(5,'D'),c(6,'C'),c(7),c(2,'H')],2).filter(c=>c.kind==='straight');
     expect(combos.map(c=>c.rank)).toEqual([7,8]);
     const state=rig([[c(4),c(5,'D'),c(6,'C'),c(7),c(2,'H'),c(10)],[c(3,'C')],[c(8,'D')],[c(9,'C')]]);
-    const next=applyAction(state,0,{type:'play',cards:state.players[0].hand.slice(0,5).map(c=>c.id),combination:combos[0].key});
+    const next=applyAction(state,0,{type:'play',cards:state.players[0].hand.slice(0,5).map(c=>c.id),combination:declaration(combos[0])});
     expect(next.lastPlay?.combination.rank).toBe(7);
     const fullHouses=classify([c(12),c(12,'D'),c(12,'C'),c(2,'H'),c(2,'H',1)],2).filter(c=>c.kind==='full_house');
     expect(fullHouses.length).toBeGreaterThan(1);expect(new Set(fullHouses.map(c=>c.key)).size).toBe(fullHouses.length);
@@ -128,7 +128,7 @@ describe('掼蛋轮转、接风与名次',()=>{
     expect(state.players.map(p=>p.hand.length)).toEqual([27,27,27,27]);conservation(state);
     expect(()=>applyAction(state,1,{type:'pass'})).toThrow('轮到');
     expect(()=>applyAction(state,0,{type:'pass'})).toThrow('领出');
-    expect(()=>applyAction(state,0,{type:'play',cards:['fake'],combination:'single:3:1'})).toThrow('不在');
+    expect(()=>applyAction(state,0,{type:'play',cards:['fake'],combination:{kind:'single',rank:3}})).toThrow('不在');
     expect(state).toEqual(before);
   });
   it('不出者在后续有人压牌后可以重新跟牌',()=>{
@@ -139,9 +139,9 @@ describe('掼蛋轮转、接风与名次',()=>{
   it('无法压牌时只能不出，非法压牌、重复牌和错误声明均不消费手牌',()=>{
     let state=rig([[c(14),c(13)],[c(3)],[c(4)],[c(5)]]);state=play(state,0,[c(14)]);
     const before=structuredClone(state);expect(getLegalActions(state,1).map(a=>a.id)).toEqual(['pass']);
-    expect(()=>applyAction(state,1,{type:'play',cards:[c(3).id],combination:'single:3:1'})).toThrow('更大');
-    expect(()=>applyAction(state,1,{type:'play',cards:[c(3).id,c(3).id],combination:'pair:3:2'})).toThrow();
-    expect(()=>applyAction(state,1,{type:'play',cards:[c(3).id],combination:'single:17:1'})).toThrow('声明');
+    expect(()=>applyAction(state,1,{type:'play',cards:[c(3).id],combination:{kind:'single',rank:3}})).toThrow('更大');
+    expect(()=>applyAction(state,1,{type:'play',cards:[c(3).id,c(3).id],combination:{kind:'pair',rank:3}})).toThrow();
+    expect(()=>applyAction(state,1,{type:'play',cards:[c(3).id],combination:{kind:'single',rank:17}})).toThrow('声明');
     expect(state).toEqual(before);
   });
   it('出完最后一手后，全部仍有牌的玩家均可跟；全过后对家接风',()=>{

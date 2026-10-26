@@ -33,7 +33,7 @@ describe('私有技能通知与信息范围',()=>{
     for(const viewer of [0,2,3,null])expect(viewCitadels(s,viewer).notifications).toEqual([]);
     expect(viewCitadels(s,0).players[1].roles).toEqual([]);expect(s.events.at(-1)).not.toHaveProperty('target');expect(s.players[1].revealed).toEqual([]);
     expect(module.decisions(run).map(d=>d.actorId)).toEqual(['p0']);expect(legalCitadels(s,1)).toEqual([]);
-    expect(prompt).toContain('无需回复');expect(JSON.parse(prompt.split('当前私有观察：')[1]).legalActions).toEqual([]);
+    expect(prompt).toContain('无需回复');expect(JSON.parse(prompt.split('当前私有观察：')[1])).not.toHaveProperty('legalActions');
     expect(module.notificationPrompt!(run,'p0',before)).toBeNull();expect(module.notificationPrompt!(run,'p1',s.events.length)).toBeNull();
     s=main(s);s=applyCitadels(s,0,{type:'end'});expect(s.called).toBe(8);expect(s.players[1].revealed).toEqual([]);
   });

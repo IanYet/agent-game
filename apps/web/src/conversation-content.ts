@@ -27,8 +27,6 @@ function observation(value:Record<string,unknown>):string{
   if(typeof value.pot==='number')lines.push(`底池：${value.pot} 筹码`);
   if(typeof value.highBid==='number'&&value.highBid>0)lines.push(`底分：${value.highBid}`);
   if(typeof value.multiplier==='number')lines.push(`倍数：${value.multiplier}`);
-  const legal=Array.isArray(value.legalActions)?value.legalActions.map(object).flatMap(action=>typeof action?.label==='string'?[action.label]:[]):[];
-  if(legal.length)lines.push(`\n可选行动：${legal.join('；')}${typeof value.legalActionCount==='number'&&value.legalActionCount>legal.length?`（共 ${value.legalActionCount} 种）`:''}`);
   const events=Array.isArray(value.events)?value.events.map(object).filter((e):e is Record<string,unknown>=>!!e&&typeof e.text==='string'):[];
   if(events.length)lines.push('\n本局记录：',...events.map(event=>`${typeof event.seq==='number'?`${event.seq}. `:''}${typeof event.seat==='number'?`${name(event.seat)} `:''}${event.text}${cards(event.cards)?` · ${cards(event.cards)}`:''}`));
   return lines.join('\n');

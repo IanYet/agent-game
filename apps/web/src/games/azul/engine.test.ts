@@ -116,7 +116,7 @@ describe('花砖物语原版有色墙',()=>{
     for(const v of [publicView,own]){expect(v).not.toHaveProperty('bag');expect(v).not.toHaveProperty('rng');expect(JSON.stringify(v.events)).not.toContain('rng');}own.factories[0].pop();expect(s.factories[0]).toHaveLength(4);
   });
   it('游戏决策拒绝过期行动、冒用座位及错误局身份，工具列表跨阶段固定',()=>{
-    const s=createAzul('test',roster(),seeded(1)),run=runOf(s),d=azulModule.decisions(run)[0],a=legalActions(s,s.turn)[0];const base={id:'req',scopeId:s.id,playerId:d.actorId,decisionId:d.decisionId,tool:'game_act',args:{revision:s.revision,actionId:a.id}};
+    const s=createAzul('test',roster(),seeded(1)),run=runOf(s),d=azulModule.decisions(run)[0],a=legalActions(s,s.turn)[0];const base={id:'req',scopeId:s.id,playerId:d.actorId,decisionId:d.decisionId,tool:'game_act',args:{revision:s.revision,action:a.action}};
     expect(azulModule.handleTool(run,{...base,playerId:run.roster[(s.turn+1)%2].playerId}).result.isError).toBe(true);expect(azulModule.handleTool(run,{...base,decisionId:'old'}).result.isError).toBe(true);expect(azulModule.handleTool(run,{...base,scopeId:'wrong'}).result.isError).toBe(true);
     const result=azulModule.handleTool(run,base);expect(result.state?.revision).toBe(2);expect(azulModule.tools(run,d.actorId)).toEqual(azulModule.tools({...run,state:result.state!},d.actorId));expect(azulModule.handleTool({...run,state:result.state!},base).result.isError).toBe(true);
   });

@@ -107,7 +107,7 @@ describe('皇位、侍卫与私有观察',()=>{
       const prompt=JSON.parse(module.decisionPrompt(run,{decisionId:'view',actorId:`p${at}`}).split('当前观察：')[1]);expect(prompt.guard).toBe(view.guard);
     }
     const before=structuredClone(s),table=module.tableView(run,null,{revealHands:true});expect(table.players.every(p=>p.hand)).toBe(true);expect(table.guard).toBeNull();expect(s).toEqual(before);
-    const publicView=module.observe(run,null);expect(publicView.players.every(p=>!p.hand)).toBe(true);expect(publicView.legalActions).toEqual([]);expect(publicView.events).toEqual(s.events);
+    const publicView=module.observe(run,null);expect(publicView.players.every(p=>!p.hand)).toBe(true);expect(publicView).not.toHaveProperty('legalActions');expect(publicView.events).toEqual(s.events);
   });
   it('打出标记小王才揭示暗侍卫，保留暗保分数',()=>{
     let s=fixture([[6],[16,7],[8],[9],[10]]);s.turn=1;const c=s.players[1].hand.find(c=>c.mark==='guard')!;s=applyAction(s,1,{type:'play',cards:[c.id]});
@@ -117,9 +117,9 @@ describe('皇位、侍卫与私有观察',()=>{
     const s=start(),before=structuredClone(s),run={...meta,state:s},at=s.turn,d=module.decisions(run)[0];
     expect(()=>applyAction(s,(at+1)%5,{type:'pass'})).toThrow();expect(()=>applyAction(s,at,{type:'pass'})).toThrow();expect(()=>applyAction(s,at,{type:'play',cards:['unknown']})).toThrow();
     const c=s.players[at].hand[0];expect(()=>applyAction(s,at,{type:'play',cards:[c.id,c.id]})).toThrow();
-    const id=legalActions(s,at)[0].id;
+    const action=legalActions(s,at)[0].action;
     for(const [playerId,decisionId,revision] of [[d.actorId,'wrong',s.revision],[`p${(at+1)%5}`,d.decisionId,s.revision],[d.actorId,d.decisionId,s.revision-1]] as const){
-      const r=module.handleTool(run,{id:'act',scopeId:'run',playerId,decisionId,tool:'game_act',args:{revision,actionId:id}});expect(r.result.isError).toBe(true);expect(r.state).toBeUndefined();
+      const r=module.handleTool(run,{id:'act',scopeId:'run',playerId,decisionId,tool:'game_act',args:{revision,action}});expect(r.result.isError).toBe(true);expect(r.state).toBeUndefined();
     }
     expect(s).toEqual(before);
   });

@@ -198,12 +198,12 @@ export function splendorEvents(state:SplendorState,revealHands=false):Event[] {
     return {...event,text:`暗抽 ${event.level} 级卡并预留${event.tokens?.gold?'，获得 1 黄金':'，黄金已空'}`};
   });
 }
-export function viewSplendor(state:SplendorState,viewer:number|null,revealHands=false):SplendorView {
+export function viewSplendor(state:SplendorState,viewer:number|null,revealHands=false,includeActions=true):SplendorView {
   const player=viewer===null?null:state.players[viewer];
   return structuredClone({gameId:state.gameId,id:state.id,round:state.round,revision:state.revision,phase:state.phase,turn:state.turn,firstSeat:state.firstSeat,turnsTaken:state.turnsTaken,finalRound:state.finalRound,viewer,
     players:state.players.map(p=>({...p,bought:p.bought.map(id=>CARD_BY_ID[id]),reserved:p.reserved.map(r=>({level:r.level,source:r.source,card:r.source==='market'||p.seat===viewer||revealHands||r.revealed?CARD_BY_ID[r.cardId]:null})),nobles:p.nobles.map(id=>NOBLE_BY_ID[id]),bonuses:bonuses(p),points:points(p)})),
     bank:state.bank,deckCounts:Object.fromEntries(LEVELS.map(level=>[level,state.decks[level].length])) as Record<Level,number>,market:Object.fromEntries(LEVELS.map(level=>[level,state.market[level].map(id=>id?CARD_BY_ID[id]:null)])) as SplendorView['market'],
-    nobles:state.nobles.map(id=>NOBLE_BY_ID[id]),events:splendorEvents(state,revealHands),result:state.result,legalActions:viewer===null?[]:legalActions(state,viewer),returnCount:player&&state.phase==='return'&&viewer===state.turn?tokenCount(player.tokens)-10:0,eligibleNobles:state.phase==='noble'&&viewer===state.turn?eligibleNobles(state,state.turn):[]});
+    nobles:state.nobles.map(id=>NOBLE_BY_ID[id]),events:splendorEvents(state,revealHands),result:state.result,legalActions:viewer===null||!includeActions?[]:legalActions(state,viewer),returnCount:player&&state.phase==='return'&&viewer===state.turn?tokenCount(player.tokens)-10:0,eligibleNobles:state.phase==='noble'&&viewer===state.turn?eligibleNobles(state,state.turn):[]});
 }
 
 // Domain invariants are shared by action transitions and browser-state restoration.
