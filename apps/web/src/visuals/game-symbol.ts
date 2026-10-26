@@ -1,7 +1,19 @@
 import {paintSplendorSymbol} from '../games/splendor/artwork';
 import {paintAzulSymbol} from '../games/azul/artwork';
+import chessSymbol from './assets/chess-symbol.svg?raw';
+import citadelsSymbol from './assets/citadels-symbol.svg?raw';
 
-const symbolPainters:Record<string,(context:CanvasRenderingContext2D)=>void>={'❖':paintAzulSymbol,'💎':paintSplendorSymbol};
+function svgSymbolPainter(source:string){
+  let paths:{path:Path2D;fill:boolean}[]|undefined;
+  return (ctx:CanvasRenderingContext2D)=>{
+    // Parse the shared SVG once; both the foil and modal retain their own material.
+    paths??=Array.from(new DOMParser().parseFromString(source,'image/svg+xml').querySelectorAll('path'),element=>({path:new Path2D(element.getAttribute('d')!),fill:element.getAttribute('fill')!=='none'}));
+    ctx.save();ctx.lineJoin='round';ctx.lineCap='round';
+    for(const {path,fill} of paths){if(fill)ctx.fill(path,'evenodd');ctx.stroke(path);}
+    ctx.restore();
+  };
+}
+const symbolPainters:Record<string,(context:CanvasRenderingContext2D)=>void>={'❖':paintAzulSymbol,'💎':paintSplendorSymbol,'♟\uFE0E':svgSymbolPainter(chessSymbol),'🏰':svgSymbolPainter(citadelsSymbol)};
 type SymbolBounds={left:number;top:number;width:number;height:number};
 const paintedSymbolBounds=new Map<string,SymbolBounds>();
 export const gameSymbolFont=(symbol:string)=>symbol==='2'||symbol==='3'?'400 198px Anton':'400 210px Arial, "Segoe UI Symbol", sans-serif';
