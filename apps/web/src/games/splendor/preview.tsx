@@ -15,13 +15,13 @@ import {COLORS,LEVELS,type Card,type Event,type SplendorView} from './types';
 import {SplendorTable} from './ui';
 
 // Manual display data only. This page never loads or writes a real game save.
-const roster:StablePlayer[]=[
+const previewRoster:StablePlayer[]=[
   {playerId:'preview-you',name:'你',kind:'human'},
   {playerId:'preview-north',name:'北河',kind:'codex-acp'},
   {playerId:'preview-tide',name:'观澜',kind:'codex-acp'},
   {playerId:'preview-echo',name:'回声',kind:'codex-acp'},
 ];
-function displayGame(reveal:boolean,spectator:boolean,loaded:boolean):ControlledView<SplendorView>{
+function displayGame(roster:StablePlayer[],reveal:boolean,spectator:boolean,loaded:boolean):ControlledView<SplendorView>{
   const market=Object.fromEntries(LEVELS.map(level=>[level,COLORS.slice(0,4).map(color=>CARDS.find(card=>card.level===level&&card.bonus===color)!)])) as SplendorView['market'];
   const marketIds=new Set(Object.values(market).flat().map(card=>card!.id));
   const pools=Object.fromEntries(COLORS.map(color=>[color,CARDS.filter(card=>card.bonus===color&&!marketIds.has(card.id))])) as Record<typeof COLORS[number],Card[]>;
@@ -68,7 +68,8 @@ function SplendorPreview(){
   const [reveal,setReveal]=useState(false),[spectator,setSpectator]=useState(false),[paused,setPaused]=useState(false),[loaded,setLoaded]=useState(true),[message,setMessage]=useState('');
   const effects=useEffectsPreference();
   useEffect(()=>{document.documentElement.dataset.reducedMotion=String(effects.reduced);},[effects.reduced]);
-  const game=useMemo(()=>displayGame(reveal,spectator,loaded),[reveal,spectator,loaded]);
+  const roster=useMemo<StablePlayer[]>(()=>previewRoster.map(player=>spectator&&player.kind==='human'?{...player,name:'南辰',kind:'codex-acp'}:player),[spectator]);
+  const game=useMemo(()=>displayGame(roster,reveal,spectator,loaded),[roster,reveal,spectator,loaded]);
   const state:AppSnapshot={connector:null,connected:true,connectorUpdateRequired:false,game,room:{moduleId:'splendor',moduleVersion:'1.0.0',stateVersion:1,roomId:game.id,runId:game.id,index:1,roster,config:{edition:'base-2024'},finished:false},seats:roster.map((player,seat)=>({...player,seat,status:'ready',turns:20,tokens:0})),paused,curiosityMode:reveal,conversations:{},conversationError:null,error:null,history:[],activity:{phase:'满载界面展示',actors:[]}};
   const controller={humanAction:()=>setMessage('这是界面展示局面；卡牌选择与背包可操作，确认行动不会改变正式对局。')} as unknown as GameController;
   return <div className="app-shell"><GameBackground enabled theme="splendor"/><VisualExperience enabled page="table"/><div className="app-content">
