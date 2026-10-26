@@ -13,6 +13,35 @@ function cards(ranks: number[]): Card[] {
 }
 function seeded(seed: number) { return () => { seed = Math.imul(seed, 1664525) + 1013904223 | 0; return (seed >>> 0) / 4294967296; }; }
 
+describe('自主组牌与拒绝后的完整状态',()=>{
+  it.each([
+    [[3],'single'],[[4,4],'pair'],[[5,5,5],'triple'],[[6,6,6,7],'triple_single'],
+    [[6,6,6,7,7],'triple_pair'],[[3,4,5,6,7],'straight'],[[3,3,4,4,5,5],'pair_straight'],
+    [[3,3,3,4,4,4],'airplane'],[[3,3,3,4,4,4,5,5],'airplane_single'],
+    [[3,3,3,4,4,4,5,5,6,6],'airplane_pair'],[[3,3,3,3,4,4],'four_two_single'],
+    [[3,3,3,3,4,4,5,5],'four_two_pair'],[[8,8,8,8],'bomb'],[[16,17],'rocket'],
+  ])('直接提交 %j，按 %s 出牌并推进回合',(ranks,kind)=>{
+    const s=applyAction(createGame('direct',players),0,{type:'bid',value:3}),chosen=cards(ranks as number[]);
+    s.players[0].hand=[...chosen,...cards([14])];const before=structuredClone(s);
+    const next=applyAction(s,0,{type:'play',cards:chosen.map(c=>c.id)});
+    expect(next.lastPlay?.combination.kind).toBe(kind);expect(next.players[0].hand).toEqual(cards([14]));
+    expect(next.turn).toBe(1);expect(next.revision).toBe(s.revision+1);expect(s).toEqual(before);
+  });
+  it('非法叫分、阶段、归属、数量和牌型不改变手牌、倍数、记录或决策',()=>{
+    const bidding=applyAction(createGame('invalid',players),0,{type:'bid',value:2});
+    const playing=applyAction(createGame('invalid',players),0,{type:'bid',value:3});playing.players[0].hand=cards([3,4,6]);
+    const cases:Array<[typeof playing,number,Parameters<typeof applyAction>[2]]>=[
+      [bidding,1,{type:'bid',value:2}],[bidding,1,{type:'bid',value:1.5}],
+      [bidding,1,{type:'play',cards:[bidding.players[1].hand[0].id]}],
+      [playing,1,{type:'pass'}],[playing,0,{type:'bid',value:3}],[playing,0,{type:'pass'}],
+      [playing,0,{type:'play',cards:[]}],[playing,0,{type:'play',cards:['missing']}],
+      [playing,0,{type:'play',cards:[playing.players[0].hand[0].id,playing.players[0].hand[0].id]}],
+      [playing,0,{type:'play',cards:playing.players[0].hand.map(c=>c.id)}],
+    ];
+    for(const [s,seat,action] of cases){const before=structuredClone(s);expect(()=>applyAction(s,seat,action)).toThrow();expect(s).toEqual(before);}
+  });
+});
+
 describe('斗地主牌型与比较', () => {
   it.each([
     [[3], 'single'], [[15, 15], 'pair'], [[3, 3, 3], 'triple'], [[3, 3, 3, 4], 'triple_single'],

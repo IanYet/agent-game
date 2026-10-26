@@ -1,18 +1,19 @@
 import {toolResult,type ToolDefinition} from '@agent-game/protocol';
 import type {GameModule,StoredRun,PendingDecision} from '../../runtime/types';
-import {historyCursor,historyInstructions,incrementalObservation,enginePlayers,seatFor,decorateView,emptySchema,readOnly,checkRevision,agentObservation} from '../shared';
-import {applyAction,createGame,createBaoDeck,legalActions,pendingSeats,viewGame} from './engine';
+import {historyCursor,historyInstructions,incrementalObservation,enginePlayers,seatFor,decorateView,emptySchema,readOnly,checkDecision,agentObservation,agentIdentity} from '../shared';
+import {applyAction,createGame,createBaoDeck,pendingSeats,viewGame} from './engine';
 import {BAOHUANG_RULES} from './rules';
 import type {BaoAction,BaoState,BaoView} from './types';
+import {actionTool,ACTION_HELP} from './actions';
+import {actionInstructions} from '../action-schema';
 
 const tools:ToolDefinition[]=[
   {name:'game_get_state',description:'读取自己的手牌、可知身份、当前局全部公开events；暗保时不透露侍卫给其他玩家。',inputSchema:emptySchema,annotations:readOnly},
-  {name:'game_legal_actions',description:'分页读取当前合法行动及actionId，offset从0开始，每页limit为1至100。不同普通花色的等效牌合并，皇牌和侍卫标记牌单独枚举。',inputSchema:{type:'object',properties:{offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:100}},additionalProperties:false},annotations:readOnly},
-  {name:'game_act',description:'用当前revision和合法actionId完成当前决策；准备阶段自己的确认不公开身份。成功后结束本次任务。',inputSchema:{type:'object',properties:{revision:{type:'integer',minimum:1},actionId:{type:'string',minLength:1,maxLength:1000}},required:['revision','actionId'],additionalProperties:false},requiresDecision:true},
+  actionTool,
   {name:'game_rules',description:'读取本桌山东保皇的固定保规则、名次计分与下一局方式。',inputSchema:emptySchema,annotations:readOnly},
 ];
 function validateConfig(config:any){if(config?.ruleset!=='jj-fixed168'||!Number.isInteger(config.baseScore)||config.baseScore<1||config.baseScore>100)throw new Error('请选择JJ标准固定保，底分须为1至100的整数');}
-const observe=(run:StoredRun<BaoState>,actor:string|null)=>decorateView(viewGame(run.state,actor===null?null:seatFor(run,actor)),run.roster) as BaoView;
+const observe=(run:StoredRun<BaoState>,actor:string|null)=>agentObservation(decorateView(viewGame(run.state,actor===null?null:seatFor(run,actor),false,false),run.roster));
 const decisions=(run:StoredRun<BaoState>):PendingDecision[]=>pendingSeats(run.state).map(seat=>({
   // Simultaneous confirmations stay valid when another player confirms.
   decisionId:run.state.phase==='declare'?`${run.runId}:declare:${run.roster[seat].playerId}`:`${run.runId}:${run.state.revision}:${run.roster[seat].playerId}`,
@@ -33,8 +34,8 @@ export function restoreBao(data:unknown,version:number):BaoState{
   if((s.phase==='finished')!==!!s.result||s.result&&(!Array.isArray(s.result.deltas)||s.result.deltas.length!==5||!s.result.deltas.every(Number.isFinite)||s.result.deltas.reduce((a,b)=>a+b,0)!==0||s.result.emperor!==s.emperor||s.result.guard!==s.guard))return fail();
   return structuredClone(s);
 }
-export const baohuangModule:GameModule<BaoState,BaoView>={
-  id:'baohuang',version:'1.0.0',stateVersion:1,name:'山东保皇',description:'皇帝在明，侍卫在暗。五人四副牌，皇保与平民争先走完。',tagline:'五人 · 固定保 · 明暗博弈',
+export const baohuangModule:GameModule<BaoState,Omit<BaoView,'legalActions'>>={
+  id:'baohuang',version:'2.0.0',stateVersion:1,name:'山东保皇',description:'皇帝在明，侍卫在暗。五人四副牌，皇保与平民争先走完。',tagline:'五人 · 固定保 · 明暗博弈',
   presentation:{english:'BAOHUANG',symbol:'crown',tone:'warm'},minPlayers:5,maxPlayers:5,defaultPlayers:5,defaultConfig:{ruleset:'jj-fixed168',baseScore:1},runNoun:'局',
   validateConfig,rules:()=>BAOHUANG_RULES,lifecycle:{sessionScope:'run',eagerAgents:false},
   activity:run=>({phase:{enthrone:'决定皇帝',declare:'全体准备',playing:'行牌',finished:'已结算'}[run.state.phase],detail:`第${run.index}局 · JJ标准固定保 · ${run.state.baseScore}底分`}),
@@ -47,23 +48,16 @@ export const baohuangModule:GameModule<BaoState,BaoView>={
   },
   finished:s=>s.phase==='finished',observe,tableView:(run,actor,{revealHands})=>decorateView(viewGame(run.state,actor===null?null:seatFor(run,actor),revealHands),run.roster),decisions,tools:()=>tools,
   historyCursor,
-  initializePrompt:(run,actor)=>`你是山东保皇玩家${run.roster[seatFor(run,actor)].name}。\n${BAOHUANG_RULES}\n仅通过游戏工具行动，不能向其他玩家询问隐藏身份。准备阶段全员同时确认，非侍卫只需ready；侍卫选择明或暗。普通副本等效，标记皇牌和侍卫牌可区别使用。\n${historyInstructions}`,
-  decisionPrompt:(run,d,afterEvent=0)=>`保皇第${run.index}局，决策${d.decisionId}。读取状态与合法行动，选一个actionId调用game_act，成功后结束任务。如果其他玩家同时准备使revision更新，请重读再提交；你的准备决策仍有效。\n当前观察：${JSON.stringify(incrementalObservation(agentObservation(observe(run,d.actorId)),afterEvent))}`,
+  initializePrompt:(run,actor)=>`你是山东保皇玩家${agentIdentity(run,actor)}。\n${BAOHUANG_RULES}\n${ACTION_HELP}\n${actionInstructions}\n仅通过游戏工具行动，不能向其他玩家询问隐藏身份。\n${historyInstructions}`,
+  decisionPrompt:(run,d,afterEvent=0)=>`保皇第${run.index}局，决策${d.decisionId}。根据可见局面构造 action 调用 game_act，成功后结束任务。如果其他玩家同时准备使 revision 更新，请重读再提交；你的准备决策仍有效。\n当前观察：${JSON.stringify(incrementalObservation(observe(run,d.actorId),afterEvent))}`,
   handleTool:(run,request)=>{
     try{
       const seat=seatFor(run,request.playerId);
-      if(request.tool==='game_get_state')return {result:toolResult(agentObservation(observe(run,request.playerId)))};
-      if(request.tool==='game_rules')return {result:toolResult({rules:BAOHUANG_RULES})};
-      const choices=legalActions(run.state,seat);
-      if(request.tool==='game_legal_actions'){
-        const offset=request.args.offset??0,limit=request.args.limit??60;
-        if(!Number.isInteger(offset)||Number(offset)<0||!Number.isInteger(limit)||Number(limit)<1||Number(limit)>100)throw new Error('分页参数不正确');
-        return {result:toolResult({revision:run.state.revision,total:choices.length,offset,actions:choices.slice(Number(offset),Number(offset)+Number(limit))})};
-      }
+      if(request.tool==='game_get_state')return {result:toolResult(observe(run,request.playerId))};
+      if(request.tool==='game_rules')return {result:toolResult({rules:BAOHUANG_RULES,actions:ACTION_HELP})};
       if(request.tool!=='game_act')throw new Error('未注册的保皇工具');
-      if(!decisions(run).some(d=>d.actorId===request.playerId&&d.decisionId===request.decisionId))throw new Error('决策或玩家身份已失效');
-      checkRevision(run.state,request.args);const choice=choices.find(c=>c.id===request.args.actionId);if(!choice)throw new Error('actionId不是当前合法行动');
-      const state=applyAction(run.state,seat,choice.action);return {state,result:toolResult({success:true,revision:state.revision,message:'行动完成，请结束本次任务。'})};
+      checkDecision(run,request,decisions(run));
+      const state=applyAction(run.state,seat,request.args.action as BaoAction);return {state,result:toolResult({success:true,revision:state.revision,message:'行动完成，请结束本次任务。'})};
     }catch(e){return {result:toolResult({error:e instanceof Error?e.message:String(e)},true)};}
   },
   humanAction:(run,actor,input)=>applyAction(run.state,seatFor(run,actor),input as BaoAction),restore:restoreBao,

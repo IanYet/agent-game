@@ -11,21 +11,49 @@
 .conversation-players button{flex:none;display:grid;gap:5px;padding:10px 16px;border:1px solid var(--line);border-radius:5px;text-align:left;color:var(--muted)}
 .conversation-players button[aria-pressed="true"]{color:var(--warm);border-color:#b5938199;background:#c6a18a0a}
 .conversation-players strong{font-size:12px;font-weight:400}.conversation-players small{font-size:9px}
+.conversation-toolbar{display:flex;flex:none;align-items:center;justify-content:space-between;gap:16px;padding:12px 0 0;color:var(--muted);font-size:10px;line-height:1.8}
+.conversation-toolbar>div{display:flex;flex-wrap:wrap;gap:18px}
+.conversation-toolbar .text-button{display:inline-flex;align-items:center;gap:5px;font-size:11px}
 .conversation-thread{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:18px 8px 24px 0;scrollbar-gutter:stable}
 .conversation-message{padding:14px 16px;margin-bottom:12px;border:1px solid var(--line);border-radius:6px;background:#11172366}
-.conversation-message[data-kind="message"]{border-left:2px solid #a3bfe1}.conversation-message[data-kind="reasoning"]{border-left:2px solid #bda6db}
+.conversation-message[data-source="connector"]{border-left:2px solid #c6a18a}.conversation-message[data-source="agent"]{border-left:2px solid #a3bfe1}.conversation-message[data-kind="reasoning"]{border-left-color:#bda6db}
 .conversation-message[data-kind="error"]{border-color:#89545c;color:var(--error)}
-.conversation-message>header,.conversation-message>summary{display:flex;gap:12px;align-items:baseline;min-width:0;line-height:1.8;list-style:none}
-.conversation-message>summary{cursor:pointer}.conversation-message>summary::-webkit-details-marker{display:none}
-.conversation-message>summary:before{content:'›';flex:none}.conversation-message[open]>summary:before{content:'⌄'}
-.conversation-message>header>span,.conversation-message>summary>span{flex:none;color:var(--warm);font-size:10px}
-.conversation-message strong{font-weight:400;font-size:11px;overflow-wrap:anywhere;min-width:0}
+.conversation-message>header{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;min-width:0;line-height:1.8}
+.conversation-route{font-size:11px;color:var(--warm);overflow-wrap:anywhere}
+.conversation-message[data-source="agent"] .conversation-route{color:#b3c9e5}
+.conversation-message[data-source="system"] .conversation-route{color:var(--error)}
+.conversation-kind{display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid #78829444;border-radius:4px;padding:1px 6px;color:#c5ccd9;font-size:10px}
+.conversation-kind code{font:9px/1.8 monospace;color:var(--muted)}
 .conversation-message time{margin-left:auto;flex:none;font:9px/1.8 monospace;color:var(--muted)}
-.conversation-message .conversation-text{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/2 'Noto Sans SC',sans-serif;margin-top:12px;color:#d3d8e2}
+.conversation-entry>summary{margin-top:9px;font-size:11px;line-height:1.8;color:#b1bacb;overflow-wrap:anywhere}
+.conversation-entry>summary{cursor:pointer;list-style:none;display:flex;gap:8px;align-items:baseline}
+.conversation-entry>summary::-webkit-details-marker,.conversation-json-branch>summary::-webkit-details-marker{display:none}
+.conversation-entry>summary:before,.conversation-json-branch>summary:before{content:'›';display:inline-block;flex:none;width:10px;color:var(--muted)}
+.conversation-entry[open]>summary:before,.conversation-json-branch[open]>summary:before{content:'⌄'}
+.conversation-body{min-width:0;display:grid;gap:12px;margin-top:12px}
+.conversation-message .conversation-text{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/2 'Noto Sans SC',sans-serif;color:#d3d8e2}
 .conversation-message[data-kind="reasoning"] .conversation-text{color:#c8c3d5}
 .conversation-message[data-kind="error"] .conversation-text{color:var(--error)}
+.conversation-empty-content{font-size:11px;line-height:1.8;color:var(--muted);font-style:italic}
+.conversation-json{min-width:0;border:1px solid #77839829;border-radius:5px;padding:10px 12px;background:#0a101b66;color:#d3d8e2;font:11px/1.9 Consolas,'Noto Sans SC',monospace;overflow-wrap:anywhere}
+.conversation-json-branch{min-width:0}
+.conversation-json-branch>summary{display:flex;align-items:baseline;flex-wrap:wrap;gap:5px;list-style:none;cursor:pointer;min-width:0;padding:2px 0}
+.conversation-json-key{color:#a9c5e9;white-space:pre-wrap;overflow-wrap:anywhere}
+.conversation-json-key>span,.conversation-json-bracket,.conversation-json-close,.conversation-json-empty{color:#98a3b6}
+.conversation-json-count{font:10px/1.8 'Noto Sans SC',sans-serif;color:var(--muted);margin:0 3px}
+.conversation-json-children{margin-left:4px;padding-left:14px;border-left:1px solid #78839833;min-width:0}
+.conversation-json-leaf{display:flex;gap:6px;align-items:baseline;min-width:0;padding:2px 0}
+.conversation-json-leaf>.conversation-json-key{flex:none;max-width:50%}
+.conversation-json-scalar{white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}
+.conversation-json-scalar[data-type="string"]{color:#b7d6b4}
+.conversation-json-scalar[data-type="string"]:before,.conversation-json-scalar[data-type="string"]:after{content:'"';color:#7f9e7c}
+.conversation-json-scalar[data-type="number"]{color:#edc18e}
+.conversation-json-scalar[data-type="boolean"],.conversation-json-scalar[data-type="null"]{color:#c4abe5}
+.conversation-json-embedded{min-width:0;padding:2px 0}
+.conversation-json-embedded>.conversation-body{margin:4px 0 6px 14px}
+.conversation-json .conversation-text{font-size:11px;line-height:1.9}
 .conversation-empty{min-height:240px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;color:var(--muted)}
 .conversation-empty p{font-size:13px}.conversation-empty small{font-size:11px;line-height:1.8;text-align:center}
 .conversation-footer{display:flex;align-items:center;gap:20px;justify-content:space-between;font-size:10px;color:var(--muted);line-height:1.8}
 .conversation-footer .text-button{white-space:nowrap;flex:none}
-@media(max-width:700px){.conversation-modal .modal-heading{padding:20px}.conversation-modal .modal-scroll{padding:0 20px}.conversation-message>header,.conversation-message>summary{flex-wrap:wrap;gap:6px 10px}.conversation-message time{font-size:8px}.conversation-footer{align-items:flex-start}.conversation-modal .modal-footer{padding:16px 20px}}
+@media(max-width:700px){.conversation-modal .modal-heading{padding:20px}.conversation-modal .modal-scroll{padding:0 20px}.conversation-message>header{gap:6px 10px}.conversation-message time{font-size:8px}.conversation-footer{align-items:flex-start}.conversation-modal .modal-footer{padding:16px 20px}}

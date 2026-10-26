@@ -11,6 +11,22 @@ const run=(s:ChessState):StoredRun<ChessState>=>({moduleId:'chess',moduleVersion
 const cycle=['g1f3','g8f6','f3g1','f6g8'];
 
 describe('国际象棋 · 人数、合法走子与王的安全',()=>{
+  it.each([
+    [{type:'accept_draw'},/没有.*提和/],
+    [{type:'decline_draw'},/没有.*提和/],
+    [{type:'claim_draw',reason:'threefold'},/三次重复/],
+    [{type:'claim_draw',reason:'fifty'},/50/],
+    [{type:'move',uci:'e2e5'},/合法棋步|移动/],
+  ])('非法申请或棋步 %j 提供可修正原因，棋盘、提议、棋谱和分数保持原状',(action,reason)=>{
+    const s=create(),before=structuredClone(s);expect(()=>applyChessAction(s,0,action)).toThrow(reason);expect(s).toEqual(before);
+  });
+  it('拒绝升变遗漏、非法预定棋步和越权后，可继续正确升变',()=>{
+    const s=create('7k/P7/8/8/8/8/8/4K3 w - - 0 1'),before=structuredClone(s);
+    expect(()=>applyChessAction(s,0,{type:'move',uci:'a7a8'})).toThrow('升变');
+    expect(()=>applyChessAction(s,0,{type:'claim_draw',reason:'fifty',uci:'a7b8q'})).toThrow();
+    expect(()=>applyChessAction(s,1,{type:'move',uci:'h8g8'})).toThrow();expect(s).toEqual(before);
+    expect(applyChessAction(s,0,{type:'move',uci:'a7a8r'}).moves.at(-1)?.promotion).toBe('r');
+  });
   it('标准开局 32 子、20 着，白方先行；初始状态不可被修改',()=>{
     const s=create(),before=structuredClone(s),next=play(s,'e2e4');
     expect(viewChess(s,null).board).toHaveLength(32);expect(legalChessMoves(s)).toHaveLength(20);expect(s.turn).toBe(0);expect(next.turn).toBe(1);expect(s).toEqual(before);expect(next.revision).toBe(2);
@@ -139,11 +155,11 @@ describe('国际象棋 · 申请和棋与自动和棋严格区分',()=>{
 describe('国际象棋 · 公开信息、保存棋局与跨局积分',()=>{
   it('双方与观众看到相同棋盘与完整公开记录，观察没有 Harness 私有对话',()=>{
     const s=play(create(),'e2e4','d7d5','e4d5'),a=definition.observe(run(s),'alice'),b=definition.observe(run(s),'bob'),publicView=definition.observe(run(s),null);
-    expect(a.board).toEqual(b.board);expect(a.board).toEqual(publicView.board);expect(a.events).toEqual(s.events);expect(b.events).toEqual(s.events);expect(b.players[1]).not.toHaveProperty('model');expect(a).not.toHaveProperty('conversations');expect(b.legalActions.length).toBeGreaterThan(0);expect(a.legalActions).toEqual([]);expect(()=>definition.observe(run(s),'outsider')).toThrow();
+    expect(a.board).toEqual(b.board);expect(a.board).toEqual(publicView.board);expect(a.events).toEqual(s.events);expect(b.events).toEqual(s.events);expect(b.players[1]).not.toHaveProperty('model');expect(a).not.toHaveProperty('conversations');expect(b).not.toHaveProperty('legalActions');expect(b).not.toHaveProperty('legalMoves');expect(definition.tableView(run(s),'bob',{revealHands:false}).legalActions.length).toBeGreaterThan(0);expect(()=>definition.observe(run(s),'outsider')).toThrow();
   });
   it('只给当前行棋方领域决策，旧决策与错误玩家不能落子',()=>{
     const s=create(),r=run(s),d=definition.decisions(r)[0];expect(d.actorId).toBe('alice');
-    const req={id:'req',scopeId:'game-1',playerId:'bob',decisionId:d.decisionId,tool:'game_act',args:{revision:1,actionId:'move:e2e4'}};
+    const req={id:'req',scopeId:'game-1',playerId:'bob',decisionId:d.decisionId,tool:'game_act',args:{revision:1,action:{type:'move',uci:'e2e4'}}};
     expect(()=>definition.handleTool(r,req)).toThrow();expect(()=>definition.handleTool(r,{...req,playerId:'alice',decisionId:'old'})).toThrow();
     expect(definition.handleTool(r,{...req,playerId:'alice'}).state?.moves.at(-1)?.uci).toBe('e2e4');
   });

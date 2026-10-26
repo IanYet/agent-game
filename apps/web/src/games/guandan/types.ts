@@ -5,7 +5,8 @@ export type Phase='tribute'|'return'|'playing'|'finished';
 export type CombinationKind='single'|'pair'|'triple'|'full_house'|'straight'|'pair_run'|'triple_run'|'bomb'|'straight_flush'|'four_jokers';
 export interface Combination {key:string;kind:CombinationKind;rank:number;size:number;label:string;suit?:Card['suit'];pairRank?:number}
 export interface Play {seat:number;cards:Card[];combination:Combination}
-export type Action={type:'play';cards:string[];combination:string}|{type:'pass'}|{type:'tribute'|'return';card:string};
+export type Declaration=Pick<Combination,'kind'|'rank'|'suit'|'pairRank'>;
+export type Action={type:'play';cards:string[];combination:Declaration}|{type:'pass'}|{type:'tribute'|'return';card:string};
 export interface LegalAction {id:string;action:Action;label:string;cards:Card[];combination?:Combination}
 export interface Player extends PlayerConfig {seat:number;team:Team;hand:Card[]}
 export interface Exchange {from:number;to:number;tribute:Card;returned?:Card}
@@ -20,4 +21,4 @@ export interface GuandanState {
   finishOrder:number[];played:Card[];events:GameEvent[];result:Result|null;
 }
 export interface PlayerView extends Omit<Player,'hand'> {count:number;hand?:Card[];knownCards:Card[];place:string}
-export interface GameView extends Omit<GuandanState,'players'|'played'> {players:PlayerView[];viewer:number|null;legalActions:LegalAction[];legalActionNote:string}
+export interface GameView extends Omit<GuandanState,'players'|'played'> {players:PlayerView[];viewer:number|null;legalActions:LegalAction[]}

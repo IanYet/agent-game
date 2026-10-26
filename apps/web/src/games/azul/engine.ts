@@ -60,16 +60,19 @@ export function createAzul(id:string,roster:Array<{playerId:string;name:string;k
   shuffle(state,state.bag);deal(state);assertAzul(state);return state;
 }
 export function placementAllowed(player:AzulPlayer,color:Color,row:number){return row===0||(Number.isInteger(row)&&row>=1&&row<=5&&player.pattern[row-1].length<row&&(!player.pattern[row-1].length||player.pattern[row-1][0]===color)&&!player.wall[row-1].includes(color));}
+function draftChoice(state:AzulState,action:AzulAction,count:number):LegalAction {
+  const {source,color,row}=action,player=state.players[state.turn],takesFirst=source===0&&state.markerInCenter;
+  const placed=row?Math.min(count,row-player.pattern[row-1].length):0,overflow=count-placed;
+  const floorCost=FLOOR_PENALTIES.slice(player.floor.length,Math.min(7,player.floor.length+overflow+(takesFirst?1:0))).reduce((s,n)=>s+n,0);
+  return {id:`${source}:${color}:${row}`,label:`${source?`工厂 ${source}`:'中央'} · ${COLOR_NAMES[color]} ×${count} → ${row?`图案行 ${row}`:'地板'}${overflow?`（落地 ${overflow}）`:''}`,action,count,placed,overflow,takesFirst,floorCost};
+}
 export function legalActions(state:AzulState,seat:number):LegalAction[]{
   if(state.phase!=='draft'||seat!==state.turn||!state.players[seat])return [];
   const player=state.players[seat],actions:LegalAction[]=[];
   [state.center,...state.factories].forEach((tiles,source)=>COLORS.forEach(color=>{
     const count=tiles.filter(c=>c===color).length;if(!count)return;
-    const takesFirst=source===0&&state.markerInCenter;
     for(let row=0;row<=5;row++)if(placementAllowed(player,color,row)){
-      const placed=row?Math.min(count,row-player.pattern[row-1].length):0,overflow=count-placed;
-      const floorCost=FLOOR_PENALTIES.slice(player.floor.length,Math.min(7,player.floor.length+overflow+(takesFirst?1:0))).reduce((s,n)=>s+n,0);
-      actions.push({id:`${source}:${color}:${row}`,label:`${source?`工厂 ${source}`:'中央'} · ${COLOR_NAMES[color]} ×${count} → ${row?`图案行 ${row}`:'地板'}${overflow?`（落地 ${overflow}）`:''}`,action:{source,color,row},count,placed,overflow,takesFirst,floorCost});
+      actions.push(draftChoice(state,{source,color,row},count));
     }
   }));return actions;
 }
@@ -112,11 +115,23 @@ function settle(state:AzulState){
   }
 }
 export function applyAzul(state:AzulState,seat:number,input:unknown):AzulState {
+  if(state.phase!=='draft')throw new Error('本局已结束，不能再选砖');
+  if(!Number.isInteger(seat)||!state.players[seat]||seat!==state.turn)throw new Error('当前不是你的选砖回合');
   if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('请选择来源、颜色与目的行');
   const action=input as AzulAction;
-  if(!Number.isInteger(action.source)||!Number.isInteger(action.row)||!isColor(action.color)||Object.keys(action).some(k=>!['source','color','row'].includes(k)))throw new Error('选砖参数无效');
-  const chosen=legalActions(state,seat).find(a=>a.action.source===action.source&&a.action.color===action.color&&a.action.row===action.row);
-  if(!chosen)throw new Error('当前不能这样选砖：请确认行动玩家、来源颜色和图案行');
+  if(Object.keys(action).some(k=>!['source','color','row'].includes(k)))throw new Error('选砖只填写 source、color 和 row');
+  if(!Number.isInteger(action.source)||action.source<0||action.source>state.factories.length)throw new Error(`来源 source 须为 0（中央）至 ${state.factories.length}（工厂）`);
+  if(!isColor(action.color))throw new Error('颜色 color 须为 blue、yellow、red、black 或 white');
+  if(!Number.isInteger(action.row)||action.row<0||action.row>5)throw new Error('目的行 row 须为 0（地板）或 1–5（图案行）');
+  const count=(action.source?state.factories[action.source-1]:state.center).filter(c=>c===action.color).length;
+  if(!count)throw new Error(`来源 ${action.source} 没有${COLOR_NAMES[action.color]}，请选择该来源实际存在的颜色`);
+  if(action.row){
+    const player=state.players[seat],line=player.pattern[action.row-1];
+    if(line.length===action.row)throw new Error(`图案行 ${action.row} 已满，请选择其他行或地板`);
+    if(line.length&&line[0]!==action.color)throw new Error(`图案行 ${action.row} 只收同色${COLOR_NAMES[line[0]]}`);
+    if(player.wall[action.row-1].includes(action.color))throw new Error(`墙面第 ${action.row} 行已有${COLOR_NAMES[action.color]}，该图案行不能再收此色`);
+  }
+  const chosen=draftChoice(state,action,count);
   const next=clone(state),player=next.players[seat],tiles=action.source?next.factories[action.source-1]:next.center;
   const picked=tiles.filter(c=>c===action.color),remaining=tiles.filter(c=>c!==action.color);
   if(action.source){next.factories[action.source-1]=[];next.center.push(...remaining);}else next.center=remaining;
@@ -128,10 +143,10 @@ export function applyAzul(state:AzulState,seat:number,input:unknown):AzulState {
   if(!next.center.length&&next.factories.every(f=>!f.length))settle(next);
   assertAzul(next);return next;
 }
-export function viewAzul(state:AzulState,viewer:number|null):AzulView {
+export function viewAzul(state:AzulState,viewer:number|null,includeActions=true):AzulView {
   return clone({id:state.id,match:state.match,createdAt:state.createdAt,revision:state.revision,phase:state.phase,round:state.round,turn:state.turn,
     firstOwner:state.firstOwner,markerInCenter:state.markerInCenter,players:state.players,factories:state.factories,center:state.center,
-    viewer,bagCount:state.bag.length,discardCounts:Object.fromEntries(COLORS.map(c=>[c,state.discard.filter(t=>t===c).length])) as Record<Color,number>,events:state.events,legalActions:viewer===null?[]:legalActions(state,viewer),result:state.result});
+    viewer,bagCount:state.bag.length,discardCounts:Object.fromEntries(COLORS.map(c=>[c,state.discard.filter(t=>t===c).length])) as Record<Color,number>,events:state.events,legalActions:viewer===null||!includeActions?[]:legalActions(state,viewer),result:state.result});
 }
 export function replayAzul(state:AzulState,count:number):AzulFrame {
   const frame:AzulFrame={round:1,turn:0,phase:'draft',factories:[],center:[],markerInCenter:true,firstOwner:null,players:state.players.map(p=>({...p,score:0,...emptyBoard()}))};

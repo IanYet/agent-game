@@ -9,6 +9,7 @@
 ```text
 games/my-game/
   definition.ts   元数据、纯引擎边界、观察、工具与提示词
+  actions.ts      自然行动参数、JSON Schema 与字段说明
   engine.ts       领域规则和状态转换
   ui.tsx          Table、ConfigFields、Replay
   index.ts        导出完整模块
@@ -68,13 +69,16 @@ export const gameRegistry = new GameRegistry([existingGame, myGame]);
 
 ```ts
 const tools: ToolDefinition[] = [{
-  name:'auction.offer',
-  description:'Stage a sealed offer; confirm separately.',
+  name:'game_act',
+  description:'提交加注到的本轮总额，由规则引擎检查加注权与筹码。',
   requiresDecision:true,
   inputSchema:{
     type:'object',
-    properties:{credits:{type:'integer',minimum:0,maximum:100}},
-    required:['credits'],
+    properties:{
+      revision:{type:'integer',minimum:1},
+      action:{type:'object',properties:{type:{const:'raise'},amount:{type:'integer',minimum:1}},required:['type','amount'],additionalProperties:false},
+    },
+    required:['revision','action'],
     additionalProperties:false,
   },
 }];
@@ -82,11 +86,28 @@ const tools: ToolDefinition[] = [{
 
 工具名、说明、输入/输出 schema 和完成规则均由模块定义。桥验证 JSON Schema，模块还必须验证当前阶段、玩家资格、资源余额等规则。不要在 schema 中增加让调用者冒充其他玩家的控制参数。
 
+八款游戏统一提供 `game_get_state`、`game_rules` 和 `game_act({revision,action})`。Agent 根据完整规则、行动字段说明和当前可见局面自行构造动作。观察与提示不生成合法行动清单，不提供 `actionId`、`game_legal_actions` 或另一个出牌入口；真人界面仍可用引擎的合法选择生成器提供按钮、选牌和提示。引擎必须直接验证提交内容，不能把是否出现在一个代表性候选列表中作为合法性依据。
+
+| 游戏 | 自行构造的行动 |
+| --- | --- |
+| 斗地主 | 叫分 `bid/value`，出牌 `play/cards`，不出 `pass` |
+| 德州 | `fold/check/call`，`raise/amount`；amount 为本轮累计下注额，可选任意合法整数 |
+| 保皇 | `enthrone/cede`、`declare/open`、`play/cards`、`pass`；保留实体王牌及标记牌身份 |
+| 国际象棋 | `move/uci/offerDraw?`、`claim_draw/reason/uci?`、接受或拒绝提和、认输 |
+| 花砖物语 | `{source,color,row}`；source=0 是中央，其余为工厂编号，row=0 是地板，1–5 是图案行 |
+| 富饶之城 | 选角、收入、保留抽牌、各身份及建筑技能、建造、拆除、墓地反应、结束回合 |
+| 璀璨宝石 | 拿异色或同色宝石、明暗预留、购买及可选支付组合、超额归还、选择贵族 |
+| 掼蛋 | `play/cards/combination`、`pass`、`tribute/card`、`return/card`；combination 用 kind/rank 及需要的 suit/pairRank 声明含义 |
+
+各模块的 `actions.ts` 声明全部阶段的参数范围与字段含义，`game_rules` 同时返回完整规则和行动说明。实体牌 ID 来自玩家可见的手牌或市场；身份、目标和金额等字段表达游戏含义。观察需保留自行判断所需的约束，例如德州加注权与上下限、富饶之城本身份已用技能和建造次数、宝石超额归还数量，不能为缩短消息删掉必要规则或可见状态。
+
+提交先校验作用域、玩家、当前 decisionId 和 revision，再由同一纯引擎检查规则。失败只返回可纠正的原因，不改手牌、资源、事件、revision 或决策窗口；玩家可修正后重试。状态过期时先用 `game_get_state` 刷新。成功一次后结束任务；新的决策由平台再次触发。
+
 无业务错误的 handler 返回标准 MCP `CallToolResult`，可用 `toolResult(object)` 同时生成 JSON 文本与 structuredContent。声明 outputSchema 后成功结果必须匹配它。普通失败用 `toolResult({error:message},true)`，只返回错误内容，不套用成功结果的结构。
 
 工具列表在会话建立时冻结。不要按瞬时阶段改变 tools/list；将各阶段能力固定声明，在 handler 和 allowedTools 中限制阶段。room 会话进入下一轮时若工具声明改变，平台会创建新会话。
 
-斗地主与德州的 `game_get_state` 在 `events` 字段返回当前局／手从发牌开始的全部公开记录，`seq` 按发生顺序递增。初始化与每轮提示也包含这份记录，界面显示条数不限制 Agent 读取。下一局／手开始后记录重置。记录中的 `cards` 只包含已经公开的牌，不包含对手未公开的手牌、牌库或烧牌。
+`game_get_state` 在 `events` 字段返回当前局／手从发牌开始的完整可见记录，`seq` 按发生顺序递增。初始化只包含身份、完整规则和字段说明；首次决策或通知携带当前局面与完整历史，之后只携带新增记录。更换模型或重建会话时重新同步完整上下文。界面显示条数不限制 Agent 读取，下一局／手开始后记录重置。记录中的 `cards` 只包含已经公开的牌，不包含对手未公开的手牌、牌库或烧牌。
 
 ## 决策设计
 
@@ -145,9 +166,9 @@ const visualState = playerCardState({
 
 ## 验证与发布
 
-1. 在游戏目录写规则测试，覆盖合法与非法行动、回合推进、结束条件、结算、资源守恒和信息可见范围。
+1. 先在游戏目录写并运行规则测试，再改实现。直接构造行动覆盖合法与非法选择、失败不改状态、回合推进、结束条件、结算、资源守恒和信息可见范围；不要让新案例仅从合法行动生成器取样。
 2. 运行 `npm test` 和 `npm run build:web`。自动测试只覆盖游戏内容与规则，不为运行时、界面、协议或连接器另建测试。
-3. 打开网页并连接本机连接器，实际检查新游戏的设置、行动、暂停继续与回放。
+3. 以至少 1920×1080 打开网页并连接本机连接器，实际检查设置、真人行动、Agent 直接提交及纠错、暂停继续与回放；更换模型或重建会话后检查完整上下文，通知不能授予行动权限。
 4. 部署 `dist/client/`。同一可信 origin 下新增游戏不更改连接器配置或 EXE。
 
 需要新的 Harness、原生权限或不被当前协议表达的平台能力时，才修改连接器并协商新 capability 或协议。

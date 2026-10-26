@@ -42,6 +42,7 @@ export function applyAction(current: DoudizhuState, seat: Seat, action: GameActi
   if (!Number.isInteger(seat) || seat < 0 || seat > 2) throw new RuleError('座位不存在');
   if (current.phase === 'finished') throw new RuleError('本局已经结束');
   if (current.turn !== seat) throw new RuleError('还没有轮到你');
+  if (!action || typeof action !== 'object' || Array.isArray(action)) throw new RuleError('行动须包含 type 和对应的叫分或手牌参数');
   const state = structuredClone(current);
   const player = state.players[seat];
   if (state.phase === 'bidding') {
@@ -103,13 +104,13 @@ export function applyAction(current: DoudizhuState, seat: Seat, action: GameActi
   return state;
 }
 
-export function viewGame(state: DoudizhuState, viewer: Seat | null, revealHands = false): GameView {
+export function viewGame(state: DoudizhuState, viewer: Seat | null, revealHands = false, includeActions = true): GameView {
   const { highBidder: _highBidder, ...publicState } = state;
   return {
     ...publicState,
     players: state.players.map(({ hand, plays: _plays, ...player }) => ({ ...player, count: hand.length, role: state.landlord === null ? null : state.landlord === player.seat ? 'landlord' : 'farmer', ...(viewer === player.seat || revealHands ? { hand: [...hand] } : {}) })),
     bottom: state.phase === 'bidding' ? [] : [...state.bottom],
     viewer,
-    legalActions: viewer === null ? [] : getLegalActions(state, viewer),
+    legalActions: viewer === null || !includeActions ? [] : getLegalActions(state, viewer),
   };
 }

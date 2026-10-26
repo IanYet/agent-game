@@ -133,11 +133,11 @@ export function legalActions(s:BaoState,seat:number):BaoChoice[]{
   // Large sets first on a fresh lead; economical covers first when following.
   return out.sort((a,b)=>a.action.type==='pass'?-1:b.action.type==='pass'?1:count?Math.max(...a.cards!.map(c=>c.rank))-Math.max(...b.cards!.map(c=>c.rank)):(b.cards!.length-a.cards!.length)||Math.min(...a.cards!.map(c=>c.rank))-Math.min(...b.cards!.map(c=>c.rank)));
 }
-export function viewGame(s:BaoState,viewer:number|null,revealHands=false):BaoView{
+export function viewGame(s:BaoState,viewer:number|null,revealHands=false,includeActions=true):BaoView{
   const publicGuard=s.guardPublic||s.phase==='finished',knowGuard=publicGuard||viewer===s.guard;
   return {gameId:s.gameId,id:s.id,round:s.round,baseScore:s.baseScore,revision:s.revision,phase:s.phase,viewer,
     players:s.players.map(p=>{const {hand,...other}=p;return {...other,count:hand.length,...(p.seat===viewer||revealHands?{hand}:{}),role:p.seat===s.emperor?(knowGuard&&s.emperor===s.guard?'solo':'emperor'):knowGuard?(p.seat===s.guard?'guard':'civilian'):p.seat===viewer?'civilian':null};}),
     turn:s.phase==='declare'||s.phase==='finished'?null:s.turn,emperor:s.emperor,guard:knowGuard?s.guard:null,open:s.open,guardPublic:publicGuard,cedes:s.cedes,
     ready:s.declarations.flatMap((v,i)=>v===null?[]:[i]),trick:s.trick,lastPlay:s.lastPlay,lastActions:s.lastActions,order:s.order,
-    events:s.events,result:s.result,legalActions:viewer===null?[]:legalActions(s,viewer)};
+    events:s.events,result:s.result,legalActions:viewer===null||!includeActions?[]:legalActions(s,viewer)};
 }

@@ -33,7 +33,7 @@ describe('私有技能通知与信息范围',()=>{
     for(const viewer of [0,2,3,null])expect(viewCitadels(s,viewer).notifications).toEqual([]);
     expect(viewCitadels(s,0).players[1].roles).toEqual([]);expect(s.events.at(-1)).not.toHaveProperty('target');expect(s.players[1].revealed).toEqual([]);
     expect(module.decisions(run).map(d=>d.actorId)).toEqual(['p0']);expect(legalCitadels(s,1)).toEqual([]);
-    expect(prompt).toContain('无需回复');expect(JSON.parse(prompt.split('当前私有观察：')[1]).legalActions).toEqual([]);
+    expect(prompt).toContain('无需回复');expect(JSON.parse(prompt.split('当前私有观察：')[1])).not.toHaveProperty('legalActions');
     expect(module.notificationPrompt!(run,'p0',before)).toBeNull();expect(module.notificationPrompt!(run,'p1',s.events.length)).toBeNull();
     s=main(s);s=applyCitadels(s,0,{type:'end'});expect(s.called).toBe(8);expect(s.players[1].revealed).toEqual([]);
   });
@@ -103,6 +103,39 @@ describe('经典八身份 · 人数与秘密选角',()=>{
   });
 });
 describe('收入、身份时序与建筑约束',()=>{
+  it('当前观察明确反映技能消耗；同一玩家下个身份重新获得使用次数',()=>{
+    let s=stage(3);assign(s,0,4);city(s,0,['laboratory','smithy']);gold(s,0,6);
+    s=applyCitadels(s,0,{type:'magic_cycle',cards:[]});
+    s=applyCitadels(s,0,{type:'laboratory',card:s.players[0].hand[0].id});s=applyCitadels(s,0,{type:'smithy'});
+    expect(viewCitadels(s,0)).toMatchObject({powerUsed:true,labUsed:true,smithyUsed:true,taxUsed:false,collected:false,built:0});
+    const before=structuredClone(s);expect(()=>applyCitadels(s,0,{type:'magic_swap',target:1})).toThrow('不可用');expect(s).toEqual(before);
+    s=main(s);s=applyCitadels(s,0,{type:'end'});expect(s.called).toBe(4);
+    expect(viewCitadels(s,0)).toMatchObject({powerUsed:false,labUsed:false,smithyUsed:false,taxUsed:false,collected:false,built:0});
+    s=applyCitadels(s,0,{type:'tax'});expect(viewCitadels(s,0)).toMatchObject({taxUsed:true});
+  });
+  it('技能、费用、目标与收入保留数量的拒绝都不会留下部分修改',()=>{
+    const mage=stage(3),king=stage(4),assassin=stage(1),thief=stage(2);thief.assassinated=6;
+    const smith=stage(4);city(smith,0,['smithy']);gold(smith,0,1);
+    const lab=stage(4);city(lab,0,['laboratory']);
+    const build=main(stage(4));gold(build,0,0);const expensive=hand(build,0,'palace');
+    const kept=applyCitadels(stage(4),0,{type:'income',source:'cards'});
+    const warlord=main(stage(8));city(warlord,1,['keep','palace']);gold(warlord,0,0);
+    const cases:Array<[CitadelsState,Parameters<typeof applyCitadels>[2]]>=[
+      [assassin,{type:'assassinate',role:1}],[thief,{type:'steal',role:6}],
+      [king,{type:'assassinate',role:6}],[mage,{type:'tax'}],
+      [mage,{type:'magic_swap',target:0}],[mage,{type:'magic_swap',target:4}],
+      [mage,{type:'magic_cycle',cards:[mage.players[1].hand[0].id]}],
+      [mage,{type:'magic_cycle',cards:[mage.players[0].hand[0].id,mage.players[0].hand[0].id]}],
+      [lab,{type:'laboratory',card:lab.players[1].hand[0].id}],[king,{type:'laboratory',card:king.players[0].hand[0].id}],
+      [smith,{type:'smithy'}],[king,{type:'smithy'}],[build,{type:'build',card:expensive.id}],
+      [kept,{type:'keep',cards:[]}],[kept,{type:'keep',cards:kept.pendingCards.map(c=>c.id)}],
+      [kept,{type:'end'}],[king,{type:'end'}],[king,{type:'recover',take:true}],
+      [warlord,{type:'destroy',target:1,card:warlord.players[1].city[0].id}],
+      [warlord,{type:'destroy',target:1,card:warlord.players[1].city[1].id}],
+      [warlord,{type:'destroy',target:2,card:warlord.players[1].city[1].id}],
+    ];
+    for(const [s,action] of cases){const before=structuredClone(s);expect(()=>applyCitadels(s,0,action)).toThrow();expect(s).toEqual(before);assertCitadels(s);}
+  });
   it('必须收入再建造，每回合只能收入一次且普通身份最多建一座',()=>{
     let s=stage(4);gold(s,0,10);const c=hand(s,0,'tavern'),other=hand(s,0,'temple');
     expect(()=>applyCitadels(s,0,{type:'build',card:c.id})).toThrow('先完成');expect(()=>applyCitadels(s,0,{type:'end'})).toThrow('先完成');

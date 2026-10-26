@@ -16,11 +16,13 @@ export interface ChessView extends ChessState {viewer:number|null;board:Array<{s
 export const COLOR_NAMES:Record<Color,string>={w:'白方',b:'黑方'};
 export const PIECE_NAMES:Record<PieceSymbol,string>={k:'王',q:'后',r:'车',b:'象',n:'马',p:'兵'};
 export const END_NAMES:Record<EndReason,string>={checkmate:'将死',stalemate:'逼和',insufficient:'子力不足死局',fivefold:'五次重复局面','seventy-five':'75 回合规则',threefold:'申请三次重复和棋',fifty:'申请 50 回合和棋',agreement:'双方同意和棋',resignation:'认输','resignation-no-mate':'认输时对方无法将死'};
-export const CHESS_RULES=`标准国际象棋 · 2 人 · 不计时。采用 FIDE 2023 的走子与计分，白方先行。王不可被吃，任何走子都不能让自己的王受将军。王车易位要求王与对应车从未移动、路径空、王未被将军且不经过或落入受攻击格；吃过路兵仅限对方兵刚从起始格前进两格后的紧接一步；兵到末排必须选择后、车、象或马，允许升变为已有的棋子。
+export const CHESS_RULES=`标准国际象棋 · 2 人 · 不计时。采用 FIDE 2023 的走子与计分，白方先行，之后双方交替走一步。棋盘从白方看，左到右为 a–h 线，近到远为 1–8 横排。白方后排 a1–h1 依次为车马象后王象马车、兵在第 2 排；黑方对应在第 8、7 排。目标是将死敌王。
+王向任意方向一格；后沿直线或斜线任意格，车沿横竖直线任意格，象沿斜线任意格，三者不得越子；马走一线两格再垂直一格的 L 形，可越子。棋子不能落在己方棋子所在格，落在敌子格则吃子。兵向前直行一格（白方向横排号增大，黑方减小），起始排可直行两格，路径及终点须空；普通吃子为向前斜行一格，不能后退。
+王不可被吃，任何走子都不能让自己的王受将军；被将军时须移动王、挡住攻击或吃掉攻击子来解将，双方王不能相邻。王车易位要求王与对应车从未移动、两者之间全空、王未被将军且不经过或落入受攻击格；王向车方向移动两格，车移到王越过的一格，同步完成一步。长易位不要求 b 线空格不受攻击。吃过路兵仅限对方兵刚从起始格前进两格后的紧接一步：本方相邻同排兵斜进到它越过的格，并移除该敌兵；同样不能暴露己王。兵到末排必须选择后、车、象或马，允许升变为已有的棋子。
 将死获胜；无合法棋步且未被将军为逼和。王对王、王与单象或单马对王、仅有同色格象与王等子力不足死局自动和棋；双马对王不自动判和。复杂封闭死局不作自动证明，可由双方协议和棋。
 同一局面包括轮到哪方、棋子位置、王车易位权与合法吃过路兵权。三次重复或双方连续 50 回合无兵移动且无吃子，可由当前行棋方申请；也可指定一着合法的预定棋步，在落子前申请该步将产生的三次重复或 50 回合和棋。未申请则继续。五次重复、双方连续 75 回合无兵移动且无吃子自动和棋；第 75 回合的将死优先。
 提和随一着棋提交，对方可接受、拒绝或用走子拒绝。双方至少各走一步后才可协议和棋。认输与和棋申请在自己的决策回合操作；认输时对方仅剩王等无法将死的情况判和。本桌不使用棋钟、触子走子或线下裁判罚时。
-胜 1 分、和棋各 0.5 分、负 0 分。下一局按玩家身份保留累计积分、胜和负；默认交换黑白，新增玩家从零分开始。所有棋子、棋谱、合法棋步与公开事件双方均可见，Agent 对话仍由公共好奇模式控制。`;
+胜 1 分、和棋各 0.5 分、负 0 分。下一局按玩家身份保留累计积分、胜和负；默认交换黑白，新增玩家从零分开始。所有棋子、棋谱与公开事件双方均可见，Agent 对话仍由公共好奇模式控制。`;
 
 export function validateChessOptions(options:ChessOptions){
   if(!options||!['first','second','random'].includes(options.firstWhite)||typeof options.alternateColors!=='boolean')throw new Error('请选择首局白方与是否交换黑白');
@@ -110,14 +112,37 @@ function canMate(chess:Chess,color:Color){
   if(own.length===1&&own[0].type==='n'&&(!other.length||other.every(p=>p.type==='q')))return false;
   return true;
 }
+function moveFromUci(chess:Chess,uci:unknown):Move {
+  if(typeof uci!=='string'||!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci))throw new Error('uci 须为起点和终点，如 e2e4；升变追加 q/r/b/n');
+  const piece=chess.get(uci.slice(0,2) as Square);
+  if(!piece)throw new Error(`起点 ${uci.slice(0,2)} 没有棋子`);
+  if(piece.color!==chess.turn())throw new Error('只能移动自己的棋子');
+  const promotion=piece.type==='p'&&['1','8'].includes(uci[3]);
+  if(promotion&&!uci[4])throw new Error('兵到末排必须指定升变 q/r/b/n');
+  if(!promotion&&uci[4])throw new Error('只有兵到末排才能指定升变');
+  const destination=chess.get(uci.slice(2,4) as Square);
+  if(destination?.color===piece.color)throw new Error('终点有己方棋子，不能移动到该格');
+  try{return chess.move({from:uci.slice(0,2),to:uci.slice(2,4),...(uci[4]?{promotion:uci[4]}:{})});}
+  catch{throw new Error(`${uci} 不是合法棋步：请检查该棋子的走法、路径阻挡与王的安全${chess.isCheck()?'，当前必须解除将军':''}`);}
+}
 export function applyChessAction(current:ChessState,seat:number,input:unknown):ChessState{
   if(current.phase==='finished')throw new Error('本局已结束');
   if(!Number.isInteger(seat)||seat!==current.turn)throw new Error('当前不是你的行棋回合');
-  if(!input||typeof input!=='object')throw new Error('行动格式无效');
+  if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('行动须包含 type 与对应棋步或和棋参数');
   const action=input as ChessAction;
-  const allowed=legalChessActions(current,seat).find(a=>a.action.type===action.type&&(a.action.type!=='move'||(action.type==='move'&&a.action.uci===action.uci))&&(a.action.type!=='claim_draw'||(action.type==='claim_draw'&&a.action.reason===action.reason&&a.action.uci===action.uci)));
-  if(!allowed)throw new Error('这不是当前合法行动，请重新选择棋步或和棋条件');
+  if(!['move','claim_draw','accept_draw','decline_draw','resign'].includes(action.type))throw new Error('未知行动类型：请选择 move、claim_draw、accept_draw、decline_draw 或 resign');
+  const keys=action.type==='move'?['type','uci','offerDraw']:action.type==='claim_draw'?['type','reason','uci']:['type'];
+  if(Object.keys(action).some(k=>!keys.includes(k)))throw new Error(`行动 ${action.type} 只接受 ${keys.join('、')}`);
   if(action.type==='move'&&action.offerDraw!==undefined&&typeof action.offerDraw!=='boolean')throw new Error('提和标记必须为布尔值');
+  if(action.type==='accept_draw'||action.type==='decline_draw'){
+    if(!current.drawOffer||current.drawOffer.by===seat)throw new Error('当前没有对方的提和可以回应');
+    if(action.type==='accept_draw'&&(!current.moves.some(m=>m.color==='w')||!current.moves.some(m=>m.color==='b')))throw new Error('双方至少各走一步后才能接受提和');
+  }
+  if(action.type==='claim_draw'){
+    if(!['threefold','fifty'].includes(action.reason))throw new Error('和棋原因须为 threefold（三次重复）或 fifty（50 回合）');
+    const fen=action.uci===undefined?current.fen:moveFromUci(new Chess(current.fen),action.uci).after;
+    if(!claims(current,fen,action.uci!==undefined).includes(action.reason))throw new Error(`未满足${action.reason==='threefold'?'三次重复局面':'50 回合无兵移动且无吃子'}，请继续行棋或选择满足条件的预定棋步`);
+  }
   const state=structuredClone(current),chess=new Chess(state.fen);state.revision++;
   if(action.type==='resign'){
     event(state,'resign','认输',seat,{action});finish(state,canMate(chess,state.players[1-seat].color)?'resignation':'resignation-no-mate',canMate(chess,state.players[1-seat].color)?1-seat:null);
@@ -128,7 +153,7 @@ export function applyChessAction(current:ChessState,seat:number,input:unknown):C
     finish(state,action.reason,null);
   }else if(action.type==='move'){
     if(state.drawOffer){event(state,'decline','以走子拒绝和棋',seat);state.drawOffer=null;}
-    const move=chess.move({from:action.uci.slice(0,2),to:action.uci.slice(2,4),...(action.uci[4]?{promotion:action.uci[4]}:{})});
+    const move=moveFromUci(chess,action.uci);
     const record:ChessMove={...describeMove(move),ply:state.moves.length+1,seat,color:move.color,before:state.fen,after:chess.fen(),time:now()};
     state.moves.push(record);state.fen=record.after;state.turn=seatOfColor(state,chess.turn());
     event(state,'move',`${COLOR_NAMES[move.color]} ${move.san}${record.castle?' · 王车易位':''}${record.enPassant?' · 吃过路兵':''}${record.promotion?` · 升变为${PIECE_NAMES[record.promotion]}`:''}${chess.isCheck()?' · 将军':''}`,seat,{fen:state.fen,ply:record.ply,action});
@@ -145,11 +170,11 @@ export function chessPgn(state:ChessState){
   chess.setHeader('Event','同桌国际象棋');chess.setHeader('White',state.players.find(p=>p.color==='w')!.name);chess.setHeader('Black',state.players.find(p=>p.color==='b')!.name);chess.setHeader('Round',String(state.round));chess.setHeader('Result',state.result?.outcome??'*');
   const pgn=chess.pgn();pgnCache.set(state,pgn);return pgn;
 }
-export function viewChess(state:ChessState,viewer:number|null):ChessView{
+export function viewChess(state:ChessState,viewer:number|null,includeActions=true):ChessView{
   if(viewer!==null&&viewer!==0&&viewer!==1)throw new Error('未知玩家');
   const chess=new Chess(state.fen),board=chess.board().flat().filter(p=>p!==null);
   const captured:Record<Color,PieceSymbol[]>={w:[],b:[]};for(const move of state.moves)if(move.captured)captured[move.color].push(move.captured);
-  return {...structuredClone(state),viewer,board,check:chess.isCheck(),checkSquare:chess.isCheck()?board.find(p=>p.type==='k'&&p.color===chess.turn())!.square:null,moveNumber:chess.moveNumber(),halfmoveClock:halfmoves(state.fen),repetitions:positionCount(state),legalMoves:legalChessMoves(state),legalActions:legalChessActions(state,viewer),claimable:state.phase==='playing'?claims(state):[],captured,pgn:chessPgn(state)};
+  return {...structuredClone(state),viewer,board,check:chess.isCheck(),checkSquare:chess.isCheck()?board.find(p=>p.type==='k'&&p.color===chess.turn())!.square:null,moveNumber:chess.moveNumber(),halfmoveClock:halfmoves(state.fen),repetitions:positionCount(state),legalMoves:includeActions?legalChessMoves(state):[],legalActions:includeActions?legalChessActions(state,viewer):[],claimable:state.phase==='playing'?claims(state):[],captured,pgn:chessPgn(state)};
 }
 
 export function restoreChess(data:unknown,version:number):ChessState{

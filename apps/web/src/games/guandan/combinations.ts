@@ -1,6 +1,10 @@
 import type {Card} from '@agent-game/core';
 import {isWild,label,POINTS,strength} from './cards';
-import type {Combination,CombinationKind} from './types';
+import type {Combination,CombinationKind,Declaration} from './types';
+
+export function declaration({kind,rank,suit,pairRank}:Combination):Declaration {
+  return {kind,rank,...(suit?{suit}:{}),...(pairRank!==undefined?{pairRank}:{})};
+}
 
 interface Template {combination:Combination;counts:Map<number,number>;suit?:Card['suit']}
 const names:Record<CombinationKind,string>={single:'单张',pair:'对子',triple:'三张',full_house:'三带对',straight:'顺子',pair_run:'三连对',triple_run:'钢板',bomb:'炸弹',straight_flush:'同花顺',four_jokers:'四王炸'};

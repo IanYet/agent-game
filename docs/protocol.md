@@ -72,6 +72,8 @@ interface SessionRequest {
 
 网页按作用域与玩家归属接收对话，按 runId/playerId 存入 `agent-arcade.conversations.v1`。流式内容合并后分批保存，页面隐藏或关闭前立即保存。开关只控制显示，记录不依赖好奇模式；刷新可重新查看已保存内容。原生 Harness 始终使用临时会话，不提供客户端历史保留开关。
 
+观战与好奇模式的对话面板仅过滤 event，其他记录各占一个条目，展示来源、去向、类型、原标题与时间。工具参数和结果完整显示；JSON 字符串解码后按层级展示，混合正文中的 JSON 也独立呈现。“全部展开／全部折叠”作用于当前玩家的全部条目和 JSON 层级，仍可单独切换。渲染不修改存档内容。
+
 ## 动态注册与校验
 
 使用 SDK 低层 `Server` 注册 `tools/list` 和 `tools/call`，不把 JSON Schema 转成硬编码 Zod 工具定义。没有为了动态工具升级原生 MCP 协议。
@@ -97,6 +99,8 @@ requiresDecision 工具必须存在该原生会话正在处理且带 decisionId 
 旧 scope、完成的 decision、重复动作、暂停后的行动和其他玩家的请求都会被拒绝。只读工具可在暂停中读取当前模块允许的私有观察。会话撤销立即删除 capability，并取消其未完成的工具请求。
 
 桥不理解领域 revision。并行竞价中一位玩家提交后，其他玩家仍使用各自稳定的 decisionId；顺序牌类模块自己验证 revision。
+
+当前八款游戏注册 `game_get_state`、`game_rules` 和需要决策授权的 `game_act`。后者接受 `{revision,action}`，action 用牌、金额、棋步或目标等领域参数表达选择，具体结构见[游戏开发约定](developing-games.md#工具与-schema)。这些工具和字段由网页模块声明，连接器无须识别任何游戏动作。规则拒绝不会结束决策，Agent 可以读取状态、修正参数后重试；成功动作完成当前决策。
 
 ## 结果与兼容
 

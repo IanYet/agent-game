@@ -2,7 +2,9 @@ import {shuffle,RuleError,type Card,type PlayerConfig,type Seat} from '@agent-ga
 
 
 
-export const HOLDEM_RULES = `无限注德州扑克，2–9 人，52 张牌，无大小王。每人两张底牌，依次翻出 3 张翻牌、1 张转牌、1 张河牌，每次发公共牌前烧一张牌。以任意 5 张组成最佳牌型（可不用底牌）：同花顺 > 四条 > 葫芦 > 同花 > 顺子 > 三条 > 两对 > 一对 > 高牌。A 可作顺子的最大牌或 A2345 的最小牌；花色不分大小。
+export const HOLDEM_RULES = `无限注德州扑克，2–9 人，52 张牌，无大小王。每人两张底牌，依次翻出 3 张翻牌、1 张转牌、1 张河牌，每次发公共牌前烧一张牌。以任意 5 张组成最佳牌型（可不用底牌）：同花顺（同花的五张连续点数）> 四条（四张同点加一张）> 葫芦（三张同点加一对）> 同花（五张同花色）> 顺子（五张连续点数）> 三条 > 两对 > 一对 > 高牌。A 可作顺子的最大牌或 A2345 的最小牌；花色不分大小。
+同类比较：顺子和同花顺比最高点（A2345 算 5 高）；四条先比四张点数再比单张；葫芦先比三张再比对子；三条、一对先比主体再按从大到小比剩余单张；两对先比大对再比小对再比单张；同花和高牌逐张由大到小比较。只比较最佳五张，完全相同则平手。
+弃牌即放弃争夺本手底池，已经投入的筹码不退；无需跟注时可以过牌；有差额时才可跟注，付到当前应跟金额，筹码不足则以全部剩余筹码跟注。可弃牌的时机包括无需跟注时。
 庄家按钮每手顺时针移动。多人桌按钮左侧为小盲、再左为大盲，翻牌前大盲左侧先行动；翻牌后按钮左侧先行动。单挑时按钮下小盲、翻牌前先行动，大盲翻牌后先行动。变更阵容时先将大盲轮转到上一大盲之后的存续座位，再按新人数确定按钮，避免单挑转换时连下两次大盲。盲注不足则全下，翻牌前最低跟注基准仍为大盲；只剩一位可下注玩家时只需跟足对手实际投入。
 行动为弃牌、过牌、跟注或加注。加注金额表示本轮累计下注到多少（raise-to），必须是整数筹码。最小开注为大盲，最小加注幅度为上一次完整加注的幅度。筹码不足时允许不足额全下；不足额加注不会单独重开已行动玩家的加注权，累计增加达到完整加注幅度时重开。过牌也视为已行动。不足额开注后再加注必须额外增加至少一个大盲，不能只补足到大盲。只有自己仍有可下注筹码时，不可对全下玩家额外加注。
 所有未弃牌玩家完成跟注或全下后进入下一轮；不足两位可继续下注时自动发完公共牌。只剩一位未弃牌者立即获胜。未被跟注的超额下注退回。按每人累计投入建立主池及边池，弃牌筹码留在池中，只有投入达到该池门槛且未弃牌的玩家可争夺；各池独立比较、平分，不能整除的零头按按钮左侧起顺时针分给并列赢家。无抽水，逐手筹码守恒。摊牌仅展示未弃牌玩家底牌。
@@ -157,6 +159,7 @@ function advance(state: HoldemState, after: Seat) {
 export function applyHoldemAction(current: HoldemState, seat: Seat, action: HoldemAction): HoldemState {
   const bet = holdemBetting(current, seat);
   if (!bet) throw new RuleError('当前不是此座位的行动回合');
+  if (!action || typeof action !== 'object' || Array.isArray(action)) throw new RuleError('行动须包含 fold、check、call 或 raise 类型');
   const state = structuredClone(current), p = state.players[seat];
   if (action.type === 'fold') { p.folded = true; event(state, { type: 'fold', seat, text: '弃牌' }); }
   else if (action.type === 'check') { if (bet.toCall) throw new RuleError('需要跟注，不能过牌'); event(state, { type: 'check', seat, text: '过牌' }); }
@@ -200,9 +203,9 @@ export function assertHoldemChips(state: HoldemState): void {
   if (!Number.isSafeInteger(state.totalChips) || state.totalChips <= 0 || state.players.some(p => !Number.isSafeInteger(p.chips) || p.chips < 0 || !Number.isSafeInteger(p.committed) || p.committed < 0) || state.players.reduce((s, p) => s + p.chips + p.committed, 0) !== state.totalChips) throw new RuleError('筹码守恒检查失败');
   if (state.ledger.reduce((sum, e) => sum + (e.type === 'buy-in' ? e.amount : -e.amount), 0) !== state.totalChips) throw new RuleError('牌桌买入与离桌账本不平衡');
 }
-export function viewHoldem(state: HoldemState, viewer: Seat | null, revealHands = false): HoldemView {
+export function viewHoldem(state: HoldemState, viewer: Seat | null, revealHands = false, includeActions = true): HoldemView {
   const { deck: _deck, burned: _burned, players, ...publicState } = structuredClone(state);
-  return { ...publicState, viewer, players: players.map(({ hand, actedAtBet: _acted, ...p }) => ({ ...p, count: hand.length, ...(p.seat === viewer || revealHands || (state.result?.showdown && !p.folded) ? { hand } : {}) })), legalActions: viewer === null ? [] : getHoldemLegalActions(state, viewer), betting: viewer === null ? null : holdemBetting(state, viewer), pot: players.reduce((s, p) => s + p.committed, 0) };
+  return { ...publicState, viewer, players: players.map(({ hand, actedAtBet: _acted, ...p }) => ({ ...p, count: hand.length, ...(p.seat === viewer || revealHands || (state.result?.showdown && !p.folded) ? { hand } : {}) })), legalActions: viewer === null || !includeActions ? [] : getHoldemLegalActions(state, viewer), betting: viewer === null ? null : holdemBetting(state, viewer), pot: players.reduce((s, p) => s + p.committed, 0) };
 }
 export function nextHoldemHand(previous: HoldemState, configs: HoldemPlayerConfig[], settings: { random?: () => number; handId?: string } = {}): HoldemState {
   if (previous.phase !== 'finished') throw new RuleError('一手牌进行中不能变更阵容');
