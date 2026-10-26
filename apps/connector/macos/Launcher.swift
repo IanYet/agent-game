@@ -197,14 +197,14 @@ private final class Child {
             request.setValue("TongZhuo-Connector/\(version)", forHTTPHeaderField: "User-Agent")
             let (data, response) = try await URLSession.shared.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200, let release = try JSONSerialization.jsonObject(with: data) as? [String: Any], release["draft"] as? Bool == false, release["prerelease"] as? Bool == false, let tag = release["tag_name"] as? String else { throw PortInspector.failure("无法读取正式发行版。") }
-            #if arch(arm64)
-            let assetName = "TongZhuo-Connector-macOS-Apple-Silicon.zip"
-            #else
-            let assetName = "TongZhuo-Connector-macOS-Intel.zip"
-            #endif
-            guard let assets = release["assets"] as? [[String: Any]], assets.contains(where: { $0["name"] as? String == assetName }) else { throw PortInspector.failure("最新版本尚未提供此芯片的下载包。") }
             let latest = tag.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
             guard latest.split(separator: ".").count == 3, latest.split(separator: ".").allSatisfy({ Int($0) != nil }) else { throw PortInspector.failure("版本号无法识别。") }
+            #if arch(arm64)
+            let assetName = "TongZhuo-Connector-v\(latest)-macOS-Apple-Silicon.zip"
+            #else
+            let assetName = "TongZhuo-Connector-v\(latest)-macOS-Intel.zip"
+            #endif
+            guard let assets = release["assets"] as? [[String: Any]], assets.contains(where: { $0["name"] as? String == assetName }) else { throw PortInspector.failure("最新版本尚未提供此芯片的下载包。") }
             updateAvailable = latest.compare(version, options: .numeric) == .orderedDescending
             updateMessage = updateAvailable ? "发现 \(tag)。下载后先退出当前应用，再用新应用替换。" : "当前已是最新正式版本。"
         } catch { updateMessage = "检查失败，可重试。\(error.localizedDescription)" }

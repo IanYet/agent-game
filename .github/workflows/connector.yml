@@ -31,18 +31,12 @@ jobs:
           - os: windows-latest
             platform: windows
             arch: x64
-            artifact: 同桌连接器-Windows-64位
-            asset: TongZhuo-Connector-Windows-x64.exe
           - os: macos-15
             platform: macos
             arch: arm64
-            artifact: 同桌连接器-macOS-Apple-Silicon
-            asset: TongZhuo-Connector-macOS-Apple-Silicon.zip
           - os: macos-15-intel
             platform: macos
             arch: x64
-            artifact: 同桌连接器-macOS-Intel
-            asset: TongZhuo-Connector-macOS-Intel.zip
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     steps:
@@ -51,6 +45,17 @@ jobs:
         with:
           node-version: '24.19.0'
           cache: npm
+      - name: Resolve versioned connector package names
+        id: package_names
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFile } from 'node:fs/promises';
+          import { connectorPackages } from './scripts/connector-assets.mjs';
+          const asset = connectorPackages.find(asset => asset.platform === process.platform && asset.arch === process.arch);
+          if (!asset) throw new Error(`Unsupported connector platform: ${process.platform}/${process.arch}`);
+          await appendFile(process.env.GITHUB_OUTPUT, `asset=${asset.name}\nartifact=${asset.label}\n`);
+          NODE
       - name: Select a stable Xcode with the current macOS UI SDK
         if: runner.os == 'macOS'
         shell: bash
@@ -98,8 +103,8 @@ jobs:
       - name: Upload connector package and checksums
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: release/${{ matrix.asset }}*
+          name: ${{ steps.package_names.outputs.artifact }}
+          path: release/${{ steps.package_names.outputs.asset }}*
           if-no-files-found: error
           retention-days: 14
 
@@ -118,14 +123,14 @@ jobs:
           node-version: '24.19.0'
       - uses: actions/download-artifact@v4
         with:
-          pattern: 同桌连接器-*
+          pattern: 同桌连接器 v*
           path: release-input
           run-id: ${{ inputs.build_run_id || github.run_id }}
           github-token: ${{ github.token }}
       - name: Collect platform packages and checksums
         run: |
           mkdir release-assets
-          find release-input -type f -name 'TongZhuo-Connector-*' -exec cp '{}' release-assets/ \;
+          find release-input -type f -name 'TongZhuo-Connector-v*' -exec cp '{}' release-assets/ \;
       - name: Publish and verify Release assets without moving existing tags
         run: node scripts/publish-connector.mjs release-assets
         env:

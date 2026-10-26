@@ -16,9 +16,9 @@
 
 | 系统 | 安装包 |
 | --- | --- |
-| Windows 10 2004（19041）及更新版本，x64，自带 WinUI、.NET 和 Node.js | [同桌连接器 · Windows 64 位](https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-Windows-x64.exe) |
-| macOS 13.5+，Apple Silicon（M 系列） | [同桌连接器 · macOS Apple Silicon](https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-macOS-Apple-Silicon.zip) |
-| macOS 13.5+，Intel | [同桌连接器 · macOS Intel](https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-macOS-Intel.zip) |
+| Windows 10 2004（19041）及更新版本，x64，自带 WinUI、.NET 和 Node.js | [同桌连接器 v0.5.3 · Windows 64 位](https://github.com/IanYet/agent-game/releases/download/v0.5.3/TongZhuo-Connector-Windows-x64.exe) |
+| macOS 13.5+，Apple Silicon（M 系列） | [同桌连接器 v0.5.3 · macOS Apple Silicon](https://github.com/IanYet/agent-game/releases/download/v0.5.3/TongZhuo-Connector-macOS-Apple-Silicon.zip) |
+| macOS 13.5+，Intel | [同桌连接器 v0.5.3 · macOS Intel](https://github.com/IanYet/agent-game/releases/download/v0.5.3/TongZhuo-Connector-macOS-Intel.zip) |
 
 Windows 包尚未做 Authenticode 签名；macOS 包只有 ad-hoc 本地签名，没有 Developer ID 身份签名，也未经过 Apple 公证。ad-hoc 不表示 Apple 已审核或认证。macOS ZIP 根目录附有[首次启动说明](apps/connector/macos/请先阅读.txt)，应用打不开时也可阅读。
 

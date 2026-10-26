@@ -43,7 +43,9 @@ macOS 的布局采用 Apple [窗口规范](https://developer.apple.com/design/hu
 
 `.github/workflows/pages.yml` 在 `main` 推送时构建并部署网页。仓库 Pages 设置的 Source 应选择 GitHub Actions；工作流会读取站点路径，本地也可用 `PAGES_BASE_PATH` 指定。
 
-下载地址通过 `VITE_CONNECTOR_DOWNLOAD_URL`、`VITE_CONNECTOR_MACOS_ARM64_DOWNLOAD_URL` 和 `VITE_CONNECTOR_MACOS_X64_DOWNLOAD_URL` 写入网页。调整安装包名称时，先发布带有新名称的连接器，再部署引用新地址的网页。
+网页下载名称使用 `apps/connector/version.json` 中的连接器版本。Pages 构建会读取该版本正式 Release，按系统和芯片选择实际安装包地址，后续 Release 不会改变已部署网页的下载目标。只调整打包命名时，无需重新发布已有连接器。升级连接器版本时，先发布对应连接器，再部署网页；目标 Release 缺少安装包时，网页构建会停止。
+
+Pages 通过 `VITE_CONNECTOR_RELEASES_URL` 指定仓库的 Releases 地址，并将实际下载地址写入 `VITE_CONNECTOR_DOWNLOAD_URL`、`VITE_CONNECTOR_MACOS_ARM64_DOWNLOAD_URL` 和 `VITE_CONNECTOR_MACOS_X64_DOWNLOAD_URL`。自建网站也可设置这些变量；未设置直接下载地址时，入口打开对应版本的 Release 页面。
 
 ## 发布连接器
 
@@ -58,11 +60,13 @@ gh run list --repo IanYet/agent-game --workflow connector.yml
 
 工作流分别在 Windows x64、macOS Apple Silicon 和 macOS Intel 上构建，使用 Node.js 24.19.0。各作业运行游戏规则测试、类型检查和构建，再生成原生安装包；Intel runner 串行运行同一套规则测试，避免多个进程争抢 CPU 导致长对局测试超时。不运行连接器、界面、协议或发布器自动测试。
 
-安装包名称和 Release 显示名统一放在 [connector-assets.mjs](../scripts/connector-assets.mjs)。Actions 下载产物与 Release 显示名会写明「同桌连接器」、系统和芯片。底层文件使用 ASCII 名称：
+安装包名称和 Release 显示名统一放在 [connector-assets.mjs](../scripts/connector-assets.mjs)，从连接器版本文件自动读取版本。Actions 下载产物与 Release 显示名写明产品、版本、系统和芯片，例如「同桌连接器 v0.5.3 · Windows 64 位」。新打包文件使用带版本的 ASCII 名称，例如：
 
-- `TongZhuo-Connector-Windows-x64.exe`
-- `TongZhuo-Connector-macOS-Apple-Silicon.zip`
-- `TongZhuo-Connector-macOS-Intel.zip`
+- `TongZhuo-Connector-v0.5.3-Windows-x64.exe`
+- `TongZhuo-Connector-v0.5.3-macOS-Apple-Silicon.zip`
+- `TongZhuo-Connector-v0.5.3-macOS-Intel.zip`
+
+校验和与构建信息沿用完整安装包文件名，分别追加 `.sha256` 与 `.build.json`。客户端检查更新时，按最新正式 Release 的版本查找对应系统和芯片的安装包。
 
 三个平台打包完成后，发布作业核对版本、平台、源提交、文件大小与 SHA-256，并生成 `SHA256SUMS.txt`。只有发布作业拥有 Release 写权限，同一仓库的连接器发布按顺序运行。
 
@@ -70,7 +74,7 @@ gh run list --repo IanYet/agent-game --workflow connector.yml
 
 连接器版本来自 `apps/connector/version.json`。修改时同步 Windows `Launcher.cs` 和 `Bootstrap.cs` 的 `AssemblyVersion`、`AssemblyFileVersion`；打包会核对它们。macOS 的应用版本由打包脚本生成。本地未提交的构建会在 `.build.json` 标记 `sourceDirty: true`；CI 拒绝从未保存到 Git 的源码发布。
 
-Windows 可用 `Get-FileHash .\TongZhuo-Connector-Windows-x64.exe -Algorithm SHA256` 查看校验和；macOS 可运行 `shasum -a 256 -c TongZhuo-Connector-macOS-Apple-Silicon.zip.sha256`，Intel 替换相应文件名。
+Windows 可用 `Get-FileHash .\TongZhuo-Connector-v0.5.3-Windows-x64.exe -Algorithm SHA256` 查看校验和；macOS 可运行 `shasum -a 256 -c TongZhuo-Connector-v0.5.3-macOS-Apple-Silicon.zip.sha256`，按实际下载文件名替换。已发布的 v0.5.3 包保持原文件名，下载地址见 README。
 
 ## 配置与运行目录
 
