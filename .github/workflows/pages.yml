@@ -30,13 +30,35 @@ jobs:
         uses: actions/configure-pages@v5
       - run: npm ci
       - run: npm test
+      - name: Resolve published connector downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFile } from 'node:fs/promises';
+          import { connectorPackages, connectorVersion } from './scripts/connector-assets.mjs';
+          const tag = `v${connectorVersion}`;
+          const response = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/releases/tags/${tag}`, {
+            headers: { Accept: 'application/vnd.github+json', ...(process.env.GH_TOKEN ? { Authorization: `Bearer ${process.env.GH_TOKEN}` } : {}) },
+            signal: AbortSignal.timeout(30_000),
+          });
+          if (!response.ok) throw new Error(`Cannot read connector Release ${tag}: ${response.status}`);
+          const release = await response.json();
+          if (release.tag_name !== tag || release.draft || release.prerelease) throw new Error(`Connector Release ${tag} must be public and stable.`);
+          const keys = { 'win32-x64': 'VITE_CONNECTOR_DOWNLOAD_URL', 'darwin-arm64': 'VITE_CONNECTOR_MACOS_ARM64_DOWNLOAD_URL', 'darwin-x64': 'VITE_CONNECTOR_MACOS_X64_DOWNLOAD_URL' };
+          const downloads = connectorPackages.map(asset => {
+            const suffix = asset.name.slice(`TongZhuo-Connector-${tag}`.length);
+            const matches = release.assets.filter(item => item.name.startsWith('TongZhuo-Connector-') && item.name.endsWith(suffix));
+            if (matches.length !== 1) throw new Error(`Expected one published connector package for ${asset.platform}/${asset.arch}.`);
+            return `${keys[`${asset.platform}-${asset.arch}`]}=${matches[0].browser_download_url}\n`;
+          });
+          await appendFile(process.env.GITHUB_ENV, downloads.join(''));
+          NODE
       - name: Build static website
         run: npm run build:web
         env:
           PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
-          VITE_CONNECTOR_DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/latest/download/TongZhuo-Connector-Windows-x64.exe
-          VITE_CONNECTOR_MACOS_ARM64_DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/latest/download/TongZhuo-Connector-macOS-Apple-Silicon.zip
-          VITE_CONNECTOR_MACOS_X64_DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/latest/download/TongZhuo-Connector-macOS-Intel.zip
+          VITE_CONNECTOR_RELEASES_URL: https://github.com/${{ github.repository }}/releases
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist/client

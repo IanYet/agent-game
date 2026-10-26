@@ -267,7 +267,8 @@ internal sealed class MainWindow : Window {
             using var json = JsonDocument.Parse(await http.GetStringAsync("https://api.github.com/repos/IanYet/agent-game/releases/latest"));
             var r = json.RootElement; string tag = r.GetProperty("tag_name").GetString() ?? "";
             if (r.GetProperty("draft").GetBoolean() || r.GetProperty("prerelease").GetBoolean() || !Version.TryParse(tag.TrimStart('v', 'V'), out var latest)) throw new IOException("无法识别正式版本。");
-            bool hasAsset = r.GetProperty("assets").EnumerateArray().Any(a => a.GetProperty("name").GetString() == "TongZhuo-Connector-Windows-x64.exe");
+            string assetName = $"TongZhuo-Connector-v{tag.TrimStart('v', 'V')}-Windows-x64.exe";
+            bool hasAsset = r.GetProperty("assets").EnumerateArray().Any(a => a.GetProperty("name").GetString() == assetName);
             if (!hasAsset) throw new IOException("最新版本尚未提供 Windows 64 位下载包。");
             var normalized = new Version(latest.Major, latest.Minor, Math.Max(0, latest.Build), Math.Max(0, latest.Revision));
             bool available = normalized > CurrentVersion; updateText.Text = available ? $"发现新版本 {tag}。下载后先退出当前连接器，再打开新包。" : "当前已是最新正式版本。";

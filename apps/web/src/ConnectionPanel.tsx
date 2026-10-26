@@ -4,8 +4,14 @@ import type {AppSnapshot} from './runtime/types';
 import {Modal} from './Modal';
 import {ConnectorInstallHelp} from './ConnectorInstallHelp';
 import {Dot,PrimaryButton} from './UiBits';
+import {version as connectorVersion} from '../../connector/version.json';
 
-const downloads=[['同桌连接器 · Windows 64 位',import.meta.env.VITE_CONNECTOR_DOWNLOAD_URL??'https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-Windows-x64.exe','EXE / x64'],['同桌连接器 · macOS Apple Silicon',import.meta.env.VITE_CONNECTOR_MACOS_ARM64_DOWNLOAD_URL??'https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-macOS-Apple-Silicon.zip','ZIP / arm64'],['同桌连接器 · macOS Intel',import.meta.env.VITE_CONNECTOR_MACOS_X64_DOWNLOAD_URL??'https://github.com/IanYet/agent-game/releases/latest/download/TongZhuo-Connector-macOS-Intel.zip','ZIP / x64']];
+const releaseUrl=`${import.meta.env.VITE_CONNECTOR_RELEASES_URL??'https://github.com/IanYet/agent-game/releases'}/tag/v${connectorVersion}`;
+const downloads=[
+  [`同桌连接器 v${connectorVersion} · Windows 64 位`,import.meta.env.VITE_CONNECTOR_DOWNLOAD_URL??releaseUrl,'EXE / x64'],
+  [`同桌连接器 v${connectorVersion} · macOS Apple Silicon`,import.meta.env.VITE_CONNECTOR_MACOS_ARM64_DOWNLOAD_URL??releaseUrl,'ZIP / arm64'],
+  [`同桌连接器 v${connectorVersion} · macOS Intel`,import.meta.env.VITE_CONNECTOR_MACOS_X64_DOWNLOAD_URL??releaseUrl,'ZIP / x64'],
+];
 export function ConnectorDownloads(){return <div className="connector-downloads">{downloads.map(([label,url,detail])=><a key={label} href={url} className="download-link"><Download size={15}/><span>{label}<small>{detail}</small></span><ArrowUpRight size={15}/></a>)}</div>;}
 export function ConnectionPanel({state,onClose,onConnect,onDisconnect,onContinue,selection,symbol}:{state:AppSnapshot;onClose:()=>void;onConnect:()=>Promise<void>;onDisconnect:()=>Promise<void>;onContinue?:()=>void;selection?:string;symbol?:string}){
   const [pending,setPending]=useState(false),[error,setError]=useState('');

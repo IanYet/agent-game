@@ -18,7 +18,7 @@
 
 ## 连接器发布
 
-流水线产物和 Release 显示名写清产品、系统与芯片，例如「同桌连接器 · Windows 64 位」「同桌连接器 · macOS Apple Silicon」「同桌连接器 · macOS Intel」。底层下载文件使用清晰的 ASCII 名称，如 `TongZhuo-Connector-Windows-x64.exe`，避免 GitHub 改写文件名。不要把提交哈希或签名状态当作安装包显示名。修改命名时，同步更新打包、发布、网页下载、客户端更新入口和文档。
+流水线产物和 Release 显示名写清产品、版本、系统与芯片，例如「同桌连接器 v0.5.3 · Windows 64 位」「同桌连接器 v0.5.3 · macOS Apple Silicon」「同桌连接器 v0.5.3 · macOS Intel」。底层下载文件使用清晰的 ASCII 名称，如 `TongZhuo-Connector-v0.5.3-Windows-x64.exe`，避免 GitHub 改写文件名。版本从 `apps/connector/version.json` 读取；网页下载地址指向对应版本的 tag。不要把提交哈希或签名状态当作安装包显示名。修改命名时，同步更新打包、发布、网页下载、客户端更新入口和文档。
 
 ## 文档
 
