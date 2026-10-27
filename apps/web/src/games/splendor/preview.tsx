@@ -9,9 +9,9 @@ import {EffectsControls} from '../../visuals/EffectsControls';
 import {GameBackground} from '../../visuals/GameBackground';
 import {VisualExperience} from '../../visuals/VisualExperience';
 import {useEffectsPreference} from '../../visuals/preferences';
-import {CARDS,NOBLES} from './data';
-import {cardName,defaultPayment,emptyTokens} from './engine';
-import {COLORS,LEVELS,type Card,type Event,type SplendorView} from './types';
+import {CARDS,CARD_BY_ID,NOBLES} from './data';
+import {applyAction,assertSplendor,cardName,createSplendor,defaultPayment,emptyTokens,legalActions,viewSplendor} from './engine';
+import {COLORS,LEVELS,type Action,type Card,type Event,type LegalAction,type SplendorView} from './types';
 import {SplendorTable} from './ui';
 
 // Manual display data only. This page never loads or writes a real game save.
@@ -21,6 +21,23 @@ const previewRoster:StablePlayer[]=[
   {playerId:'preview-tide',name:'观澜',kind:'codex-acp'},
   {playerId:'preview-echo',name:'回声',kind:'codex-acp'},
 ];
+function motionGame(){
+  let seed=24;
+  const state=createSplendor(`splendor-motion-${Date.now()}`,previewRoster.map((player,seat)=>({...player,kind:seat===0?'human':'agent'})),{random:()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}});
+  for(const player of state.players){
+    for(const color of COLORS){player.tokens[color]=1;state.bank[color]--;}
+    const extra=COLORS[player.seat];player.tokens[extra]++;state.bank[extra]--;
+    player.wins=player.seat+1;player.totalPoints=40+player.seat*7;
+  }
+  // Put an affordable card in the market for each seat; all actions below still
+  // go through the real rules engine and preserve cards and bank resources.
+  for(const player of state.players){
+    const card=CARDS.find(card=>card.level===1&&defaultPayment(player,card)&&!state.market[1].includes(card.id))!;
+    state.decks[1].splice(state.decks[1].indexOf(card.id),1);
+    state.decks[1].push(state.market[1][player.seat]!);state.market[1][player.seat]=card.id;
+  }
+  assertSplendor(state);return state;
+}
 function displayGame(roster:StablePlayer[],reveal:boolean,spectator:boolean,loaded:boolean):ControlledView<SplendorView>{
   const market=Object.fromEntries(LEVELS.map(level=>[level,COLORS.slice(0,4).map(color=>CARDS.find(card=>card.level===level&&card.bonus===color)!)])) as SplendorView['market'];
   const marketIds=new Set(Object.values(market).flat().map(card=>card!.id));
@@ -66,19 +83,34 @@ function displayGame(roster:StablePlayer[],reveal:boolean,spectator:boolean,load
 }
 function SplendorPreview(){
   const [reveal,setReveal]=useState(false),[spectator,setSpectator]=useState(false),[paused,setPaused]=useState(false),[loaded,setLoaded]=useState(true),[message,setMessage]=useState('');
+  const [motion,setMotion]=useState(false),[motionState,setMotionState]=useState(motionGame);
   const effects=useEffectsPreference();
   useEffect(()=>{document.documentElement.dataset.reducedMotion=String(effects.reduced);},[effects.reduced]);
   const roster=useMemo<StablePlayer[]>(()=>previewRoster.map(player=>spectator&&player.kind==='human'?{...player,name:'南辰',kind:'codex-acp'}:player),[spectator]);
-  const game=useMemo(()=>displayGame(roster,reveal,spectator,loaded),[roster,reveal,spectator,loaded]);
+  const game=useMemo(()=>{
+    if(!motion)return displayGame(roster,reveal,spectator,loaded);
+    const view=viewSplendor(motionState,spectator?null:0,reveal||spectator);
+    return {...view,players:view.players.map((player,seat)=>({...player,...roster[seat]}))};
+  },[roster,reveal,spectator,loaded,motion,motionState]);
   const state:AppSnapshot={connector:null,connected:true,connectorUpdateRequired:false,game,room:{moduleId:'splendor',moduleVersion:'1.0.0',stateVersion:1,roomId:game.id,runId:game.id,index:1,roster,config:{edition:'base-2024'},finished:false},seats:roster.map((player,seat)=>({...player,seat,status:'ready',turns:20,tokens:0})),paused,curiosityMode:reveal,conversations:{},conversationError:null,error:null,history:[],activity:{phase:'满载界面展示',actors:[]}};
-  const controller={humanAction:()=>setMessage('这是界面展示局面；卡牌选择与背包可操作，确认行动不会改变正式对局。')} as unknown as GameController;
+  const perform=(action?:Action)=>{if(!action||paused)return;try{setMotionState(applyAction(motionState,motionState.turn,action));}catch(error){setMessage((error as Error).message);}};
+  const choices=motion?legalActions(motionState,motionState.turn):[];
+  const marketBuy=choices.find(choice=>choice.action.type==='buy'&&motionState.market[CARD_BY_ID[choice.action.cardId].level].includes(choice.action.cardId));
+  const reservedBuy=choices.find(({action})=>action.type==='buy'&&motionState.players[motionState.turn].reserved.some(card=>card.cardId===action.cardId));
+  const marketReserve=choices.find(choice=>choice.action.type==='reserve'&&defaultPayment(motionState.players[motionState.turn],CARD_BY_ID[choice.action.cardId]));
+  const deckReserve=choices.find(choice=>choice.action.type==='reserveDeck'&&choice.action.level===1);
+  const next=choices.find(choice=>['take','return','noble','pass'].includes(choice.action.type));
+  const take=choices.find(choice=>choice.action.type==='take'),pair=choices.find(choice=>choice.action.type==='pair');
+  const motionButtons:Array<[string,LegalAction|undefined]>=[['拿三色宝石',take],['拿同色两枚',pair],['市场购买',marketBuy],['市场预留',marketReserve],['暗抽预留',deckReserve],['购买预留',reservedBuy],['继续回合',next]];
+  const controller={humanAction:(action:Action)=>motion?perform(action):setMessage('这是界面展示局面；卡牌选择与背包可操作，确认行动不会改变正式对局。')} as unknown as GameController;
   return <div className="app-shell"><GameBackground enabled theme="splendor"/><VisualExperience enabled page="table"/><div className="app-content">
-    <header className="site-header"><a className="brand" href="/"><Logo/><strong>同桌</strong><small>TONGZHUO</small></a><span style={{fontSize:11,color:'var(--muted)'}}>手动检查 · 每人 16 张建筑 / 3 张预留 / 3 位贵族</span></header>
+    <header className="site-header"><a className="brand" href="/"><Logo/><strong>同桌</strong><small>TONGZHUO</small></a><span style={{fontSize:11,color:'var(--muted)'}}>手动检查 · {motion?'使用真实规则执行行动':'每人 16 张发展牌 / 3 张预留 / 3 位贵族'}</span></header>
     <main id="main"><div className="game-page">
-      <GameChrome title="璀璨宝石" status={loaded?'满载界面展示':'空桌布局对照'} actions={<><button className="text-button" onClick={()=>setLoaded(value=>!value)}>{loaded?'切到空桌对照':'切回满载局面'}</button><button className="text-button" disabled={spectator} onClick={()=>setReveal(value=>!value)}>{reveal||spectator?'暗抽全部可见':'对手暗抽保密'}</button><button className="text-button" onClick={()=>setSpectator(value=>!value)}>{spectator?'切回真人视角':'检查 Agent 观战视角'}</button></>}/>
+      <GameChrome title="璀璨宝石" status={motion?'卡牌动画检查':loaded?'满载界面展示':'空桌布局对照'} actions={<><button className="text-button" onClick={()=>setMotion(value=>!value)}>{motion?'返回布局检查':'检查卡牌动画'}</button>{motion?<button className="text-button" onClick={()=>setMotionState(motionGame())}>重置动画局面</button>:<button className="text-button" onClick={()=>setLoaded(value=>!value)}>{loaded?'切到空桌对照':'切回满载局面'}</button>}<button className="text-button" disabled={spectator} onClick={()=>setReveal(value=>!value)}>{reveal||spectator?'暗抽全部可见':'对手暗抽保密'}</button><button className="text-button" onClick={()=>setSpectator(value=>!value)}>{spectator?'切回真人视角':'检查 Agent 观战视角'}</button></>}/>
+      {motion&&<div style={{display:'flex',alignItems:'center',gap:14,marginBottom:12,fontSize:11,color:'var(--muted)'}}><span>当前：{game.players[game.turn].name}</span>{motionButtons.map(([label,choice])=><button className="text-button" key={label} disabled={paused||!choice} onClick={()=>perform(choice?.action)}>{label}</button>)}</div>}
       <SplendorTable state={state} controller={controller} onError={setMessage} tableActions={<div className="game-actions"><button className="button outline" onClick={()=>setPaused(value=>!value)}>{paused?'继续展示':'暂停展示'}</button></div>}/>
     </div></main>
-    <footer className="site-footer"><span style={{fontSize:10,color:'var(--muted)'}}>界面展示数据 · 贵族数量特意加大 · 不写入正式存档</span><EffectsControls/></footer>
+    <footer className="site-footer"><span style={{fontSize:10,color:'var(--muted)'}}>{motion?'动画检查局面':'界面展示数据 · 贵族数量特意加大'} · 不写入正式存档</span><EffectsControls/></footer>
     {message&&<div className="toast" role="status"><span>{message}</span><button className="icon-button" aria-label="关闭消息" onClick={()=>setMessage('')}>×</button></div>}
   </div></div>;
 }

@@ -212,13 +212,40 @@ class HolographicRenderer{
       }
     };
   }
+  setRestingLight(canvas:HTMLCanvasElement,position:readonly [number,number]){
+    const entry=this.entries.get(canvas);if(!entry)return;
+    const rest={x:Math.max(0,Math.min(1,position[0]))*2-1,y:Math.max(0,Math.min(1,position[1]))*2-1};
+    if(rest.x===entry.rest.x&&rest.y===entry.rest.y)return;
+    entry.rest=rest;
+    const focused=(entry.root.parentElement??entry.root).matches(':focus-visible');
+    Object.assign(entry.target,focused?{x:0,y:0}:rest,{tiltX:0,tiltY:0});
+    this.wake();
+  }
+  transferLight(source:HTMLCanvasElement,destination:HTMLCanvasElement){
+    const from=this.entries.get(source),to=this.entries.get(destination);
+    if(!from||!to)return;
+    Object.assign(to.current,from.current);
+    to.geometryDirty=true;
+    // Paint before the landing card is revealed, then ease toward its own
+    // resting or pointer light without replacing the material instance.
+    this.paint(to);to.dirty=false;
+    window.dispatchEvent(new Event('tongzhuo:visual-frame'));this.wake();
+  }
+}
+
+export function transferHolographicLight(source:HTMLElement,destination:HTMLElement){
+  const from=source.querySelector<HTMLCanvasElement>('.holographic-card-material'),to=destination.querySelector<HTMLCanvasElement>('.holographic-card-material');
+  if(from&&to)shared?.transferLight(from,to);
 }
 
 export function HolographicMaterial({glowColor,rainbow,pattern,patternSymbol,restingLight:[restX,restY],tilt}:MaterialOptions){
   const canvas=useRef<HTMLCanvasElement>(null),{reduced}=useEffectsPreference();
+  // Resting-light changes retarget the existing reflection below. Reattaching
+  // here would discard its current position and make selection jump.
   useEffect(()=>{
     const source=canvas.current,root=source?.parentElement;if(!source||!root)return;
     shared??=new HolographicRenderer();return shared.attach(source,root,{glowColor,rainbow,pattern,patternSymbol,restingLight:[restX,restY],tilt},reduced);
-  },[glowColor,rainbow,pattern,patternSymbol,restX,restY,tilt,reduced]);
+  },[glowColor,rainbow,pattern,patternSymbol,tilt,reduced]);
+  useEffect(()=>{if(canvas.current)shared?.setRestingLight(canvas.current,[restX,restY]);},[restX,restY]);
   return <canvas ref={canvas} className="holographic-card-material" aria-hidden="true"/>;
 }

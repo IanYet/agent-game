@@ -14,6 +14,7 @@ import {GemIcon} from './gem';
 import {HolographicCard} from '../../visuals/HolographicCard';
 import {GEM_PALETTE} from './artwork';
 import {RESERVED_BACK_PATTERN} from './reserve-artwork';
+import {TableTransfers} from './transfers';
 import {COLORS,GEMS,GEM_NAMES,type Action,type Card,type Color,type Cost,type Noble,type SplendorState,type SplendorView,type Tokens} from './types';
 import './style.css';
 
@@ -29,7 +30,7 @@ function TokenRow({tokens,label}:{tokens:Tokens;label:string}){return <div class
 function GemBank({tokens}:{tokens:Tokens}){
   return <section className="sp-bank" aria-label="公共银行">
     <h3>公共银行</h3>
-    <div className="sp-bank-stocks">{GEMS.map(color=><div className="sp-bank-stock" key={color} role="group" aria-label={`${GEM_NAMES[color]}，剩余 ${tokens[color]} 枚`}>
+    <div className="sp-bank-stocks">{GEMS.map(color=><div className="sp-bank-stock" key={color} data-sp-bank-color={color} role="group" aria-label={`${GEM_NAMES[color]}，剩余 ${tokens[color]} 枚`}>
       <span className="sp-bank-name">{GEM_NAMES[color]}</span>
       <div className="sp-bank-gems" aria-hidden="true">{Array.from({length:tokens[color]},(_,index)=><GemIcon key={index} color={color}/>)}{tokens[color]===0&&<small className="sp-bank-empty">已取完</small>}</div>
     </div>)}</div>
@@ -38,7 +39,7 @@ function GemBank({tokens}:{tokens:Tokens}){
 function Prestige({value}:{value:number}){
   return <span className="sp-card-points">{value>0&&<span className="sp-card-score" data-value={value} aria-label={`${value} 点声望`}>{value}</span>}</span>;
 }
-function Development({card,selected=false,onClick}:{card:Card;selected?:boolean;onClick?:()=>void}){
+function Development({card,selected=false,onClick,inTransit=false}:{card:Card;selected?:boolean;onClick?:()=>void;inTransit?:boolean}){
   const description=`${cardName(card)}，永久折扣：${GEM_NAMES[card.bonus]}，费用：${describeCost(card.cost)}`;
   const body=<>
     <div className="sp-card-top" aria-hidden="true">
@@ -47,7 +48,7 @@ function Development({card,selected=false,onClick}:{card:Card;selected?:boolean;
     </div>
     <CostRow cost={card.cost} engraved/>
   </>;
-  const appearance={glowColor:(card.bonus==='black'?'#bac2cc':GEM_PALETTE[card.bonus][1]) as `#${string}`,highlightColor:card.bonus==='white'?'#dce3ec':GEM_PALETTE[card.bonus][1],rainbow:card.bonus==='black',selected,width:'var(--sp-card-width,112px)'};
+  const appearance={glowColor:(card.bonus==='black'?'#bac2cc':GEM_PALETTE[card.bonus][1]) as `#${string}`,highlightColor:card.bonus==='white'?'#dce3ec':GEM_PALETTE[card.bonus][1],rainbow:card.bonus==='black',selected,width:'var(--sp-card-width,112px)',restingLight:(selected||inTransit?[.5,.5]:[.09,.09]) as readonly [number,number],tilt:!inTransit};
   return onClick?<HolographicCard as="button" className="sp-card" {...appearance} onClick={onClick} aria-pressed={selected} aria-label={`查看 ${description}`} title={description}>{body}</HolographicCard>:<HolographicCard className="sp-card" {...appearance} role="img" aria-label={description} title={description}>{body}</HolographicCard>;
 }
 function NobleTile({noble,eligible=false}:{noble:Noble;eligible?:boolean}){
@@ -69,16 +70,16 @@ function DevelopmentOverview({card}:{card:Card}){
     <span className="sp-overview-points"><b>{card.points}</b><small>声望</small></span><SummaryCost cost={card.cost}/>
   </div>;
 }
-function ReservedCardBack({level}:{level:Card['level']}){
+function ReservedCardBack({level,inTransit=false}:{level:Card['level'];inTransit?:boolean}){
   const description=`${LEVEL_NAMES[level]}，暗抽预留，牌面仅持有者可见`;
-  return <HolographicCard className="sp-card sp-card-back" pattern={RESERVED_BACK_PATTERN} rainbow glowColor="#c3cbd6" width="var(--sp-card-width,112px)" role="img" aria-label={description} title={description}>
+  return <HolographicCard className="sp-card sp-card-back" pattern={RESERVED_BACK_PATTERN} rainbow glowColor="#c3cbd6" width="var(--sp-card-width,112px)" restingLight={inTransit?[.5,.5]:[.09,.09]} tilt={!inTransit} role="img" aria-label={description} title={description}>
     <b aria-hidden="true">{LEVEL_NAMES[level]}</b>
     <svg className="sp-reserved-coin" viewBox="0 0 100 100" data-lens-svg aria-hidden="true" fill="none" strokeWidth="1.5"><circle cx="50" cy="51" r="44" stroke="#05070c"/><circle cx="50" cy="50" r="44" stroke="#9da6b2" opacity=".5"/></svg>
   </HolographicCard>;
 }
-function ReservedDevelopment({reserved,selected=false,onClick,status}:{reserved:View['players'][number]['reserved'][number];selected?:boolean;onClick?:()=>void;status?:string}){
+function ReservedDevelopment({reserved,selected=false,onClick,status,origin}:{reserved:View['players'][number]['reserved'][number];selected?:boolean;onClick?:()=>void;status?:string;origin?:string}){
   const label=reserved.source==='deck'?'暗抽预留':'市场预留';
-  return <figure className="sp-reserved-card" aria-label={label}>
+  return <figure className="sp-reserved-card" aria-label={label} data-sp-card-origin={origin}>
     {reserved.card?<Development card={reserved.card} selected={selected} onClick={onClick}/>:<ReservedCardBack level={reserved.level}/>}
     <figcaption className="sp-reserved-caption">{label}</figcaption>
     {status&&<small className="sp-reserved-status">{status}</small>}
@@ -89,20 +90,20 @@ function PlayerContents({player,viewer,onInventory}:{player:View['players'][numb
   return <div className="sp-player-contents">
     <section className="sp-resource-group" aria-label="持有宝石">
       <h4 className="sp-overview-heading"><span>持有宝石</span><small>{tokenCount(player.tokens)} / 10 枚</small></h4>
-      <div className="sp-held-gems" role="img" aria-label={`${player.name}持有：${held.map(color=>`${GEM_NAMES[color]} ${player.tokens[color]} 枚`).join('，')||'暂无宝石'}`}>
-        {held.map(color=><span className="sp-held-gem-group" key={color} title={`${GEM_NAMES[color]} ${player.tokens[color]} 枚`} aria-hidden="true">{Array.from({length:player.tokens[color]},(_,index)=><GemIcon key={index} color={color}/>)}</span>)}
+      <div className="sp-held-gems" data-sp-held-seat={player.seat} role="img" aria-label={`${player.name}持有：${held.map(color=>`${GEM_NAMES[color]} ${player.tokens[color]} 枚`).join('，')||'暂无宝石'}`}>
+        {held.map(color=><span className="sp-held-gem-group" data-sp-held-gem={color} key={color} title={`${GEM_NAMES[color]} ${player.tokens[color]} 枚`} aria-hidden="true">{Array.from({length:player.tokens[color]},(_,index)=><GemIcon key={index} color={color}/>)}</span>)}
       </div>
     </section>
     <section className="sp-resource-group" aria-label="永久折扣">
       <h4 className="sp-overview-heading"><span>永久折扣</span></h4>
       <div className="sp-discounts">{COLORS.map(color=><span key={color} title={`${GEM_NAMES[color]}永久折扣 ${player.bonuses[color]}`} aria-label={`${GEM_NAMES[color]}永久折扣 ${player.bonuses[color]}`}><GemIcon color={color}/><b>{player.bonuses[color]}</b></span>)}</div>
     </section>
-    <button type="button" className="sp-inventory-entry" aria-label={`打开${player.name}的卡牌背包`} onClick={event=>onInventory(event.currentTarget)}>{viewer?'我的背包':'查看背包'} ↗</button>
+    <button type="button" className="sp-inventory-entry" data-sp-bought-target={player.seat} aria-label={`打开${player.name}的卡牌背包`} onClick={event=>onInventory(event.currentTarget)}>{viewer?'我的背包':'查看背包'} ↗</button>
   </div>;
 }
 function ReservedCards({player,viewer,selectedCard,onChoose}:{player:View['players'][number];viewer:number|null;selectedCard:string;onChoose?:(card:Card)=>void}){
-  return <div className="sp-reserved-hand" role="group" aria-label={`${player.name}的预留卡牌，${player.reserved.length} / 3`}>
-    {player.reserved.map((reserved,index)=><ReservedDevelopment key={reserved.card?.id??`hidden-${index}`} reserved={reserved} selected={player.seat===viewer&&selectedCard===reserved.card?.id} onClick={reserved.card&&player.seat===viewer&&onChoose?()=>onChoose(reserved.card!):undefined}/>)}
+  return <div className="sp-reserved-hand" data-sp-reserved-seat={player.seat} role="group" aria-label={`${player.name}的预留卡牌，${player.reserved.length} / 3`}>
+    {player.reserved.map((reserved,index)=><ReservedDevelopment key={reserved.card?.id??`hidden-${index}`} origin={`reserved:${player.seat}:${index}`} reserved={reserved} selected={player.seat===viewer&&selectedCard===reserved.card?.id} onClick={reserved.card&&player.seat===viewer&&onChoose?()=>onChoose(reserved.card!):undefined}/>)}
   </div>;
 }
 function InventoryCardGrid({children,count,square=false,captionHeight=0}:{children:ReactNode;count:number;square?:boolean;captionHeight?:number}){
@@ -154,6 +155,7 @@ export function SplendorTable({state,controller,onError,tableActions}:GameUiProp
   const ownTurn=!!own&&!finished&&!state.paused&&game.turn===human;
   const humanPhase=game.turn===human?game.phase:'action';
   const [panel,setPanel]=useState<BoardGamePanel>('table');
+  const market=useRef<HTMLDivElement>(null);
   const actionBox=useRef<HTMLElement>(null);
   useLayoutEffect(()=>{
     const box=actionBox.current,controls=box?.querySelector('fieldset');
@@ -207,12 +209,15 @@ export function SplendorTable({state,controller,onError,tableActions}:GameUiProp
   </fieldset></section>;
   const humanActions=own&&<fieldset className="sp-confirm-actions" disabled={!ownTurn}>{humanPhase==='action'&&mode==='take'&&<span className="sp-action-summary">{pair?`${pairColor?GEM_NAMES[pairColor]:'—'} ×2`:`已选 ${colors.length}/${Math.min(3,available)} 色`}</span>}{humanPhase==='return'?<button className="button primary" disabled={tokenCount(returns)!==game.returnCount||GEMS.some(c=>returns[c]<0||returns[c]>own.tokens[c]||!Number.isInteger(returns[c]))} onClick={()=>act({type:'return',tokens:returns})}>确认归还 {tokenCount(returns)} / {game.returnCount}</button>:humanPhase==='noble'?<button className="button primary" disabled={!game.eligibleNobles.includes(nobleId)} onClick={()=>act({type:'noble',nobleId})}>确认邀请</button>:mode==='take'?<button className="button primary" disabled={!takeChoice} onClick={()=>takeChoice&&act(takeChoice.action)}>确认拿取</button>:mode==='buy'?<><button className="button outline" disabled={!game.legalActions.some(a=>a.action.type==='reserve'&&a.action.cardId===selectedCard)} onClick={()=>{setReserveTarget('reserve:'+selectedCard);setMode('reserve');}}>改为预留</button><button className="button primary" disabled={!canPay} onClick={()=>act({type:'buy',cardId:selectedCard,payment:{...selectedPayment,gold}})}>确认购买</button></>:<button className="button primary" disabled={!reserveChoice} onClick={()=>reserveChoice&&act(reserveChoice.action)}>确认预留{game.bank.gold?'并拿黄金':''}</button>}{game.legalActions.some(a=>a.action.type==='pass')&&<button className="button outline" onClick={()=>act({type:'pass'})}>公开预留并跳过</button>}</fieldset>;
   const opponents=game.players.filter(p=>p.seat!==human);
-  return <GameLayout gameId="splendor" label="璀璨宝石牌桌" className="sp-layout" surfaceClassName="sp-main" viewport={{mode:own?'player':'spectator',panel,onPanelChange:setPanel,playerLabel:'我的行动',tableActions}} toolbar={<> <span>第 {game.round} 局 · 第 {Math.min(...game.turnsTaken)+(finished?0:1)} 轮 · {game.players.length} 人</span><strong>{finished?'本局结束':game.finalRound?'最后一轮 · 等轮结束':'基础版 · 15 分触发最后一轮'}</strong> </>} score={<FoilPanel className="sp-standings"><h3>本桌累计</h3>{game.players.map(p=><div key={p.playerId}><strong>{p.name}<small>本局 {p.points} 分 · {p.bought.length} 张</small></strong><span>{p.wins} 胜<small>累计 {p.totalPoints} 声望</small></span></div>)}{game.result&&<section className="sp-score-result"><h3>{game.result.winners.map(s=>game.players[s].name).join('、')}{game.result.winners.length>1?'共同获胜':'获胜'}</h3><p>声望最高；同分时已购发展牌较少者胜，仍相同共享胜利。</p></section>}</FoilPanel>} events={game.events} eventPlayers={game.players} after={<> {inventorySeat!==null&&game.players[inventorySeat]&&<Inventory key={game.players[inventorySeat].playerId} player={game.players[inventorySeat]} game={game} onClose={closeInventory} onChoose={inventorySeat===human&&ownTurn&&game.phase==='action'?inspectCard:undefined}/>} </>}>
-    <GameTable className="sp-market-table" aria-label="宝石市场"><div className="sp-market"><div className="sp-market-board">
+  return <GameLayout gameId="splendor" label="璀璨宝石牌桌" className="sp-layout" surfaceClassName="sp-main" viewport={{mode:own?'player':'spectator',panel,onPanelChange:setPanel,playerLabel:'我的行动',tableActions}} toolbar={<> <span>第 {game.round} 局 · 第 {Math.min(...game.turnsTaken)+(finished?0:1)} 轮 · {game.players.length} 人</span><strong>{finished?'本局结束':game.finalRound?'最后一轮 · 等轮结束':'基础版 · 15 分触发最后一轮'}</strong> </>} score={<FoilPanel className="sp-standings"><h3>当局声望</h3>{game.players.map(p=><div key={p.playerId}><strong>{p.name}<small>已购 {p.bought.length} 张 · 贵族 {p.nobles.length} 位</small></strong><span><b className="sp-standing-prestige">{p.points}</b> 声望</span></div>)}{game.result&&<section className="sp-score-result"><h3>{game.result.winners.map(s=>game.players[s].name).join('、')}{game.result.winners.length>1?'共同获胜':'获胜'}</h3><p>声望最高；同分时已购发展牌较少者胜，仍相同共享胜利。</p>{game.players.map(p=><p key={p.playerId}>{p.name} · 累计 {p.wins} 胜 / {p.totalPoints} 声望</p>)}</section>}</FoilPanel>} events={game.events} eventPlayers={game.players} after={<>
+      <TableTransfers game={game} market={market} renderCard={(card,level)=>card?<Development card={card} inTransit/>:<ReservedCardBack level={level} inTransit/>}/>
+      {inventorySeat!==null&&game.players[inventorySeat]&&<Inventory key={game.players[inventorySeat].playerId} player={game.players[inventorySeat]} game={game} onClose={closeInventory} onChoose={inventorySeat===human&&ownTurn&&game.phase==='action'?inspectCard:undefined}/>}
+    </>}>
+    <GameTable className="sp-market-table" aria-label="宝石市场"><div ref={market} className="sp-market"><div className="sp-market-board">
       <div className="sp-patrons"><h3 className="sp-market-caption">贵族</h3><div className="sp-nobles" aria-label="本局贵族">{game.nobles.map(n=><NobleTile key={n.id} noble={n} eligible={game.eligibleNobles.includes(n.id)}/>)}{!game.nobles.length&&<p>贵族已全部来访</p>}</div></div>
-      <div className="sp-market-rows">{([3,2,1] as const).map(level=><div className="sp-market-row" key={level} aria-label={`${LEVEL_NAMES[level]}发展牌`}><div className="sp-market-level"><h3 className="sp-market-caption">{LEVEL_NAMES[level]}</h3><span className="sp-deck" aria-label={`${level} 级暗库剩余 ${game.deckCounts[level]} 张`} title={`${LEVEL_NAMES[level]}牌库剩余 ${game.deckCounts[level]} 张`}><small>余</small><b>{game.deckCounts[level]}</b></span>{mode==='reserve'&&reserveChoice?.action.type==='reserveDeck'&&reserveChoice.action.level===level&&<small className="sp-deck-reserve-marker">待预留</small>}</div>{game.market[level].map((card,i)=>{
+      <div className="sp-market-rows">{([3,2,1] as const).map(level=><div className="sp-market-row" key={level} aria-label={`${LEVEL_NAMES[level]}发展牌`}><div className="sp-market-level"><h3 className="sp-market-caption">{LEVEL_NAMES[level]}</h3><span className="sp-deck" data-sp-card-origin={`deck:${level}`} aria-label={`${level} 级暗库剩余 ${game.deckCounts[level]} 张`} title={`${LEVEL_NAMES[level]}牌库剩余 ${game.deckCounts[level]} 张`}><small>余</small><b>{game.deckCounts[level]}</b></span>{mode==='reserve'&&reserveChoice?.action.type==='reserveDeck'&&reserveChoice.action.level===level&&<small className="sp-deck-reserve-marker">待预留</small>}</div>{game.market[level].map((card,i)=>{
         const reserving=!!card&&mode==='reserve'&&reserveChoice?.action.type==='reserve'&&reserveChoice.action.cardId===card.id;
-        return card?<Development key={card.id} card={card} selected={selectedCard===card.id&&mode==='buy'||reserving} onClick={own&&!finished?()=>inspectMarketCard(card):undefined}/>:<div className="sp-market-empty" key={'empty'+i}>已售罄</div>;
+        return <div className="sp-market-slot" key={i} data-sp-market-slot={`${level}:${i}`} data-sp-card-origin={card?`market:${card.id}`:undefined}>{card?<Development key={card.id} card={card} selected={selectedCard===card.id&&mode==='buy'||reserving} onClick={own&&!finished?()=>inspectMarketCard(card):undefined}/>:<div className="sp-market-empty">已售罄</div>}</div>;
       })}</div>)}</div>
       <GemBank tokens={game.bank}/>
     </div></div></GameTable>

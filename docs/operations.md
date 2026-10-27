@@ -35,7 +35,7 @@ macOS 的布局采用 Apple [窗口规范](https://developer.apple.com/design/hu
 
 页面最低支持 1920×1080。开发服务启动后，打开 `/src/games/preview.html`，逐个切换游戏，分别检查最大人数的「真人 + Agent」和「全 Agent 观战」；公共牌桌、玩家卡与操作按钮应完整显示，不产生布局滚动条。
 
-富饶之城的 `/src/games/citadels/preview.html` 提供八座城区、四张手牌及各身份操作场景，用于检查操作切换时玩家卡高度是否稳定。璀璨宝石的 `/src/games/splendor/preview.html` 提供满背包场景。这些预览使用正式牌桌组件，不连接模型，也不读取或写入真实游戏存档。
+富饶之城的 `/src/games/citadels/preview.html` 提供八座城区、四张手牌及各身份操作场景，用于检查操作切换时玩家卡高度是否稳定。璀璨宝石的 `/src/games/splendor/preview.html` 提供满背包场景，点击「检查卡牌动画」后可按真实规则拿取宝石、购买、预留、暗抽和推进行动，检查卡牌与宝石移动、选中牌的光照过渡和当局声望。这些预览使用正式牌桌组件，不连接模型，也不读取或写入真实游戏存档。
 
 ## 发布网页
 
