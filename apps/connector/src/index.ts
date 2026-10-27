@@ -30,6 +30,7 @@ async function main() {
   const discovery = await discoverHarnesses(root);
   const connector: ConnectorInfo = { version: CONNECTOR_VERSION, protocolVersion: PROTOCOL_VERSION, capabilities: [...CONNECTOR_CAPABILITIES], platform: process.platform, port, harnesses: discovery.harnesses, models: [], auth: 'unknown' };
   let otherMcpServers: string[] = [];
+  let codexInspectionError: string | undefined;
   if (discovery.codexPath) {
     try {
       const inspection = await inspectCodex(discovery.codexPath);
@@ -37,13 +38,18 @@ async function main() {
       for (const harness of connector.harnesses) if (harness.id === 'codex' || harness.id === 'codex-acp') harness.models = inspection.models;
     } catch (error: any) {
       connector.auth = 'unknown';
-      console.error(`Codex 检测失败：${String(error.message ?? '未知错误').replace(/https?:\/\/\S+/g, '[endpoint]').replace(/Bearer\s+\S+|sk-[A-Za-z0-9_-]+/gi, '[redacted]').slice(0, 350)}`);
+      codexInspectionError = `Codex 检测失败：${String(error.message ?? '未知错误').replace(/https?:\/\/\S+/g, '[endpoint]').replace(/Bearer\s+\S+|sk-[A-Za-z0-9_-]+/gi, '[redacted]').slice(0, 350)}`;
+      console.error(codexInspectionError);
     }
   } else connector.auth = 'missing';
   const adapters = new Map<string, HarnessAdapter>();
   for (const harness of connector.harnesses.filter(h => h.id === 'codex' || h.id === 'codex-acp')) {
-    harness.available = harness.available && connector.auth === 'chatgpt'; harness.auth = connector.auth === 'chatgpt' ? 'ready' : 'missing'; harness.ephemeral = true;
-    if (!harness.available) harness.detail = '请安装 Codex，并在 Codex 中用已有 ChatGPT 订阅登录';
+    harness.available = harness.available && connector.auth === 'chatgpt';
+    harness.auth = connector.auth === 'chatgpt' ? 'ready' : connector.auth === 'unknown' ? 'unknown' : 'missing'; harness.ephemeral = true;
+    if (!discovery.codexPath) harness.detail = process.env.CODEX_PATH ? 'CODEX_PATH 指向的文件不存在，请修正路径后重新打开连接器' : '未找到本机 Codex，请安装 Codex，或用 CODEX_PATH 指定程序路径';
+    else if (codexInspectionError) harness.detail = `${codexInspectionError}；程序路径：${discovery.codexPath}`;
+    else if (connector.auth !== 'chatgpt') harness.detail = connector.auth === 'apiKey' ? '当前 Codex 使用 API Key 登录，请在 Codex 中改用已有 ChatGPT 订阅登录' : 'Codex 尚未登录，请在 Codex 中用已有 ChatGPT 订阅登录';
+    else if (harness.id === 'codex-acp' && !discovery.acpPath) harness.detail = '已检测到 Codex 登录，但缺少 ACP 适配器，请更新连接器；也可选择 Codex · App Server';
   }
   if (discovery.codexPath && connector.auth === 'chatgpt') adapters.set('codex', new CodexAdapter(discovery.codexPath, otherMcpServers));
   if (discovery.acpPath && discovery.codexPath && connector.auth === 'chatgpt') adapters.set('codex-acp', new AcpAdapter(discovery.acpPath, discovery.codexPath, otherMcpServers));

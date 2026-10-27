@@ -58,7 +58,7 @@ export async function publish({ repository, token, directory, sourceCommit, runI
   }
   if (!release) {
     release = await request(`${base}/releases`, { method: 'POST', body: { tag_name: tag, target_commitish: sourceCommit, name: `同桌连接器 ${tag}`, draft: true, prerelease: false,
-      body: `同桌连接器 ${tag}，协议 5，自带 Node.js。配合当前游戏网页使用。\n\n- 游戏历史按玩家会话增量同步：第一次发送完整可见记录，后续只发送新增事件；Agent 仍可通过 game_get_state 主动获取完整可见记录。\n- 切换 Agent 或模型、重新连接及重建会话后，重新同步完整可见上下文，避免新会话缺失历史。\n- 移除额外的游戏技能通知任务，技能结果随正常决策的当前观察与增量记录提供。\n- 配套网页 v0.5.8 的富饶之城规则明确区分王冠持有人与本轮国王身份牌，说明国王可暗弃、偷盗可落空。富饶之城存档结构已更新，旧存档需新开牌局。\n\nWindows 下载「同桌连接器 ${tag} · Windows 64 位」EXE；macOS 13.5+ 按芯片选择「同桌连接器 ${tag} · macOS Apple Silicon」或「同桌连接器 ${tag} · macOS Intel」ZIP，解压后将应用拖入「应用程序」。\n\nWindows 包自带 .NET 与 Windows App SDK，支持 Windows 10 2004（19041）及更新版本，尚未做 Authenticode 签名。macOS 包只有 ad-hoc 签名，尚未完成 Developer ID 签名与公证，首次启动说明位于 ZIP 根目录的「请先阅读.txt」。安装包启动由用户验收。\n\n每个包附带 .sha256 校验和与 .build.json 构建信息，SHA256SUMS.txt 汇总全部安装包。源提交：${sourceCommit}。` } });
+      body: `同桌连接器 ${tag}，协议 5，自带 Node.js。配合当前游戏网页使用。\n\n- 修复 Windows 下部分 Codex 启动脚本无法解析，导致已安装并登录的 Codex 仍显示未就绪的问题。\n- 支持启动脚本的两种标准目录写法，继续直接运行实际 Node 入口，无需修改用户的 Codex 安装或登录。\n- 检测失败时显示具体错误与选中的程序路径，区分程序未找到、未登录、API Key 登录与 ACP 适配器缺失。\n\nWindows 下载「同桌连接器 ${tag} · Windows 64 位」EXE；macOS 13.5+ 按芯片选择「同桌连接器 ${tag} · macOS Apple Silicon」或「同桌连接器 ${tag} · macOS Intel」ZIP，解压后将应用拖入「应用程序」。\n\nWindows 包自带 .NET 与 Windows App SDK，支持 Windows 10 2004（19041）及更新版本，尚未做 Authenticode 签名。macOS 包只有 ad-hoc 签名，尚未完成 Developer ID 签名与公证，首次启动说明位于 ZIP 根目录的「请先阅读.txt」。安装包启动由用户验收。\n\n每个包附带 .sha256 校验和与 .build.json 构建信息，SHA256SUMS.txt 汇总全部安装包。源提交：${sourceCommit}。` } });
   }
   if (release.prerelease) throw new Error('Refusing to publish stable downloads into a prerelease.');
   const publishDraft = release.draft;

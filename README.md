@@ -4,7 +4,7 @@
 
 [游戏网站](https://ianyet.github.io/agent-game/) · [连接器下载](https://github.com/IanYet/agent-game/releases/latest) · [源码](https://github.com/IanYet/agent-game)
 
-网页和连接器独立发布。新增游戏只需添加网页模块并发布静态网站；连接器根据模块提供的工具声明和提示词转发请求，不执行网页发来的代码。当前网页版本为 0.5.9，连接器为 0.5.4，桥接协议为 5。本版网页需要 0.5.4 或更新连接器。
+网页和连接器独立发布。新增游戏只需添加网页模块并发布静态网站；连接器根据模块提供的工具声明和提示词转发请求，不执行网页发来的代码。当前网页版本为 0.5.9，连接器为 0.5.5，桥接协议为 5。本版网页需要 0.5.4 或更新连接器。
 
 ## 开始游戏
 
@@ -16,9 +16,9 @@
 
 | 系统 | 安装包 |
 | --- | --- |
-| Windows 10 2004（19041）及更新版本，x64，自带 WinUI、.NET 和 Node.js | [同桌连接器 v0.5.4 · Windows 64 位](https://github.com/IanYet/agent-game/releases/download/v0.5.4/TongZhuo-Connector-v0.5.4-Windows-x64.exe) |
-| macOS 13.5+，Apple Silicon（M 系列） | [同桌连接器 v0.5.4 · macOS Apple Silicon](https://github.com/IanYet/agent-game/releases/download/v0.5.4/TongZhuo-Connector-v0.5.4-macOS-Apple-Silicon.zip) |
-| macOS 13.5+，Intel | [同桌连接器 v0.5.4 · macOS Intel](https://github.com/IanYet/agent-game/releases/download/v0.5.4/TongZhuo-Connector-v0.5.4-macOS-Intel.zip) |
+| Windows 10 2004（19041）及更新版本，x64，自带 WinUI、.NET 和 Node.js | [同桌连接器 v0.5.5 · Windows 64 位](https://github.com/IanYet/agent-game/releases/download/v0.5.5/TongZhuo-Connector-v0.5.5-Windows-x64.exe) |
+| macOS 13.5+，Apple Silicon（M 系列） | [同桌连接器 v0.5.5 · macOS Apple Silicon](https://github.com/IanYet/agent-game/releases/download/v0.5.5/TongZhuo-Connector-v0.5.5-macOS-Apple-Silicon.zip) |
+| macOS 13.5+，Intel | [同桌连接器 v0.5.5 · macOS Intel](https://github.com/IanYet/agent-game/releases/download/v0.5.5/TongZhuo-Connector-v0.5.5-macOS-Intel.zip) |
 
 Windows 包尚未做 Authenticode 签名；macOS 包只有 ad-hoc 本地签名，没有 Developer ID 身份签名，也未经过 Apple 公证。ad-hoc 不表示 Apple 已审核或认证。macOS ZIP 根目录附有[首次启动说明](apps/connector/macos/请先阅读.txt)，应用打不开时也可阅读。
 
@@ -27,6 +27,8 @@ macOS 首次打开受阻时，先核对下载来源和校验和；若确认信�
 窗口中的「概览」显示服务与网页状态，「可用程序」说明各程序未就绪的原因，「端口与进程」可查看 PID、路径和 IPv4／IPv6 监听地址。默认端口 3211，遵循 `AGENT_GAME_PORT`。清理前先让原连接器正常退出；强制结束只作用于确认过的单个 PID，未知程序不会被自动停止。清理后重新检测，端口释放后点击「重新检测并启动」。
 
 模型列表来自各 Harness 自己的配置，可见的模型未必有推理权限。连接器复用各自的登录，不要求额外提供 API Key；真实对弈会使用对应账户额度。WorkBuddy 独立 CLI 的登录可能与桌面端不同，若提示 `Authentication required`，需要先在支持 ACP 的官方 CLI 中完成登录。
+
+Codex 按 `CODEX_PATH`、系统 PATH、桌面版内置程序的顺序查找，支持 Windows npm 启动脚本。「可用程序」会区分程序未找到、启动检测失败、未登录和缺少 ACP 适配器；启动检测失败时会显示具体原因与选中的路径。若 PATH 中存在其他项目的 Codex，连接器可能优先选中该版本，可用 `CODEX_PATH` 指定要使用的程序；修改环境变量后需退出并重新打开连接器。
 
 ## 游戏桌与记录
 

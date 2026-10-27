@@ -59,7 +59,7 @@ export async function executableCommand(path: string, args: string[] = []): Prom
       const root = resolve(dirname(path), '../../../..'), carrier = join(root, 'DeepSeek Harness.exe');
       if (await exists(carrier) && await exists(join(root, 'resources', 'app.asar'))) return { command: carrier, args: ['--expose-internals', join(root, 'resources', 'app.asar', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'cli.js'), ...args], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } };
     }
-    const match = /%dp0%[\\/]([^"\r\n]+?(?:\.(?:mjs|cjs|js)|[\\/]bin[\\/](?:codebuddy|workbuddy)))"/i.exec(shim);
+    const match = /%(?:dp0%|~dp0)[\\/]([^"\r\n]+?(?:\.(?:mjs|cjs|js)|[\\/]bin[\\/](?:codebuddy|workbuddy)))"/i.exec(shim);
     if (match) {
       const entry = resolve(dirname(path), match[1].replace(/[\\/]/g, '/'));
       if (await exists(entry)) return executableCommand(entry, args);
