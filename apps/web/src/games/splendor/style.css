@@ -11,6 +11,14 @@
 @media(max-width:650px){.sp-inventory-sheet{padding:14px}.sp-inventory-modal .modal-scroll{padding:9px}.sp-inventory-tabs button{padding:8px;font-size:11px}.sp-inventory-footer>span{min-width:100%}}
 
 .sp-score-result{border-top:1px solid #ffffff18;margin-top:14px;padding-top:14px}.sp-score-result h3{line-height:1.7}.sp-score-result p{font-size:10px;line-height:1.8;color:#aeb8c9}
+.sp-standing-prestige{font:26px/1 Georgia,'Times New Roman',serif;font-variant-numeric:tabular-nums}
+.sp-table-transfers{position:fixed;inset:0;z-index:45;pointer-events:none}
+.sp-flying-card{position:absolute;width:var(--sp-card-width);aspect-ratio:64/91;transform-origin:center;will-change:transform,opacity;filter:drop-shadow(0 12px 16px #0007)}
+.sp-reserved-card[data-sp-card-arriving]{opacity:0}
+.sp-flying-gem{position:absolute;transform-origin:center;will-change:transform;filter:drop-shadow(0 4px 7px #0007)}
+.sp-flying-gem>.sp-gem{display:block;width:100%;height:100%;filter:none}
+.sp-gem[data-sp-gem-arriving]{opacity:0}
+.sp-market-slot{width:var(--sp-card-width);aspect-ratio:64/91}
 
 .sp-layout{--board-player-min-height:240px}
 .sp-layout .sp-action-box{margin-top:10px;padding-top:10px}.sp-layout .sp-tabs{gap:5px;margin-bottom:10px}.sp-layout .sp-tabs button{padding:7px 8px;font-size:10px}.sp-layout .sp-take-mode{gap:5px;margin-bottom:9px}.sp-layout .sp-take-mode button{padding:6px 8px}
