@@ -1,6 +1,6 @@
 # 新增游戏
 
-新增游戏只修改 `apps/web/src/games/<id>/` 和 `games/registry.ts`，随后发布静态网站。已经满足协议、能力和最低修复版本要求的连接器可以继续使用。
+新增游戏的规则与操作界面放在 `apps/web/src/games/<id>/`，在 `games/registry.ts` 注册后发布静态网站。独立背景物件也放在游戏目录，并在 `visuals/table-models.ts` 注册主题、在 `GameBackground.tsx` 提供静态图案。已经满足协议、能力和最低修复版本要求的连接器可以继续使用。
 
 ## 目录与注册
 
@@ -85,7 +85,7 @@ const tools: ToolDefinition[] = [{
 
 工具名、说明、输入/输出 schema 和完成规则均由模块定义。桥验证 JSON Schema，模块还必须验证当前阶段、玩家资格、资源余额等规则。不要在 schema 中增加让调用者冒充其他玩家的控制参数。
 
-八款游戏统一提供 `game_get_state`、`game_rules` 和 `game_act({revision,action})`。Agent 根据完整规则、行动字段说明和当前可见局面自行构造动作。观察与提示不生成合法行动清单，不提供 `actionId`、`game_legal_actions` 或另一个出牌入口；真人界面仍可用引擎的合法选择生成器提供按钮、选牌和提示。引擎必须直接验证提交内容，不能把是否出现在一个代表性候选列表中作为合法性依据。
+各款游戏统一提供 `game_get_state`、`game_rules` 和 `game_act({revision,action})`。Agent 根据完整规则、行动字段说明和当前可见局面自行构造动作。观察与提示不生成合法行动清单，不提供 `actionId`、`game_legal_actions` 或另一个出牌入口；真人界面仍可用引擎的合法选择生成器提供按钮、选牌和提示。引擎必须直接验证提交内容，不能把是否出现在一个代表性候选列表中作为合法性依据。
 
 | 游戏 | 自行构造的行动 |
 | --- | --- |
@@ -97,6 +97,7 @@ const tools: ToolDefinition[] = [{
 | 富饶之城 | 选角、收入、保留抽牌、各身份及建筑技能、建造、拆除、墓地反应、结束回合 |
 | 璀璨宝石 | 拿异色或同色宝石、明暗预留、购买及可选支付组合、超额归还、选择贵族 |
 | 掼蛋 | `play/cards/combination`、`pass`、`tribute/card`、`return/card`；combination 用 kind/rank 及需要的 suit/pairRank 声明含义 |
+| 勃艮第城堡 | 庄园与起始格、骰子拿取／铺放／售货／取工人、银币购买、即时连锁、船只仓库与货物类型、结束回合 |
 
 各模块的 `actions.ts` 声明全部阶段的参数范围与字段含义，`game_rules` 同时返回完整规则和行动说明。实体牌 ID 来自玩家可见的手牌或市场；身份、目标和金额等字段表达游戏含义。观察需保留自行判断所需的约束，例如德州加注权与上下限、富饶之城本身份已用技能和建造次数、宝石超额归还数量，不能为缩短消息删掉必要规则或可见状态。
 

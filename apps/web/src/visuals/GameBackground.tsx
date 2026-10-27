@@ -5,6 +5,7 @@ import type {TablePhysics} from './table-physics';
 import {TILE_IMAGES} from '../games/azul/artwork';
 import {GemIcon} from '../games/splendor/gem';
 import {COLORS as GEM_COLORS} from '../games/splendor/types';
+import {HexTile} from '../games/castles-of-burgundy/artwork';
 import {CARD_SUIT_COLORS,CHESS_COLORS,POKER_CHIP_COLORS,CITADELS_CHIP_COLORS} from './table-palette';
 import {SvgIcon} from './SvgIcon';
 import type {SvgIconName} from './svg-icons';
@@ -84,7 +85,9 @@ export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme
   },[theme]);
   useEffect(()=>{window.dispatchEvent(new Event('tongzhuo:table-motion'));},[enabled,effects.reduced]);
   return <div className="game-background" data-table-theme={theme} aria-hidden="true">
-    <div className="table-object-fallback">{theme==='splendor'
+    <div className="table-object-fallback">{theme==='castles-of-burgundy'
+      ?Array.from({length:12},(_,i)=><span key={i}><HexTile id={['c-1','m-1','s-1','a-cow-3-1','b-market-1','k-8'][i%6]}/></span>)
+      :theme==='splendor'
       ?Array.from({length:12},(_,i)=><span className="table-fallback-gem" key={i}><GemIcon color={GEM_COLORS[i%GEM_COLORS.length]}/></span>)
       :theme==='holdem'||theme==='citadels'
       ?Array.from({length:12},(_,i)=><span className="table-fallback-chip" key={i} style={{background:chipPalettes[theme][i%chipPalettes[theme].length],textShadow:'none'}}/>)

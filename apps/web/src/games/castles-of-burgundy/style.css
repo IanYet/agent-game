@@ -1,0 +1,210 @@
+.burgundy-main{min-width:0;container-type:inline-size}
+.game-background[data-table-theme='castles-of-burgundy'] .table-object-surface{opacity:.19}
+.game-background[data-table-theme='castles-of-burgundy'] .table-object-fallback>span{width:100px;height:110px}
+.game-layout.board-game-layout.burgundy-layout>.game-surface{grid-template-columns:minmax(500px,550px) minmax(0,1fr)}
+.game-layout.board-game-layout.burgundy-layout[data-board-mode=spectator]>.game-surface{grid-template-columns:minmax(0,1fr)}
+.burgundy-public-table{overflow:visible}
+.burgundy-public{width:100%;height:100%;min-height:280px;display:flex;flex-direction:column;justify-content:center;gap:13px;padding:10px 4px}
+.burgundy-tile{display:block;width:100%;height:100%;color:#f7efdb;filter:drop-shadow(0 2px 2px #0006);user-select:none}
+.burgundy-tile svg{display:block;width:100%;height:100%;overflow:visible}
+.burgundy-tile-face{fill:var(--burgundy-color);stroke:#fff6d577;stroke-width:1.5}
+.burgundy-tile-rim{fill:none;stroke:#fff6d52b;stroke-width:.9}
+.burgundy-tile text{font-family:inherit}
+.burgundy-market{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,22%);align-items:center;gap:24px;width:100%;min-height:174px}
+.burgundy-numbered-depots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px 22px}
+.burgundy-depot{min-width:0;display:flex;flex-direction:column;gap:6px;padding:5px 0 2px;border-top:1px solid #c6d7e22b;border-radius:5px;transition:background .15s}
+.burgundy-depot.shipping{background:#8fcce01c;outline:1px solid #9dd4e5aa;outline-offset:6px}
+.burgundy-depot-heading{display:flex;align-items:center;gap:6px;min-height:24px;font-size:10px;color:#c4cfda}
+.burgundy-depot-heading>span:not(.burgundy-depot-number):not(.burgundy-goods){white-space:nowrap}
+.burgundy-depot-number{display:grid;place-items:center;flex:none;width:23px;height:23px;border:1px solid #d8d5b77d;border-radius:5px;background:#6d76821c;font-size:15px;font-weight:700;color:#e6dec6}
+button.burgundy-depot-number{cursor:pointer}
+.burgundy-depot-number[aria-pressed=true]{border-color:#f3de9f;background:#b8a36e3b}
+.burgundy-depot-heading>.burgundy-goods{margin-left:auto;gap:3px;flex-wrap:nowrap}
+.burgundy-depot-heading>.burgundy-goods .burgundy-good{height:22px;min-width:23px;padding:2px 3px;gap:2px;font-size:9px;border-radius:3px}
+.burgundy-depot-heading>.burgundy-goods .burgundy-good small{font-size:8px}
+.burgundy-depot-heading>.burgundy-goods .burgundy-empty{font-size:8px;opacity:.7}
+.burgundy-depot-heading>span>small{display:block;font-size:9px;color:#a5adb9;margin-top:3px}
+.burgundy-depot-tiles{display:flex;flex-wrap:wrap;gap:2px;align-items:center;min-height:51px}
+.burgundy-depot-tiles>button,.burgundy-storage>button{display:block;width:47px;height:51px;padding:0;border:0;background:transparent;border-radius:9px;transition:transform .15s,filter .15s}
+.burgundy-depot-tiles>button:disabled,.burgundy-storage>button:disabled{opacity:1;cursor:default}
+.burgundy-depot-tiles>button:not(:disabled):hover,.burgundy-storage>button:not(:disabled):hover{transform:translateY(-3px);filter:brightness(1.2)}
+.burgundy-depot-tiles>button.selected,.burgundy-storage>button.selected{filter:drop-shadow(0 0 4px #f5d38c);transform:translateY(-3px)}
+.burgundy-depot-tiles>button.selected .burgundy-tile-face,.burgundy-storage>button.selected .burgundy-tile-face{stroke:#fff0bf;stroke-width:4}
+.burgundy-depot.black{border-top-color:#e8ca8f6b;border-bottom:1px solid #e8ca8f28;padding-block:10px}
+.burgundy-depot.black .burgundy-depot-tiles{justify-content:center;gap:4px}
+.burgundy-market-setup{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:190px;text-align:center;gap:10px}
+.burgundy-market-setup>span{font:10px monospace;letter-spacing:4px;color:#c8b38c}
+.burgundy-market-setup h2{font-weight:400;font-size:25px;margin:0}
+.burgundy-market-setup p{font-size:12px;color:var(--muted)}
+.burgundy-empty{font-size:10px;color:#99a9bc}
+.burgundy-round-track{display:flex;align-items:center;gap:20px;justify-content:space-between;min-width:0;padding-bottom:7px;border-bottom:1px solid #b9cad51c}
+.burgundy-phases{display:flex;gap:5px;flex:none}
+.burgundy-phases>span{display:grid;place-items:center;gap:2px;padding:4px 8px;color:#7f8a99;border:1px solid transparent;border-radius:4px}
+.burgundy-phases b{font-size:17px;font-weight:500}
+.burgundy-phases small{font:9px monospace}
+.burgundy-phases .current{color:#f0d8a4;border-color:#e5cc8744;background:#e7cd9910}
+.burgundy-white-die{display:flex;align-items:center;gap:9px;min-width:0}
+.burgundy-white-die>b{font:34px/1 sans-serif;color:#e7e2d6}
+.burgundy-white-die>span{font-size:10px;white-space:nowrap}
+.burgundy-white-die>span small{display:block;margin-top:4px;font-size:9px;color:#9ba9bb}
+.burgundy-white-die .burgundy-good{height:25px;min-width:24px;padding:3px;gap:3px;font-size:10px}
+.burgundy-round-goods{display:flex;align-items:center;gap:5px;margin-left:4px}
+.burgundy-round-goods>span{display:grid;justify-items:center;gap:3px}
+.burgundy-round-goods small{font-size:8px;color:#9eacc0}
+.burgundy-bridge{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:4px 9px;min-width:0;font-size:10px}
+.burgundy-bridge>span:first-child{color:#97a9be;font-size:9px}
+.burgundy-bridge>span:not(:first-child){display:flex;align-items:center;gap:5px;max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#c4cbd5}
+.burgundy-bridge b{font:11px monospace;color:#a2b7bd}
+.burgundy-bridge small{font-size:8px;color:#8e9eb1}
+.burgundy-bridge .current{color:#f0dcb1!important}
+.burgundy-color-bonuses{display:flex;justify-content:space-between;flex-wrap:wrap;gap:9px;padding-top:6px;border-top:1px solid #b9cad51c}
+.burgundy-color-bonuses>span{display:flex;align-items:center;gap:6px;font-size:9px;min-width:0}
+.burgundy-color-bonuses small{color:#9caec3;font-size:8px;max-width:125px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.burgundy-color-key{display:inline-flex;align-items:center;gap:5px;font-size:10px;white-space:nowrap}
+.burgundy-color-key:before{content:'';width:9px;height:10px;background:var(--burgundy-color);clip-path:polygon(50% 0,95% 25%,95% 75%,50% 100%,5% 75%,5% 25%)}
+.burgundy-estate{position:relative;width:100%;max-width:280px;min-width:0;margin-inline:auto;isolation:isolate}
+.burgundy-estate>svg{display:block;width:100%;height:auto;overflow:visible}
+.burgundy-hex{outline:0;color:#f5ecd4}
+.burgundy-hex>polygon{fill:var(--burgundy-color);fill-opacity:.2;stroke:var(--burgundy-color);stroke-width:1.7;stroke-opacity:.6;transition:stroke .15s,fill-opacity .15s}
+.burgundy-hex.filled>polygon{fill-opacity:.92;stroke:#e9d8aa;stroke-width:1.2;stroke-opacity:.7;filter:drop-shadow(0 2px 2px #0006)}
+.burgundy-hex.available{cursor:pointer}
+.burgundy-hex.available>polygon{fill-opacity:.45;stroke:#f6e6bc;stroke-width:2;stroke-opacity:.8}
+.burgundy-hex.available:hover>polygon,.burgundy-hex.available:focus>polygon{fill-opacity:.7;stroke-width:4}
+.burgundy-hex.selected>polygon{fill-opacity:.75;stroke:#fff1b6;stroke-width:4;stroke-opacity:1;filter:drop-shadow(0 0 4px #e9c78077)}
+.burgundy-cell-value{font-size:24px;fill:#c8d0ce;opacity:.68;font-weight:500}
+.burgundy-cell-id{font:10px monospace;fill:#b9c3cc;opacity:.75;pointer-events:none}
+.burgundy-hex.filled .burgundy-cell-id{fill:#fff4d7;opacity:.9}
+.burgundy-cell-pip{font:10px monospace;fill:#fff3d1;opacity:.8;pointer-events:none}
+.burgundy-board-number{display:block;font-size:10px;letter-spacing:1px;text-align:center;color:#d4c4a4;margin-top:-5px}
+.burgundy-board-number small{font-size:9px;letter-spacing:0;margin-left:7px;color:#98a7b9}
+.burgundy-unselected{display:grid;place-items:center;min-height:190px;font-size:11px;color:#9ca7b9;border:1px dashed #a7b5c52b;border-radius:50%}
+.burgundy-detail-link{font-size:9px!important;display:block;margin:5px auto 0;padding:2px!important;min-height:18px;color:#c4b897}
+.burgundy-own-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:10px;align-items:center}
+.burgundy-controls{display:flex;flex-direction:column;gap:5px;min-width:0}
+.burgundy-layout .human-player-badges .burgundy-dice{gap:3px}
+.burgundy-layout .human-player-badges .burgundy-dice>button>span{font-size:29px}
+.burgundy-dice{display:flex;align-items:center;gap:8px;flex:none}
+.burgundy-dice>button{display:grid;place-items:center;padding:0 3px 3px;border:1px solid transparent;background:transparent;border-radius:5px;gap:1px;min-width:34px;color:#e7dbc0}
+.burgundy-dice>button>span{font:35px/1 sans-serif}
+.burgundy-dice>button>small{font-size:8px;color:#a1b1c4}
+.burgundy-dice>button:disabled{opacity:1;cursor:default}
+.burgundy-dice>button.used{opacity:.3}
+.burgundy-dice>button.selected{border-color:#f5d59e88;background:#e0c58813}
+.burgundy-action-modes{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px}
+.burgundy-action-modes>button{font-size:9px;line-height:1.3;min-height:28px;background:#8eabc30b;border:1px solid #c3d3dd23;border-radius:4px;color:#c6d0de;padding:4px 3px;white-space:nowrap}
+.burgundy-action-modes>button[aria-pressed=true]{color:#f6deab;border-color:#ead19b66;background:#dec28b16}
+.burgundy-action-modes>button:disabled{opacity:.3}
+.burgundy-action-hint{margin:0;min-height:24px;font-size:9px;line-height:1.5;color:#a3b2c6}
+.burgundy-pending{margin:0;padding:6px 8px;border-left:2px solid #dfc287;color:#e5cfab;background:#dac0870a;font-size:10px;line-height:1.6}
+.burgundy-holdings{display:flex;gap:12px;align-items:flex-start;min-width:0;flex-wrap:wrap}
+.burgundy-section-label{display:block;font-size:9px;color:#a5b5c6;margin-bottom:5px}
+.burgundy-storage{display:flex;gap:1px;align-items:center;min-height:38px}
+.burgundy-storage>button{width:33px;height:38px}
+.burgundy-storage-empty{display:grid;place-items:center;width:32px;height:36px;border:1px dashed #a4b2c42d;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);background:#8eaac309;color:#75859a;font:9px monospace}
+.burgundy-goods{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;min-height:25px}
+.burgundy-good{display:flex;align-items:center;justify-content:center;gap:5px;min-width:30px;height:28px;border:1px solid #a8bdce55;border-radius:4px;padding:4px 5px;color:#e1e6ee;background:#6e899233;font-size:12px;white-space:nowrap}
+.burgundy-good[data-type='1']{background:#775f8d55;border-color:#b69dca66}.burgundy-good[data-type='2']{background:#ac7d5555;border-color:#d6aa7466}.burgundy-good[data-type='3']{background:#9d536555;border-color:#d489a266}.burgundy-good[data-type='4']{background:#4d839255;border-color:#84bbcf66}.burgundy-good[data-type='5']{background:#787e4e55;border-color:#c3c88d66}.burgundy-good[data-type='6']{background:#665d5355;border-color:#bcaf9366}
+.burgundy-good:disabled{opacity:1;cursor:default}
+.burgundy-good.selected{border:2px solid #ffdfa6;box-shadow:0 0 7px #e2c48644}
+.burgundy-good small{font-size:9px}
+.burgundy-sold{display:block;margin-top:4px;color:#8c9daf;font-size:8px}
+.burgundy-knowledge{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-height:20px;font-size:9px}
+.burgundy-knowledge>span:first-child{color:#a4b3c5;margin-right:2px}
+.burgundy-knowledge>span:not(:first-child){display:grid;place-items:center;width:21px;height:21px;border:1px solid #c5ad5a77;border-radius:50%;background:#b49a4322;color:#e4d293;font:10px monospace;cursor:help}
+.burgundy-knowledge>small{color:#7e90a7;font-size:8px}
+.burgundy-selection-info{display:grid;gap:3px;min-width:0}
+.burgundy-selection-info strong{font-size:10px;font-weight:500;color:#ead2a7}
+.burgundy-selection-info small{font-size:9px;line-height:1.5;color:#b4becc;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.burgundy-submit{display:flex;align-items:center;justify-content:flex-end;gap:7px;min-height:36px;flex-wrap:wrap}
+.burgundy-submit>span{font-size:9px;color:#a7b6c8;margin-right:auto}
+.burgundy-submit .button{font-size:10px;padding:7px 10px;min-height:32px;white-space:nowrap}
+.burgundy-setup-choice>label{font-size:10px;color:#b9c5d0}
+.burgundy-setup-choice>div{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.burgundy-setup-choice .button{padding:7px 10px;font-size:10px}
+.burgundy-setup-choice .button[aria-pressed=true],.burgundy-shipping .button[aria-pressed=true]{color:#f3dba7;border-color:#ecd19699;background:#d8b7781c}
+.burgundy-setup-choice p,.burgundy-shipping p{font-size:10px;line-height:1.7;color:#b5bfd0}
+.burgundy-shipping>div{display:flex;gap:4px;flex-wrap:wrap}
+.burgundy-shipping .button{padding:5px 9px;min-height:28px;font-size:10px}
+.burgundy-shipping>small{font-size:9px;color:#c7a899;line-height:1.6}
+.burgundy-ship-types{margin-top:8px;font-size:10px}
+.burgundy-ship-types label{display:flex;align-items:center;gap:4px;padding:4px 5px}
+.burgundy-opponents{--board-player-min-height:375px}
+.burgundy-opponents .agent-player-body{container-type:inline-size}
+.burgundy-opponent-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:center;gap:7px;min-width:0}
+.burgundy-opponent-grid .burgundy-estate{max-width:205px}
+.burgundy-opponent-grid .burgundy-dice>button>span{font-size:27px}
+.burgundy-opponent-grid .burgundy-dice>button{min-width:25px}
+.burgundy-opponent-grid .burgundy-holdings{display:grid;gap:7px;margin-top:8px}
+.burgundy-opponent-grid .burgundy-storage>button{width:30px;height:34px}
+.burgundy-opponent-grid .burgundy-storage-empty{width:27px;height:32px}
+.burgundy-opponent-grid .burgundy-knowledge{margin-top:7px}
+.burgundy-opponents .player-card-action{font-size:9px;white-space:normal;line-height:1.5}
+.burgundy-standings{padding:18px}
+.burgundy-standings>h3{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:400;margin:0 0 10px}
+.burgundy-standings>h3>small{font-size:9px;color:#a1b3c7}
+.burgundy-score-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-top:1px solid #fff2}
+.burgundy-score-row strong{font-size:12px;font-weight:400}
+.burgundy-score-row small{display:block;font-size:9px;line-height:1.6;color:#9eafc4;margin-top:3px}
+.burgundy-score-row>b{font:29px/1 Anton,sans-serif;color:#e0d5bc;text-align:right;flex:none}
+.burgundy-final{border-top:1px solid #e2cd9c44}
+.burgundy-final h3{font-size:17px;font-weight:500}
+.burgundy-final p{font-size:10px;color:#b6c0cf;line-height:1.6}
+.burgundy-final>div{display:grid;gap:5px;border-top:1px solid #fff2;padding:10px 0}
+.burgundy-final strong{font-size:11px;font-weight:500}
+.burgundy-final small{color:#b1bfd1;font-size:9px;line-height:1.7}
+.burgundy-estate-modal{width:min(1100px,calc(100vw - 64px))!important}
+.burgundy-estate-details{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:25px;align-items:start}
+.burgundy-estate.large{max-width:530px}
+.burgundy-estate-details h3{font-size:17px;font-weight:400}
+.burgundy-estate-details p{font-size:11px;line-height:1.8;color:#afbbce}
+.burgundy-region-list{display:grid;gap:0;margin-bottom:17px}
+.burgundy-region-list>div{display:grid;grid-template-columns:48px minmax(0,1fr) 25px 60px;gap:8px;padding:7px 0;border-bottom:1px solid #abbad323;align-items:center;font-size:10px}
+.burgundy-region-list>div>span:nth-child(2){font:9px/1.6 monospace;color:#a8b8cd;overflow-wrap:anywhere}
+.burgundy-region-list b{font:10px monospace;color:#daceb3}
+.burgundy-region-list small{font-size:9px;color:#a6b7c9;text-align:right}
+.burgundy-knowledge-details b{color:#dec988;font-weight:500}
+.burgundy-sold-details{margin-block:13px}
+.burgundy-rules{font-size:12px;line-height:1.9;color:#bfc8d7}
+.burgundy-rules>p{margin:0 0 15px}
+.burgundy-rules a,.burgundy-config a{color:#cfbd93}
+.burgundy-config{font-size:12px;line-height:1.9;color:#b8c5d6}
+.burgundy-config>strong{display:block;margin-bottom:12px;color:#e2d9c7;font-weight:500}
+.burgundy-config>label{display:grid;gap:6px;font-size:11px}
+.burgundy-config select{width:100%;min-height:30px;padding:8px;border:1px solid #adbbcc3b;border-radius:4px;background:#141b2b;color:#e1d7bf;font-size:12px}
+.burgundy-discard-modal>p{font-size:12px;line-height:1.8;color:#bdc8d7;margin:0 0 22px}
+.burgundy-discard-modal>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}
+.burgundy-discard-modal button{display:flex;flex-direction:column;align-items:center;gap:10px;padding:15px 10px;border:1px solid #b9cad044;border-radius:8px;background:#b0c3d009;color:#ddd2b7;cursor:pointer}
+.burgundy-discard-modal button:hover{border-color:#edce90;background:#d7bd7e17}
+.burgundy-discard-modal .burgundy-tile{width:74px;height:80px}
+.burgundy-discard-modal strong{font-size:11px;font-weight:500}
+.burgundy-discard-modal small{font-size:10px;line-height:1.7;color:#a9b8cb;text-align:left}
+.burgundy-replay{display:grid;gap:18px}
+.burgundy-replay>p{font-size:12px;line-height:1.8;color:#c7d1df}
+.burgundy-replay-controls{display:flex;align-items:center;gap:15px}
+.burgundy-replay-controls>label{flex:1;font-size:11px;color:#a6b8cd}
+.burgundy-replay-controls input{width:100%;display:block;margin-top:9px}
+.burgundy-replay-controls .button{font-size:11px;white-space:nowrap}
+.burgundy-replay .burgundy-market{grid-template-columns:minmax(0,1fr) 190px}
+.burgundy-replay .burgundy-numbered-depots{gap:18px}
+.burgundy-replay-players{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:15px}
+.burgundy-replay-players .identity-card{padding:17px}
+.burgundy-replay-players h3{font-size:13px;font-weight:500;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 15px}
+.burgundy-replay-players h3>span{font-size:9px;color:#a8b5c8}
+.burgundy-replay-players .burgundy-holdings{margin-block:13px}
+.burgundy-replay-log{display:grid;max-height:310px;overflow:auto;border-top:1px solid #b4c4da33}
+.burgundy-replay-log>button{display:grid;grid-template-columns:95px minmax(0,1fr);gap:12px;align-items:start;padding:11px 9px;text-align:left;border:0;border-bottom:1px solid #b4c4da22;background:transparent;font-size:11px;color:#bac5d7;line-height:1.6}
+.burgundy-replay-log small{font:10px/1.8 monospace;color:#8b9eb9}
+.burgundy-replay-log>button[aria-current=step]{background:#e1bf7720;color:#eedbb0}
+@media(min-width:1281px) and (min-height:851px){
+  .burgundy-layout[data-board-mode=player] .burgundy-opponents .board-player-slots{align-items:stretch}
+  .burgundy-layout[data-board-mode=player] .burgundy-opponents .player-card-grid{height:100%}
+  .burgundy-layout[data-board-mode=player] .burgundy-opponents{--board-player-template-rows:minmax(0,1fr)}
+}
+@container (max-width:365px){.burgundy-opponent-grid{grid-template-columns:minmax(0,1fr) 105px}.burgundy-opponent-grid .burgundy-estate{min-width:0}.burgundy-opponent-grid .burgundy-holdings{gap:6px}.burgundy-opponent-grid .burgundy-good{height:23px;min-width:23px;padding:2px 3px;font-size:10px}}
+@media(max-width:1280px),(max-height:850px){
+  .game-layout.board-game-layout.burgundy-layout>.game-surface{grid-template-columns:minmax(0,1fr)}
+  .burgundy-layout .human-player-card{width:min(100%,700px)}
+  .burgundy-own-grid{grid-template-columns:minmax(0,1fr) minmax(240px,1fr)}
+  .burgundy-own-grid .burgundy-estate{max-width:320px}
+  .burgundy-public{min-height:310px}
+}
