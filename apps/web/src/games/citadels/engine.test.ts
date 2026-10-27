@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {applyCitadels,assertCitadels,createCitadels,legalCitadels,nextCitadels,scoreCitadels,viewCitadels,type CitadelsState,type PlayerInput} from './engine';
-import {district,makeDeck,type BuiltDistrict,type District} from './cards';
+import {cardName,district,makeDeck,roleName,type BuiltDistrict,type District} from './cards';
 import {definition as module} from './definition';
 import type {StoredRun} from '../../runtime/types';
 const players=(n=4):PlayerInput[]=>Array.from({length:n},(_,i)=>({playerId:`p${i}`,name:`城主${i+1}`,kind:i===0?'human':'agent'}));
@@ -28,18 +28,32 @@ describe('技能结果与信息范围',()=>{
   it('刺杀只公开目标身份，不新增私信、决策或公开持有人',()=>{
     let s=stage(1);assign(s,1,6);assign(s,2,8);
     s=applyCitadels(s,0,{type:'assassinate',role:6});
+    const selected=s.events.at(-1)!;
+    expect(selected.text).toContain('城主1');expect(selected.text).toContain('刺客');expect(selected.text).toContain('商人');expect(selected.text).not.toContain('城主2');
     for(const viewer of [0,1,2,3,null])expect(viewCitadels(s,viewer)).not.toHaveProperty('notifications');
     expect(viewCitadels(s,0).players[1].roles).toEqual([]);expect(s.events.at(-1)).toMatchObject({role:6});expect(s.events.at(-1)).not.toHaveProperty('target');
     expect(module.decisions(runFor(s)).map(d=>d.actorId)).toEqual(['p0']);expect(legalCitadels(s,1)).toEqual([]);
     s=main(s);s=applyCitadels(s,0,{type:'end'});expect(s.called).toBe(8);expect(s.players[1].revealed).toEqual([]);
+    const skipped=s.events.filter(e=>e.role===6).at(-1)!;
+    expect(skipped.text).toContain('商人');expect(skipped.text).toContain('跳过');expect(skipped.text).not.toContain('城主2');
+    s=main(s);s=applyCitadels(s,2,{type:'end'});
+    const revealed=s.events.find(e=>e.seat===1&&e.role===6)!;
+    expect(revealed.text).toContain('城主2');expect(revealed.text).toContain('商人');expect(revealed.text).toContain('轮末');
   });
   it('偷盗选择与实际扣款仅记录在公开事件，目标到自己被叫到才取得行动机会',()=>{
     let s=stage(2);assign(s,1,6);gold(s,1,7);s=applyCitadels(s,0,{type:'steal',role:6});
-    expect(s.players[1].gold).toBe(7);expect(s.events.at(-1)).toMatchObject({role:6,text:'偷窃目标：商人。'});
+    expect(s.players[1].gold).toBe(7);expect(s.events.at(-1)).toMatchObject({seat:0,role:6});
+    const selected=s.events.at(-1)!.text;
+    expect(selected).toContain('城主1');expect(selected).toContain('盗贼');expect(selected).toContain('商人');expect(selected).not.toContain('城主2');
     expect(module.decisions(runFor(s)).map(d=>d.actorId)).toEqual(['p0']);
     s=main(s);s=applyCitadels(s,0,{type:'end'});expect(s.players[1].gold).toBe(0);expect(s.players[0].gold).toBe(11);
     expect(module.decisions(runFor(s)).map(d=>d.actorId)).toEqual(['p1']);
-    for(const viewer of [0,1,2,3,null]){const view=viewCitadels(s,viewer);expect(view).not.toHaveProperty('notifications');expect(view.events.at(-1)?.text).toContain('7 金币');}
+    for(const viewer of [0,1,2,3,null]){
+      const view=viewCitadels(s,viewer),payment=view.events.at(-1)!.text;
+      expect(view).not.toHaveProperty('notifications');expect(payment).toContain('7 金币');
+      expect(payment).toContain('城主1');expect(payment).toContain('盗贼');expect(payment).toContain('城主2');expect(payment).toContain('商人');
+      expect(view.events.find(e=>e.seat===1&&e.role===6)?.text).toContain('城主2');
+    }
     assertCitadels(s);
   });
   it('换牌后只在各自观察中看到当前手牌，公开事件不附带牌或额外私信',()=>{
@@ -47,10 +61,52 @@ describe('技能结果与信息范围',()=>{
     expect(viewCitadels(s,1).players[1].hand).toEqual(newHand);expect(viewCitadels(s,0).players[0].hand).toEqual(otherHand);
     for(const viewer of [0,1,2,3,null])expect(viewCitadels(s,viewer)).not.toHaveProperty('notifications');
     expect(s.events.at(-1)?.cards).toBeUndefined();expect(JSON.stringify(module.observe(runFor(s),null))).not.toContain(newHand[0].id);
+    const text=s.events.at(-1)!.text;
+    expect(text).toContain('城主1');expect(text).toContain('魔术师');expect(text).toContain('城主2');expect(text).toContain('全部手牌');
+    for(const card of [...newHand,...otherHand]){expect(text).not.toContain(card.id);expect(text).not.toContain(cardName(card));}
     const delta=JSON.parse(module.decisionPrompt(runFor(s),{decisionId:'view',actorId:'p1'},s.events.length).split('当前私有观察：')[1]);
     expect(delta.events).toEqual([]);expect(delta.players[1].hand).toEqual(newHand);expect(delta.players[0].hand).toBeUndefined();
     const empty=stage(3);empty.deck.push(...empty.players[0].hand);empty.players[0].hand=[];expect(viewCitadels(applyCitadels(empty,0,{type:'magic_swap',target:1}),1).players[1].hand).toEqual([]);
     assertCitadels(s);
+  });
+});
+
+describe('公开事件文字中的玩家、身份与结果',()=>{
+  it('收入、选牌、建造、税收、王冠和结束回合直接说明玩家与当前身份',()=>{
+    let s=stage(2);assign(s,1,4);assign(s,2,6);city(s,1,['manor']);gold(s,1,10);
+    const card=hand(s,1,'castle');s=main(s);s=applyCitadels(s,0,{type:'end'});
+    const started=s.events.length-2;
+    s=applyCitadels(s,1,{type:'income',source:'cards'});const pending=[...s.pendingCards];
+    s=applyCitadels(s,1,{type:'keep',cards:[pending[0].id]});
+    s=applyCitadels(s,1,{type:'build',card:card.id});s=applyCitadels(s,1,{type:'tax'});s=applyCitadels(s,1,{type:'end'});
+    const events=s.events.slice(started).filter(e=>e.seat===1);
+    expect(events).toHaveLength(7);
+    for(const event of events){expect(event.text).toContain('城主2');expect(event.text).toContain('国王');}
+    expect(events.find(e=>e.text.includes('王冠'))?.text).toContain('下轮');
+    expect(events.find(e=>e.kind==='build')?.text).toContain('城堡');
+    expect(events.find(e=>e.kind==='build')?.text).toContain('4 金币');
+    expect(events.find(e=>e.text.includes('税收'))?.text).toContain('2 金币');
+    for(const event of events.filter(e=>e.text.includes('抽取')||e.text.includes('保留'))){
+      for(const card of pending){expect(event.text).not.toContain(card.id);expect(event.text).not.toContain(cardName(card));}
+    }
+    assertCitadels(s);
+  });
+  it.each([6,7])('身份 %i 的自动收入文字说明玩家、身份与实际收益',role=>{
+    const s=main(stage(role)),text=s.events.at(-1)!.text;
+    expect(text).toContain('城主1');expect(text).toContain(roleName(role));expect(text).toContain(role===6?'1 金币':'2 张');
+    expect(s.events.at(-1)?.cards).toBeUndefined();
+  });
+  it.each([true,false])('军阀拆除与墓地选择（收回=%s）写明双方和建筑，不暴露墓地持有人身份',take=>{
+    let s=stage(8);assign(s,1,5);s.assassinated=5;city(s,1,['graveyard']);city(s,2,['church']);gold(s,0,10);s=main(s);
+    const card=s.players[2].city[0];s=applyCitadels(s,0,{type:'destroy',target:2,card:card.id});
+    const destroyed=s.events.at(-2)!.text,offered=s.events.at(-1)!.text;
+    for(const word of ['城主1','军阀','城主3','教堂','1 金币'])expect(destroyed).toContain(word);
+    for(const word of ['城主2','墓地','教堂'])expect(offered).toContain(word);
+    expect(offered).not.toContain('主教');
+    const index=s.events.length;s=applyCitadels(s,1,{type:'recover',take});const recovered=s.events[index].text;
+    for(const word of ['城主2','墓地','教堂'])expect(recovered).toContain(word);
+    expect(recovered).not.toContain('主教');expect(recovered).toContain(take?'1 金币':'牌库底');
+    expect(s.players[1].hand.some(c=>c.id===card.id)).toBe(take);assertCitadels(s);
   });
 });
 
@@ -112,6 +168,8 @@ describe('经典八身份 · 人数与秘密选角',()=>{
     expect(own.players[0].hand).toHaveLength(4);expect(other.players[0].hand).toBeUndefined();expect(other.players[0].roles).toEqual([]);expect(own.players[0].roles).toEqual([selected]);
     expect(own.available).toEqual([]);expect(other.available.length).toBeGreaterThan(0);expect(publicView.available).toEqual([]);expect(spectator.players[0].hand).toHaveLength(4);
     expect('deck' in other).toBe(false);expect('rng' in other).toBe(false);expect('faceDown' in other).toBe(false);expect(s.events.every(e=>!e.cards?.length)).toBe(true);
+    const selectedEvent=publicView.events.at(-1)!;
+    expect(selectedEvent.text).toContain('城主1');expect(selectedEvent.text).toContain('秘密选角');expect(selectedEvent.text).not.toContain(roleName(selected));expect(selectedEvent.role).toBeUndefined();
   });
 });
 describe('收入、身份时序与建筑约束',()=>{

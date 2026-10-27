@@ -22,9 +22,9 @@ export function Replay({run}:{run:StoredRun<CitadelsState>}){
   }
   return <div className="ct-replay"><h2>富饶之城 · 第 {run.index} 局公开回放</h2><p>按公开事件还原选角、叫号与城区变化；未公开的身份、手牌和抽牌选择保密。</p>
     <label>公开事件 {step}/{run.state.events.length}<input aria-label="回放进度" type="range" min="0" max={run.state.events.length} value={step} onChange={event=>setStep(Number(event.target.value))}/></label>
-    <div className="ct-replay-controls"><button className="button outline" disabled={step===0} onClick={()=>setStep(value=>value-1)}>上一步</button><p>{last?`第 ${last.round} 轮 · ${last.seat!==undefined?run.roster[last.seat].name+'：':''}${last.text}`:'开局前'}</p><button className="button outline" disabled={step===run.state.events.length} onClick={()=>setStep(value=>value+1)}>下一步</button></div>
+    <div className="ct-replay-controls"><button className="button outline" disabled={step===0} onClick={()=>setStep(value=>value-1)}>上一步</button><p>{last?`第 ${last.round} 轮 · ${last.text}`:'开局前'}</p><button className="button outline" disabled={step===run.state.events.length} onClick={()=>setStep(value=>value+1)}>下一步</button></div>
     <div className="ct-replay-cities">{run.roster.map((player,seat)=><FoilPanel key={player.playerId}><h3>{player.name} · {cities[seat].length} 座</h3><BuildingFan cards={cities[seat]} label={`${player.name}的回放城区`}/></FoilPanel>)}</div>
     {step===run.state.events.length&&run.state.scores&&<FoilPanel><Results game={{...run.state,viewer:null,players:run.state.players} as unknown as CitadelsView}/></FoilPanel>}
-    <details><summary>完整公开记录</summary>{events.map(event=><p key={event.seq}>#{event.seq} · 第 {event.round} 轮 · {event.seat!==undefined?run.roster[event.seat].name+'：':''}{event.text}</p>)}</details>
+    <details><summary>完整公开记录</summary>{events.map(event=><p key={event.seq}>#{event.seq} · 第 {event.round} 轮 · {event.text}</p>)}</details>
   </div>;
 }
