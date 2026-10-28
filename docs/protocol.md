@@ -98,7 +98,7 @@ requiresDecision 工具必须存在该原生会话正在处理且带 decisionId 
 
 桥不理解领域 revision。并行竞价中一位玩家提交后，其他玩家仍使用各自稳定的 decisionId；顺序牌类模块自己验证 revision。
 
-各款游戏注册 `game_get_state`、`game_rules` 和需要决策授权的 `game_act`。后者接受 `{revision,action}`，action 用牌、金额、棋步或目标等领域参数表达选择，具体结构见[游戏开发约定](developing-games.md#工具与-schema)。这些工具和字段由网页模块声明，连接器无须识别任何游戏动作。规则拒绝不会结束决策，Agent 可以读取状态、修正参数后重试；成功动作完成当前决策。
+各游戏注册 `game_get_state`、`game_rules` 和需要决策授权的 `game_act`。后者接受 `{revision,action}`，action 用牌、金额、棋步或目标等领域参数表达选择，具体结构见[游戏开发约定](developing-games.md#工具与-schema)。这些工具和字段由网页模块声明，连接器无须识别任何游戏动作。规则拒绝不会结束决策，Agent 可以读取状态、修正参数后重试；成功动作完成当前决策。
 
 ## 结果与兼容
 

@@ -6,7 +6,7 @@ import {ConversationStore} from './conversations';
 import {GameRegistry,type AppSnapshot,type CreateOptions,type PendingDecision,type PlayerConfig,type SeatRuntime,type StablePlayer,type StoredRun} from './runtime/types';
 
 export type {CreateOptions} from './runtime/types';
-export interface LocalStore {getItem:(key:string)=>string|null;setItem:(key:string,value:string)=>void}
+export interface LocalStore {getItem:(key:string)=>string|null;setItem:(key:string,value:string)=>void;removeItem:(key:string)=>void}
 interface SavedGames {version:4;current:StoredRun|null;archives:StoredRun[];curiosityMode:boolean}
 interface Binding {scopeId:string;registry:ToolRegistry;contextKey:string;history:{runId:string;seq:number}}
 const STORE_KEY='agent-arcade.games.v4';
@@ -45,7 +45,7 @@ export class GameController {
       };
       this.data={version:4,current:restore(saved.current),archives:saved.archives.map(restore).filter(Boolean) as StoredRun[],curiosityMode:saved.curiosityMode===true};
     }catch(e:any){this.error=`存档未载入：${e.message}。开发阶段不迁移旧存档。`;}
-    this.resetSeats();this.refresh();
+    this.recordFinish();this.resetSeats();this.refresh();
     client.onTool=request=>this.handleTool(request);
     client.onEvent=event=>{
       if(event.type==='ready')this.info=event.info;
@@ -93,7 +93,10 @@ export class GameController {
   }
   private save(){
     this.conversations.retain(new Set([this.data.current,...this.data.archives].filter((r):r is StoredRun=>!!r).map(r=>r.runId)));
-    try{this.store.setItem(STORE_KEY,JSON.stringify(this.data));}
+    // The current run already has its own slot, including after it finishes.
+    // Rebuild that history entry on load instead of storing a second full copy.
+    const archives=this.data.archives.filter(run=>run.runId!==this.data.current?.runId);
+    try{this.store.setItem(STORE_KEY,JSON.stringify({...this.data,archives}));}
     catch{this.error='浏览器存储空间不足；本次变更可能无法恢复，请导出记录或释放空间。';}
   }
   async connect(){

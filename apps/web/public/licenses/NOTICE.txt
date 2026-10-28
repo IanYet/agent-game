@@ -31,6 +31,9 @@ https://lusion.co/
 Anton / Vernon Adams；Noto Sans SC / Adobe、Google：SIL OFL，完整许可见 OFL-Anton.txt、OFL-NotoSansSC.txt。
 React、React DOM、scheduler：MIT，完整许可见 react.txt、react-dom.txt、scheduler.txt。
 
+fflate 0.8.3 / Arjun Barrett：完整 Agent 对话记录的 GZIP 压缩。MIT，完整许可见 fflate.txt。
+https://github.com/101arrowz/fflate
+
 chess.js 1.4.0 / Jeff Hlywa：国际象棋合法走子、将军、将死与子力判定。BSD-2-Clause，完整许可见 chess.js.txt。
 https://github.com/jhlywa/chess.js
 国际象棋棋盘与背景立体棋子由同桌自行绘制和生成。

@@ -9,11 +9,12 @@ import {AzulTableModels} from '../games/azul/table-models';
 import {SplendorTableModels} from '../games/splendor/table-models';
 import {CatanTableModels} from '../games/catan/table-models';
 import {BurgundyTableModels} from '../games/castles-of-burgundy/table-models';
+import {PuertoRicoTableModels} from '../games/puerto-rico/table-models';
 import {PlainChipModels} from './plain-chip-models';
 import type {TableSurfaces} from './table-surfaces';
 import {POKER_CHIP_COLORS,CARD_SUIT_COLORS,CITADELS_CHIP_COLORS} from './table-palette';
 
-export type TableTheme='holdem'|'doudizhu'|'chess'|'azul'|'citadels'|'splendor'|'catan'|'castles-of-burgundy';
+export type TableTheme='holdem'|'doudizhu'|'chess'|'azul'|'citadels'|'splendor'|'catan'|'castles-of-burgundy'|'puerto-rico';
 interface GameModelSet {create:(index:number,scale:number)=>Group;dispose:()=>void;lights?:readonly Light[];pixelBudget?:number}
 
 // The same suit outlines supply the floating models and chip artwork.
@@ -68,6 +69,7 @@ export class TableModels{
     if(theme==='azul'){this.gameModels=new AzulTableModels();return;}
     if(theme==='catan'){this.gameModels=new CatanTableModels();return;}
     if(theme==='castles-of-burgundy'){this.gameModels=new BurgundyTableModels();return;}
+    if(theme==='puerto-rico'){this.gameModels=new PuertoRicoTableModels();return;}
     if(theme==='citadels'){this.gameModels=new PlainChipModels(CITADELS_CHIP_COLORS);return;}
     if(theme!=='holdem'&&theme!=='doudizhu')throw new Error(`未注册的牌桌物件主题：${theme}`);
     this.disc=new CircleGeometry(.704,64);this.geometries.push(this.disc);
