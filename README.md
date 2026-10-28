@@ -4,7 +4,7 @@
 
 [游戏网站](https://ianyet.github.io/agent-game/) · [连接器下载](https://github.com/IanYet/agent-game/releases/latest) · [源码](https://github.com/IanYet/agent-game)
 
-网页和连接器独立发布。新增游戏只需添加网页模块并发布静态网站；连接器根据模块提供的工具声明和提示词转发请求，不执行网页发来的代码。当前网页版本为 0.5.11，连接器为 0.5.5，桥接协议为 5。本版网页需要 0.5.4 或更新连接器。
+网页和连接器独立发布。新增游戏只需添加网页模块并发布静态网站；连接器根据模块提供的工具声明和提示词转发请求，不执行网页发来的代码。当前网页版本为 0.5.12，连接器为 0.5.6，桥接协议为 5。本版网页需要 0.5.6 或更新连接器。
 
 ## 开始游戏
 
@@ -16,9 +16,9 @@
 
 | 系统 | 安装包 |
 | --- | --- |
-| Windows 10 2004（19041）及更新版本，x64，自带 WinUI、.NET 和 Node.js | [同桌连接器 v0.5.5 · Windows 64 位](https://github.com/IanYet/agent-game/releases/download/v0.5.5/TongZhuo-Connector-v0.5.5-Windows-x64.exe) |
-| macOS 13.5+，Apple Silicon（M 系列） | [同桌连接器 v0.5.5 · macOS Apple Silicon](https://github.com/IanYet/agent-game/releases/download/v0.5.5/TongZhuo-Connector-v0.5.5-macOS-Apple-Silicon.zip) |
-| macOS 13.5+，Intel | [同桌连接器 v0.5.5 · macOS Intel](https://github.com/IanYet/agent-game/releases/download/v0.5.5/TongZhuo-Connector-v0.5.5-macOS-Intel.zip) |
+| Windows 10 2004（19041）及更新版本，x64，自带 WinUI、.NET 和 Node.js | [同桌连接器 v0.5.6 · Windows 64 位](https://github.com/IanYet/agent-game/releases/download/v0.5.6/TongZhuo-Connector-v0.5.6-Windows-x64.exe) |
+| macOS 13.5+，Apple Silicon（M 系列） | [同桌连接器 v0.5.6 · macOS Apple Silicon](https://github.com/IanYet/agent-game/releases/download/v0.5.6/TongZhuo-Connector-v0.5.6-macOS-Apple-Silicon.zip) |
+| macOS 13.5+，Intel | [同桌连接器 v0.5.6 · macOS Intel](https://github.com/IanYet/agent-game/releases/download/v0.5.6/TongZhuo-Connector-v0.5.6-macOS-Intel.zip) |
 
 Windows 包尚未做 Authenticode 签名；macOS 包只有 ad-hoc 本地签名，没有 Developer ID 身份签名，也未经过 Apple 公证。ad-hoc 不表示 Apple 已审核或认证。macOS ZIP 根目录附有[首次启动说明](apps/connector/macos/请先阅读.txt)，应用打不开时也可阅读。
 
@@ -58,7 +58,7 @@ Agent 的首次消息包含当前可见局面和本局完整公开记录，之�
 
 每次 Agent 决策最多等待 180 秒，包含 Harness 自己的限流重试等待。超时后连接器会撤销本轮行动权限并取消上游任务；取消后 5 秒内仍未结束，会关闭该玩家的本机会话。游戏暂停后，点击继续可重试，已关闭的玩家会话会重新建立。
 
-上游返回 429 或明确的限流错误时，连接器会取消同一程序正在进行的决策，并让这些玩家共享冷却。上游提供 `Retry-After` 或恢复时间时按该时间等待；程序未透传时，保守等待 10 分钟。网页提示剩余时间，冷却期间重复点击继续不会重新请求，结束后需手动继续。Codex ACP 与 App Server 共用冷却，dsh 和 WorkBuddy 各自独立。截止时间保存在本机，重连、重建会话或重启连接器不会清除尚未结束的冷却。
+上游暂时限流且程序明确表示会自行重试时，连接器显示重试状态，让程序在本次决策的 180 秒内继续退避重试。上游最终返回 429 或明确的限流失败时，连接器才取消同一程序正在进行的决策，并让这些玩家共享冷却；对话同时保留脱敏后的上游错误原因。上游提供 `Retry-After` 或恢复时间时按该时间等待；程序未透传时，保守等待 10 分钟，这不是订阅额度恢复时间的保证。网页提示剩余时间，冷却期间重复点击继续不会重新请求，结束后需手动继续。Codex ACP 与 App Server 共用冷却，dsh 和 WorkBuddy 各自独立。截止时间保存在本机，重连、重建会话或重启连接器不会清除尚未结束的冷却。
 
 国际象棋固定两人，不计时。点选棋子与合法落点，必要时选择升变棋子，再确认落子。支持王车易位、吃过路兵、将死、逼和、认输与协议和棋；三次重复和 50 回合需要申请，五次重复和 75 回合自动结束。下一局默认交换黑白并保留积分；记录页可逐步回放并下载 PGN。规则来源与判定边界见[国际象棋说明](apps/web/src/games/chess/README.md)。
 

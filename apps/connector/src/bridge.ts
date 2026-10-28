@@ -134,7 +134,7 @@ export class LocalBridge extends EventEmitter {
   }
   private rateLimited(capability: Capability, notice: RateLimitNotice): void {
     const failure = this.cooldowns.record(capability.request.kind, notice);
-    capability.conversation.record('error', '上游限流，共享冷却', failure.message + (notice.retryAt === undefined ? ' 上游程序未提供恢复时间，本次按 10 分钟保守冷却。' : ''));
+    capability.conversation.record('error', '上游限流，共享冷却', (notice.detail ? `上游原因：${notice.detail}\n\n` : '') + failure.message + (notice.retryAt === undefined ? ' 上游程序未提供恢复时间，本次按 10 分钟保守冷却。' : ''));
     for (const task of this.active.values()) if (cooldownChannel(task.kind) === cooldownChannel(capability.request.kind)) task.controller.abort(failure);
   }
   private async runTurn(sessionId: string, player: PlayerSession, prompt: string, signal: AbortSignal, settings: AgentSettings): Promise<void> {

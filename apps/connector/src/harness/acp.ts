@@ -49,7 +49,7 @@ export class AcpAdapter implements HarnessAdapter {
       if (update?.sessionUpdate === 'usage_update') context.onUsage(update.used ?? update.totalTokens ?? 0);
     });
     try {
-      const initialized = await rpc.call('initialize', { protocolVersion: 1, clientCapabilities: { _meta: { jetbrains: { air: { version: 1, capabilities: ['sessionIndex'] } } } }, clientInfo: { name: 'agent_arcade', title: '同桌 Agent Arcade', version: CONNECTOR_VERSION } });
+      const initialized = await rpc.call('initialize', { protocolVersion: 1, clientCapabilities: { _meta: { jetbrains: { air: { version: 1, capabilities: ['sessionIndex', 'sessionFailure'] } } } }, clientInfo: { name: 'agent_arcade', title: '同桌 Agent Arcade', version: CONNECTOR_VERSION } });
       if (initialized.protocolVersion !== 1) throw new Error(`暂不支持此 ACP 版本：${initialized.protocolVersion}`);
       if (!initialized.agentCapabilities?.mcpCapabilities?.http) throw new Error('此 ACP harness 不支持 HTTP MCP，请使用 Codex App Server 模式');
       const result = await rpc.call('session/new', { cwd: context.cwd, mcpServers: [{ type: 'http', name: 'agent_game', url: context.mcpUrl, headers: [] }] }, 90_000);
@@ -74,6 +74,8 @@ export class AcpAdapter implements HarnessAdapter {
           try {
             const response = await rpc.call('session/prompt', { sessionId, prompt: [{ type: 'text', text: prompt }] }, 0);
             if (signal.aborted) throw abortError();
+            const failure = response._meta?.jetbrains?.air?.sessionFailure;
+            if (failure?.severity === 'error') throw new Error(`ACP 任务失败：${typeof failure.title === 'string' ? failure.title : '程序未提供具体原因'}`);
             if (response.stopReason && !['end_turn', 'stop_sequence'].includes(response.stopReason)) throw new Error(`ACP 回合停止：${response.stopReason}`);
           } finally { activeSignal = undefined; gameCalls.clear(); signal.removeEventListener('abort', abort); }
         },
