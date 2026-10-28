@@ -19,8 +19,11 @@ export class ConversationRecorder {
 // Observe conversational RPC traffic without recording authentication, MCP URLs
 // or process configuration. Unknown conversation events retain their full payload.
 export function captureConversation(rpc: JsonRpcProcess, context: HarnessContext): void {
-  observeRateLimits(rpc, context.onRateLimit);
   const recorder = new ConversationRecorder(context.onConversation);
+  observeRateLimits(rpc, context.onRateLimit, notice => {
+    context.onActivity('上游暂时限流，程序正在退避重试');
+    recorder.record('event', '上游限流重试', notice);
+  });
   const permissions = new Set<string | number>();
   const turns = new Set<string | number>();
   const eventTitles: Record<string, string> = { available_commands_update: '可用指令更新', session_info_update: '会话信息更新', usage_update: '用量更新', current_mode_update: '模式更新', config_option_update: '模型设置更新', plan: 'Agent 计划', tool_call: '原生工具调用', tool_call_update: '原生工具进度', 'turn/started': 'Agent 开始本轮思考', 'turn/completed': 'Agent 完成本轮任务', 'item/reasoning/summaryPartAdded': 'Agent 开始新的思考摘要' };

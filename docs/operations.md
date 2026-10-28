@@ -60,11 +60,11 @@ gh run list --repo IanYet/agent-game --workflow connector.yml
 
 工作流分别在 Windows x64、macOS Apple Silicon 和 macOS Intel 上构建，使用 Node.js 24.19.0。各作业运行游戏规则测试、类型检查和构建，再生成原生安装包；Intel runner 串行运行同一套规则测试，避免多个进程争抢 CPU 导致长对局测试超时。不运行连接器、界面、协议或发布器自动测试。
 
-安装包名称和 Release 显示名统一放在 [connector-assets.mjs](../scripts/connector-assets.mjs)，从连接器版本文件自动读取版本。Actions 下载产物与 Release 显示名写明产品、版本、系统和芯片，例如「同桌连接器 v0.5.5 · Windows 64 位」。新打包文件使用带版本的 ASCII 名称，例如：
+安装包名称和 Release 显示名统一放在 [connector-assets.mjs](../scripts/connector-assets.mjs)，从连接器版本文件自动读取版本。Actions 下载产物与 Release 显示名写明产品、版本、系统和芯片，例如「同桌连接器 v0.5.6 · Windows 64 位」。新打包文件使用带版本的 ASCII 名称，例如：
 
-- `TongZhuo-Connector-v0.5.5-Windows-x64.exe`
-- `TongZhuo-Connector-v0.5.5-macOS-Apple-Silicon.zip`
-- `TongZhuo-Connector-v0.5.5-macOS-Intel.zip`
+- `TongZhuo-Connector-v0.5.6-Windows-x64.exe`
+- `TongZhuo-Connector-v0.5.6-macOS-Apple-Silicon.zip`
+- `TongZhuo-Connector-v0.5.6-macOS-Intel.zip`
 
 校验和与构建信息沿用完整安装包文件名，分别追加 `.sha256` 与 `.build.json`。客户端检查更新时，按最新正式 Release 的版本查找对应系统和芯片的安装包。
 
@@ -74,7 +74,7 @@ gh run list --repo IanYet/agent-game --workflow connector.yml
 
 连接器版本来自 `apps/connector/version.json`。修改时同步 Windows `Launcher.cs` 和 `Bootstrap.cs` 的 `AssemblyVersion`、`AssemblyFileVersion`；打包会核对它们。macOS 的应用版本由打包脚本生成。本地未提交的构建会在 `.build.json` 标记 `sourceDirty: true`；CI 拒绝从未保存到 Git 的源码发布。
 
-Windows 可用 `Get-FileHash .\TongZhuo-Connector-v0.5.5-Windows-x64.exe -Algorithm SHA256` 查看校验和；macOS 可运行 `shasum -a 256 -c TongZhuo-Connector-v0.5.5-macOS-Apple-Silicon.zip.sha256`，按实际下载文件名替换。下载地址见 README。
+Windows 可用 `Get-FileHash .\TongZhuo-Connector-v0.5.6-Windows-x64.exe -Algorithm SHA256` 查看校验和；macOS 可运行 `shasum -a 256 -c TongZhuo-Connector-v0.5.6-macOS-Apple-Silicon.zip.sha256`，按实际下载文件名替换。下载地址见 README。
 
 ## 配置与运行目录
 
@@ -126,8 +126,11 @@ macOS 包只有 ad-hoc 本地签名，没有 Developer ID 身份签名，未经�
 | 能选模型但推理失败 | 在对应 Harness 中检查登录、模型权限与网络 |
 | Agent 未完成决策 | 查看错误信息，处理原因后继续牌局 |
 | 决策超过 180 秒 | 连接器会取消上游任务并暂停牌局；5 秒内仍未结束则关闭该玩家会话，点击继续时重建。180 秒也包含 Harness 的限流重试等待；遇到 429 时先等待上游限制恢复 |
-| 上游限流，仍需等待 | 冷却结束后再点继续。同一程序的玩家共享等待，Codex 的两种接入也共用；重连和重启不会重置。优先采用上游提供的恢复时间，程序未透传时保守冷却 10 分钟 |
+| 上游暂时限流，程序正在退避重试 | 程序仍在处理本次决策，连接器不会提前取消或启动共享冷却；这段等待计入 180 秒决策时限，也可以主动暂停 |
+| 上游限流，仍需等待 | 在对话中查看上游错误原因，区分短时请求限流和账户额度耗尽。冷却结束后再点继续；账户额度耗尽时还需等待账户用量窗口恢复。同一程序的玩家共享等待，Codex 的两种接入也共用；重连和重启不会重置。优先采用上游提供的恢复时间，程序未透传时保守冷却 10 分钟，这只是本地估计 |
 | 刷新后暂停 | 点击继续，会建立新的原生会话 |
 | 存档格式不匹配 | 新建游戏，开发期不迁移旧存档 |
 
 退出连接器会结束它启动的子进程并释放端口。Windows 通过 Job Object 管理进程树；macOS 由 Guardian 管理进程组。实际操作检查见[开发检查](validation.md)。
+
+429 不能单凭状态码判断原因，也不能由 3 秒消息间隔保证消除。OpenAI 的[错误说明](https://developers.openai.com/api/docs/guides/error-codes)区分请求限流与额度相关错误；Codex 使用 ChatGPT 订阅登录时，应查看 Codex 自己的账户用量，而不是套用 API Key 的限额。开发排查可通过[App Server 的 `account/rateLimits/read`](https://learn.chatgpt.com/docs/app-server)读取用量窗口与恢复时间。Codex 的[配置参考](https://learn.chatgpt.com/docs/config-file/config-reference)说明程序自带请求与流重试，连接器应等待原生重试结果。
