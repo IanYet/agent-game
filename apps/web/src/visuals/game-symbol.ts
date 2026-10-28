@@ -1,10 +1,11 @@
 import {paintSplendorSymbol} from '../games/splendor/artwork';
 import {paintAzulSymbol} from '../games/azul/artwork';
+import {paintCatanSymbol} from '../games/catan/artwork';
 import {paintSvgIcon,svgIconNames,type SvgIconName} from './svg-icons';
 
-export type GameSymbol=SvgIconName|'tiles'|'gem'|'2'|'3';
+export type GameSymbol=SvgIconName|'tiles'|'gem'|'island'|'2'|'3';
 
-const symbolPainters:Record<string,(context:CanvasRenderingContext2D)=>void>={tiles:paintAzulSymbol,gem:paintSplendorSymbol,...Object.fromEntries(svgIconNames.map(name=>[name,(ctx:CanvasRenderingContext2D)=>paintSvgIcon(ctx,name)]))};
+const symbolPainters:Record<string,(context:CanvasRenderingContext2D)=>void>={tiles:paintAzulSymbol,gem:paintSplendorSymbol,island:paintCatanSymbol,...Object.fromEntries(svgIconNames.map(name=>[name,(ctx:CanvasRenderingContext2D)=>paintSvgIcon(ctx,name)]))};
 type SymbolBounds={left:number;top:number;width:number;height:number};
 const paintedSymbolBounds=new Map<string,SymbolBounds>();
 export const gameSymbolFont=(symbol:string)=>symbol==='2'||symbol==='3'?'400 198px Anton':'400 210px Arial, "Segoe UI Symbol", sans-serif';
