@@ -32,7 +32,7 @@
 | POST /api/connect | 协议/能力握手，返回控制令牌 |
 | GET /api/events | 授权 SSE：ready、tool、activity、usage、conversation |
 | POST /api/sessions | 创建单玩家原生会话及固定工具注册表 |
-| POST /api/sessions/:id/turn | 传 decisionId、模块提示词和可选模型/强度；按玩家并发 |
+| POST /api/sessions/:id/turn | 传 decisionId、模块提示词和可选模型/强度；网页按待决策顺序逐个派发 |
 | POST /api/tool-results | 网页返回标准 MCP 结果 |
 | POST /api/pause | 取消并等待全部活动推理 |
 | DELETE /api/sessions | 撤销全部会话；可用 ids 数组只关闭指定会话 |
@@ -56,7 +56,7 @@ interface SessionRequest {
 
 没有 gameId 枚举、座位上界、牌类规则、固定行动参数或网页代码。创建时给会话生成随机 capability 和隔离工作目录。capability 封装玩家和作用域；MCP 参数不能改变绑定。
 
-`/turn` 接受 `{decisionId,prompt,settings?}`。同一原生会话中的决策不能重叠，不同玩家可并发。桥只报告原生任务 completed；决策是否完成由网页模块检查。决策统一使用取消、超时与限流处理。
+`/turn` 接受 `{decisionId,prompt,settings?}`。同一原生会话中的决策不能重叠；网页对全部玩家串行派发，上一条任务结束后至少等待 3 秒再发送下一条。创建玩家会话也由网页依次完成。桥只报告原生任务 completed；决策是否完成由网页模块检查。决策统一使用取消、超时与限流处理。
 
 初始化不携带局面快照。网页为每个实际会话维护记录游标：首条消息包含完整可见上下文，之后只发新增记录；成功才确认本次快照的截止序号。更换 Agent、模型设置或重建会话时重新同步，连接器不在原句柄下隐式恢复已关闭的会话。
 
