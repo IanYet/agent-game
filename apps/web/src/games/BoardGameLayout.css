@@ -1,4 +1,4 @@
-/* Opt-in viewport layout for the three board games. Poker and chess keep their layouts. */
+/* Opt-in viewport layout for board games. Poker and chess keep their layouts. */
 body:has(.board-game-layout){min-width:0}
 .app-shell:has(.board-game-layout) main{overflow:visible;min-width:0}
 .app-shell:has(.board-game-layout) .game-page{min-width:0}
