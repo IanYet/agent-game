@@ -35,6 +35,10 @@ export function rateLimitNotice(error: unknown, now = Date.now()): RateLimitNoti
     if (typeof value === 'string') { text(value); return; }
     if (!value || typeof value !== 'object' || seen.has(value)) return;
     seen.add(value);
+    const failure = value as { severity?: unknown; category?: unknown; actions?: unknown };
+    // ACP separates request/quota limits from context and session budgets by
+    // recovery action. The latter require a new session, not shared cooldown.
+    if (failure.severity === 'error' && failure.category === 'limit' && Array.isArray(failure.actions) && failure.actions.every(action => action === 'retry')) limited = true;
     for (const [key, entry] of Object.entries(value)) {
       const field = key.replace(/[-_\s]/g, '').toLowerCase();
       if (['message', 'title', 'details', 'additionaldetails'].includes(field) && typeof entry === 'string') details.add(entry);
@@ -60,7 +64,11 @@ export function observeRateLimits(rpc: JsonRpcProcess, report: (notice: RateLimi
     if (direction !== 'received') return;
     let error = message.error;
     let retrying = false;
-    if (message.result?.stopReason && !['end_turn', 'stop_sequence', 'cancelled'].includes(message.result.stopReason)) error = message.result._meta ?? message.result.error;
+    const failure = message.result?._meta?.jetbrains?.air?.sessionFailure;
+    // ACP reports typed terminal failures with end_turn, so stopReason alone
+    // cannot distinguish a completed prompt from a failed upstream turn.
+    if (failure?.severity === 'error') error = failure;
+    else if (message.result?.stopReason && !['end_turn', 'stop_sequence', 'cancelled'].includes(message.result.stopReason)) error = message.result._meta ?? message.result.error;
     if (message.method === 'error') { error = message.params?.error; retrying = message.params?.willRetry === true; }
     if (message.method === 'turn/completed') error = message.params?.turn?.error;
     if (message.method === 'session/update') {
