@@ -10,6 +10,7 @@ export interface LocalStore {getItem:(key:string)=>string|null;setItem:(key:stri
 interface SavedGames {version:4;current:StoredRun|null;archives:StoredRun[];curiosityMode:boolean}
 interface Binding {scopeId:string;registry:ToolRegistry;contextKey:string;history:{runId:string;seq:number}}
 const STORE_KEY='agent-arcade.games.v4';
+const AGENT_MESSAGE_DELAY_MS=3000;
 const harnesses=new Set<PlayerKind>(['human','codex','codex-acp','dsh','workbuddy']);
 const secureRandom=()=>{const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]/4294967296;};
 export class GameController {
@@ -27,6 +28,8 @@ export class GameController {
   private error:string|null=null;
   private generation=0;
   private pumpTask:Promise<void>|null=null;
+  private nextAgentMessageAt=0;
+  private cancelMessageWait:(()=>void)|null=null;
   private cleanupTask:Promise<void>|null=null;
   private closedRunId:string|null=null;
   private deadlineTimer:ReturnType<typeof setTimeout>|null=null;
@@ -62,6 +65,7 @@ export class GameController {
     };
     client.onDisconnect=()=>{
       this.connected=false;this.generation++;this.active.clear();this.bindings.clear();this.clearDeadline();
+      this.cancelMessageWait?.();
       this.seats.forEach(s=>{delete s.sessionId;s.status='paused';});
       if(this.data.current&&!this.module().finished(this.data.current.state)){this.paused=true;this.error='连接器已断开，游戏已暂停。重新连接后可以继续。';}
       this.refresh();
@@ -156,6 +160,7 @@ export class GameController {
   }
   async pause(){
     this.paused=true;this.generation++;this.active.clear();this.clearDeadline();
+    this.cancelMessageWait?.();
     this.seats.forEach(s=>{if(s.status!=='error')s.status='paused';});this.refresh();
     await this.client.pauseTurn();await this.pumpTask;await this.cleanupTask;this.refresh();
   }
@@ -242,52 +247,59 @@ export class GameController {
       this.refresh();
     }catch(e){if(this.bindings.get(playerId)===binding)this.bindings.delete(playerId);throw e;}
   }
+  private async waitForAgentMessage(){
+    const delay=this.nextAgentMessageAt-Date.now();
+    if(delay<=0)return;
+    await new Promise<void>(resolve=>{
+      const finish=()=>{clearTimeout(timer);this.cancelMessageWait=null;resolve();};
+      const timer=setTimeout(finish,delay);
+      this.cancelMessageWait=finish;
+    });
+  }
+  private async runDecision(decision:PendingDecision,generation:number){
+    const playerId=decision.actorId,runtime=this.seats.find(s=>s.playerId===playerId)!,player=this.data.current!.roster.find(p=>p.playerId===playerId)!;
+    let sessionId:string|undefined;
+    try{
+      await this.ensureSession(playerId,generation);
+      if(this.paused||generation!==this.generation||!this.pending().some(d=>d.decisionId===decision.decisionId&&d.actorId===playerId))return;
+      const run=this.data.current!,module=this.module(),binding=this.bindings.get(playerId)!,afterEvent=this.historyAfter(playerId),through=module.historyCursor(run);
+      const prompt=module.decisionPrompt(run,decision,afterEvent);
+      sessionId=runtime.sessionId!;
+      runtime.status='thinking';runtime.message='正在思考';
+      this.active.set(decision.decisionId,decision);this.refresh();
+      const settings={model:player.model,reasoningEffort:player.reasoningEffort};
+      try{await this.client.playTurn(sessionId,prompt,decision.decisionId,settings);}
+      finally{this.nextAgentMessageAt=Date.now()+AGENT_MESSAGE_DELAY_MS;}
+      if(this.paused||generation!==this.generation)return;
+      if(this.pending().some(d=>d.decisionId===decision.decisionId&&d.actorId===playerId))throw new Error('Agent 结束了任务，但当前决策尚未完成。点击继续可重试。');
+      // A tool call can advance the game during delivery. Acknowledge only
+      // the immutable snapshot actually sent, never the later live state.
+      if(this.bindings.get(playerId)===binding)binding.history={runId:run.runId,seq:through};
+      runtime.status='ready';runtime.message=undefined;runtime.turns++;this.refresh();
+    }catch(e:any){
+      if(sessionId)await this.releaseSession(playerId,sessionId).catch(()=>{});
+      // A human can finish the game while an agent is still returning from
+      // its already committed action. Session disposal then rejects that
+      // task; the completed game must keep its successful result.
+      if(generation!==this.generation||this.paused||(this.data.current&&this.module().finished(this.data.current.state)))return;
+      runtime.status='error';runtime.message=`${player.name}：${e.message}`;this.error=runtime.message;
+      this.paused=true;this.clearDeadline();this.active.clear();this.refresh();
+      await this.client.pauseTurn().catch(()=>{});
+    }finally{this.active.delete(decision.decisionId);}
+  }
   private async pump(generation:number){
-    const running=new Map<string,Promise<void>>();
-    const launch=(decision:PendingDecision)=>{
-      const playerId=decision.actorId;
-      const task=(async()=>{
-        const runtime=this.seats.find(s=>s.playerId===playerId)!,player=this.data.current!.roster.find(p=>p.playerId===playerId)!;
-        let sessionId:string|undefined;
-        try{
-          await this.ensureSession(player.playerId,generation);
-          if(this.paused||generation!==this.generation||!this.pending().some(d=>d.decisionId===decision.decisionId))return;
-          const run=this.data.current!,module=this.module(),binding=this.bindings.get(playerId)!,afterEvent=this.historyAfter(playerId),through=module.historyCursor(run);
-          const prompt=module.decisionPrompt(run,decision,afterEvent);
-          sessionId=runtime.sessionId!;
-          runtime.status='thinking';runtime.message='正在思考';
-          this.active.set(decision.decisionId,decision);this.refresh();
-          const settings={model:player.model,reasoningEffort:player.reasoningEffort};
-          await this.client.playTurn(sessionId,prompt,decision.decisionId,settings);
-          if(this.paused||generation!==this.generation)return;
-          if(this.pending().some(d=>d.decisionId===decision.decisionId&&d.actorId===player.playerId))throw new Error('Agent 结束了任务，但当前决策尚未完成。点击继续可重试。');
-          // A tool call can advance the game during delivery. Acknowledge only
-          // the immutable snapshot actually sent, never the later live state.
-          if(this.bindings.get(playerId)===binding)binding.history={runId:run.runId,seq:through};
-          runtime.status='ready';runtime.message=undefined;runtime.turns++;this.refresh();
-        }catch(e:any){
-          if(sessionId)await this.releaseSession(playerId,sessionId).catch(()=>{});
-          // A human can finish the game while an agent is still returning from
-          // its already committed action. Session disposal then rejects that
-          // task; the completed game must keep its successful result.
-          if(generation!==this.generation||this.paused||(this.data.current&&this.module().finished(this.data.current.state)))return;
-          runtime.status='error';runtime.message=`${player.name}：${e.message}`;this.error=runtime.message;
-          this.paused=true;this.clearDeadline();this.active.clear();this.refresh();
-          await this.client.pauseTurn().catch(()=>{});
-        }finally{this.active.delete(decision.decisionId);}
-      })().finally(()=>running.delete(playerId));
-      running.set(playerId,task);
-    };
     try{
       if(this.module().lifecycle.eagerAgents)for(const player of this.data.current!.roster){if(this.paused||generation!==this.generation)return;await this.ensureSession(player.playerId,generation);}
       while(!this.paused&&generation===this.generation){
-        for(const d of this.pending())if(!running.has(d.actorId)&&this.data.current!.roster.find(p=>p.playerId===d.actorId)?.kind!=='human')launch(d);
-        if(!running.size)break;
-        await Promise.race(running.values());
+        const decision=this.pending().find(d=>this.data.current!.roster.find(p=>p.playerId===d.actorId)?.kind!=='human');
+        if(!decision)break;
+        await this.waitForAgentMessage();
+        if(this.paused||generation!==this.generation)return;
+        if(!this.pending().some(d=>d.decisionId===decision.decisionId&&d.actorId===decision.actorId))continue;
+        await this.runDecision(decision,generation);
       }
     }catch(e:any){if(generation===this.generation){this.paused=true;this.error=e.message;this.clearDeadline();this.refresh();}}
     finally{
-      await Promise.allSettled(running.values());
       if(!this.paused&&generation===this.generation&&this.data.current&&this.module().finished(this.data.current.state))await this.closeFinishedSessions();
       this.refresh();
     }
