@@ -1,6 +1,6 @@
 {
   "name": "agent-arcade",
-  "version": "0.5.12",
+  "version": "0.5.13",
   "private": true,
   "type": "module",
   "description": "A local game table for humans and their agents.",
@@ -31,6 +31,7 @@
     "cannon-es": "0.20.0",
     "chess.js": "1.4.0",
     "express": "^5.1.0",
+    "fflate": "0.8.3",
     "gsap": "3.13.0",
     "lucide-react": "^0.468.0",
     "react": "^19.2.0",
