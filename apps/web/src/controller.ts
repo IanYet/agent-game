@@ -6,7 +6,7 @@ import {ConversationStore} from './conversations';
 import {GameRegistry,type AppSnapshot,type CreateOptions,type PendingDecision,type PlayerConfig,type SeatRuntime,type StablePlayer,type StoredRun} from './runtime/types';
 
 export type {CreateOptions} from './runtime/types';
-export interface LocalStore {getItem:(key:string)=>string|null;setItem:(key:string,value:string)=>void;removeItem:(key:string)=>void}
+export interface LocalStore {getItem:(key:string)=>string|null;setItem:(key:string,value:string)=>void;removeItem:(key:string)=>void;clear:()=>void}
 interface SavedGames {version:4;current:StoredRun|null;archives:StoredRun[];curiosityMode:boolean}
 interface Binding {scopeId:string;registry:ToolRegistry;contextKey:string;history:{runId:string;seq:number}}
 const STORE_KEY='agent-arcade.games.v4';
@@ -26,6 +26,7 @@ export class GameController {
   private connectorUpdateRequired=false;
   private paused=true;
   private error:string|null=null;
+  private storageError:string|null=null;
   private generation=0;
   private pumpTask:Promise<void>|null=null;
   private nextAgentMessageAt=0;
@@ -92,7 +93,7 @@ export class GameController {
   private refresh(){
     const run=this.data.current,viewer=run?.roster.find(p=>p.kind==='human')?.playerId??null;
     const {state:_state,...room}=run??({} as StoredRun);
-    this.snapshot={connector:this.info,connected:this.connected,connectorUpdateRequired:this.connectorUpdateRequired,game:run?this.module().tableView(run,viewer,{revealHands:viewer===null||(this.data.curiosityMode&&this.module().finished(run.state))}):null,room:run?{...room,finished:this.module().finished(run.state)}:null,seats:structuredClone(this.seats),paused:this.paused,curiosityMode:this.data.curiosityMode,conversations:run?this.conversations.forRun(run.runId):{},conversationError:this.conversations.error,error:this.error,activity:run?{...this.module().activity(run),actors:[...new Set(this.pending().map(d=>d.actorId))]}:null,history:[...this.data.archives].reverse().map(r=>this.registry.get(r.moduleId).summary(r))};
+    this.snapshot={connector:this.info,connected:this.connected,connectorUpdateRequired:this.connectorUpdateRequired,game:run?this.module().tableView(run,viewer,{revealHands:viewer===null||(this.data.curiosityMode&&this.module().finished(run.state))}):null,room:run?{...room,finished:this.module().finished(run.state)}:null,seats:structuredClone(this.seats),paused:this.paused,curiosityMode:this.data.curiosityMode,conversations:run?this.conversations.forRun(run.runId):{},conversationError:this.conversations.error,error:this.error,storageError:this.storageError,activity:run?{...this.module().activity(run),actors:[...new Set(this.pending().map(d=>d.actorId))]}:null,history:[...this.data.archives].reverse().map(r=>this.registry.get(r.moduleId).summary(r))};
     this.listeners.forEach(listener=>listener());
   }
   private save(){
@@ -100,8 +101,8 @@ export class GameController {
     // The current run already has its own slot, including after it finishes.
     // Rebuild that history entry on load instead of storing a second full copy.
     const archives=this.data.archives.filter(run=>run.runId!==this.data.current?.runId);
-    try{this.store.setItem(STORE_KEY,JSON.stringify({...this.data,archives}));}
-    catch{this.error='浏览器存储空间不足；本次变更可能无法恢复，请导出记录或释放空间。';}
+    try{this.store.setItem(STORE_KEY,JSON.stringify({...this.data,archives}));this.storageError=null;}
+    catch{this.storageError='浏览器存储空间不足或不可用；本次变更可能无法恢复，请导出记录或清理本地存储。';}
   }
   async connect(){
     if(this.connected){this.info=await this.client.inspect();this.refresh();return;}
@@ -185,7 +186,14 @@ export class GameController {
   setCuriosityMode(enabled:boolean){this.data.curiosityMode=enabled;this.save();this.refresh();}
   conversation(runId:string,playerId:string){return structuredClone(this.conversations.forRun(runId)[playerId]??[]);}
   flushConversations(){this.conversations.flush();}
-  clearError(){this.error=null;this.refresh();}
+  clearLocalStorage(){
+    this.store.clear();
+    this.conversations.clear();
+    this.data.archives=[];
+    this.storageError=null;
+    this.refresh();
+  }
+  clearError(){this.error=null;this.storageError=null;this.refresh();}
   handleTool(request:BrowserToolRequest):ToolResponse{
     try{
       const run=this.data.current,binding=this.bindings.get(request.playerId);
@@ -241,12 +249,12 @@ export class GameController {
     const binding:Binding={scopeId,registry,contextKey,history:{runId:run.runId,seq:0}};
     this.bindings.set(playerId,binding);
     try{
-      const {sessionId}=await this.client.createSession({scopeId,playerId,kind:player.kind,name:player.name,instructions:module.initializePrompt(run,playerId),tools:registry.definitions,model:player.model,reasoningEffort:player.reasoningEffort});
+      const {sessionId,settings}=await this.client.createSession({scopeId,playerId,kind:player.kind,name:player.name,instructions:module.initializePrompt(run,playerId),tools:registry.definitions,model:player.model,reasoningEffort:player.reasoningEffort});
       if(generation!==this.generation||this.bindings.get(playerId)!==binding){
         if(this.bindings.get(playerId)===binding)this.bindings.delete(playerId);
         await this.client.stopSessions([sessionId]);return;
       }
-      runtime.sessionId=sessionId;runtime.status=this.paused||generation!==this.generation?'paused':'ready';
+      runtime.sessionId=sessionId;runtime.settings=settings;runtime.status=this.paused||generation!==this.generation?'paused':'ready';
       this.refresh();
     }catch(e){if(this.bindings.get(playerId)===binding)this.bindings.delete(playerId);throw e;}
   }
@@ -271,7 +279,10 @@ export class GameController {
       runtime.status='thinking';runtime.message='正在思考';
       this.active.set(decision.decisionId,decision);this.refresh();
       const settings={model:player.model,reasoningEffort:player.reasoningEffort};
-      try{await this.client.playTurn(sessionId,prompt,decision.decisionId,settings);}
+      try{
+        const result=await this.client.playTurn(sessionId,prompt,decision.decisionId,settings);
+        if(this.bindings.get(playerId)===binding&&runtime.sessionId===sessionId)runtime.settings=result.settings;
+      }
       finally{this.nextAgentMessageAt=Date.now()+AGENT_MESSAGE_DELAY_MS;}
       if(this.paused||generation!==this.generation)return;
       if(this.pending().some(d=>d.decisionId===decision.decisionId&&d.actorId===playerId))throw new Error('Agent 结束了任务，但当前决策尚未完成。点击继续可重试。');

@@ -1,4 +1,4 @@
-import { CONNECTOR_PORT, PROTOCOL_VERSION, type AgentSettings, type BrowserToolRequest, type ConnectorEvent, type ConnectorInfo, type SessionRequest, type ToolResponse } from '@agent-game/protocol';
+import { CONNECTOR_PORT, PROTOCOL_VERSION, type AgentSettings, type BrowserToolRequest, type ConnectorEvent, type ConnectorInfo, type SessionRequest, type SessionResult, type TurnResult, type ToolResponse } from '@agent-game/protocol';
 import { connectorCompatibilityProblem } from './compatibility';
 import { connectorRequirements } from './version';
 
@@ -63,8 +63,8 @@ export class ConnectorClient {
     });
     return result.info;
   }
-  createSession(request: SessionRequest): Promise<{ sessionId: string }> { return this.request('/api/sessions', 'POST', request); }
-  playTurn(sessionId: string, prompt: string, decisionId: string, settings?: AgentSettings): Promise<{ completed: boolean }> { return this.request(`/api/sessions/${encodeURIComponent(sessionId)}/turn`, 'POST', { prompt, decisionId, settings }); }
+  createSession(request: SessionRequest): Promise<SessionResult> { return this.request('/api/sessions', 'POST', request); }
+  playTurn(sessionId: string, prompt: string, decisionId: string, settings?: AgentSettings): Promise<TurnResult> { return this.request(`/api/sessions/${encodeURIComponent(sessionId)}/turn`, 'POST', { prompt, decisionId, settings }); }
   async pauseTurn(): Promise<void> { if (this.token) await this.request('/api/pause', 'POST'); }
   async stopSessions(ids?: string[]): Promise<void> { if (this.token) await this.request('/api/sessions', 'DELETE', ids ? { ids } : undefined); }
   async disconnect(): Promise<void> {

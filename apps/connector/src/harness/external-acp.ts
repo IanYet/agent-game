@@ -170,6 +170,7 @@ export class ExternalAcpAdapter implements HarnessAdapter {
       await configure(context);
       return {
         sessionId,
+        get settings() { return { model: modelOption(options)?.currentValue || currentLegacy || undefined, reasoningEffort: effortOption(options)?.currentValue || undefined }; },
         playTurn: async (prompt, signal, settings) => {
           if (signal.aborted) throw abortError(); await configure(settings ?? context); if (signal.aborted) throw abortError();
           const abort = () => rpc.notify('session/cancel', { sessionId }); signal.addEventListener('abort', abort, { once: true });

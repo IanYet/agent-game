@@ -1,0 +1,4 @@
+.storage-cleanup{display:flex;flex:none;flex-direction:column;align-items:flex-end;gap:8px;margin-top:12px}
+.storage-cleanup>p{align-self:stretch;color:var(--muted);font-size:10px;line-height:1.8;overflow-wrap:anywhere}
+.storage-cleanup>.button{min-height:34px;padding:7px 13px;gap:8px;font-size:11px;border-color:#e7b7a247;color:var(--warm)}
+.storage-cleanup>.button:hover{border-color:#e7b7a288;background:#e7b7a209}

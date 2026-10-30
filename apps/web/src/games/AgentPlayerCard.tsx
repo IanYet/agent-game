@@ -1,17 +1,17 @@
-import type {ComponentProps,CSSProperties,ReactNode} from 'react';
-import type {StablePlayer} from '../runtime/types';
-import {effortLabel,kindName} from '../AgentModelFields';
+import {createContext,useContext,type ComponentProps,type CSSProperties,type ReactNode} from 'react';
+import type {SeatRuntime,StablePlayer} from '../runtime/types';
+import {effortLabel} from '../AgentModelFields';
 import {PlayerCard,PlayerCardAvatar} from '../visuals/PlayerCard';
 import {PlayingCard,PlayingCardGroup,type PlayingCardProps} from './PlayingCard';
 import './AgentPlayerCard.css';
 
-type AgentPlayer=Pick<StablePlayer,'name'|'kind'|'model'|'reasoningEffort'>&{seat:number};
+export const AgentRuntimeContext=createContext<readonly SeatRuntime[]>([]);
+type AgentPlayer=Pick<StablePlayer,'playerId'|'name'|'kind'>&{seat:number};
 type AgentHand={count:number;cards?:readonly Pick<PlayingCardProps,'card'|'marker'>[];note?:string};
 type AgentPlayerCardProps=Omit<ComponentProps<typeof PlayerCard>,'children'|'className'|'primary'>&{
   player:AgentPlayer;
   caption?:ReactNode;
   badges?:ReactNode;
-  modelName?:string;
   metrics?:readonly {label:string;value:ReactNode}[];
   hand?:AgentHand;
   children?:ReactNode;
@@ -19,15 +19,17 @@ type AgentPlayerCardProps=Omit<ComponentProps<typeof PlayerCard>,'children'|'cla
   action:string;
 };
 
-export function AgentPlayerCard({player,caption,badges,modelName,metrics,hand,status,action,children,...props}:AgentPlayerCardProps){
+export function AgentPlayerCard({player,caption,badges,metrics,hand,status,action,children,...props}:AgentPlayerCardProps){
   const values=metrics??(hand?[{label:'张',value:hand.count}]:[]);
-  const model=modelName??player.model;
+  const settings=useContext(AgentRuntimeContext).find(seat=>seat.playerId===player.playerId)?.settings;
+  const model=settings?.modelName??settings?.model,effort=settings?.reasoningEffort?effortLabel(settings.reasoningEffort):null;
+  const modelDescription=[model,effort].filter(Boolean).join(' ');
   const name=<strong className="agent-player-name" title={player.name}>{player.name}</strong>;
   return <PlayerCard {...props} className="agent-player-card" status={status} action={action} aria-label={props['aria-label']??`${player.name}的玩家卡`}>
     <header className="agent-player-heading">
       <span className="agent-player-caption">PLAYER {String(player.seat+1).padStart(2,'0')}{caption&&<> · {caption}</>}</span>
       {badges?<div className="agent-player-name-row">{name}<span className="agent-player-badges">{badges}</span></div>:name}
-      <small className="agent-player-model" title={[kindName[player.kind],model,player.reasoningEffort&&effortLabel(player.reasoningEffort)].filter(Boolean).join(' · ')}>{kindName[player.kind]}{model?` · ${model}`:''}{player.reasoningEffort?` · ${effortLabel(player.reasoningEffort)}`:''}</small>
+      <small className="agent-player-model" title={modelDescription||undefined}>{model&&<span className="agent-player-model-name">{model}</span>} {effort&&<span className="agent-player-model-effort">{effort}</span>}</small>
       <div className="agent-player-metrics">{values.map(value=><span key={value.label}><b>{value.value}</b><small>{value.label}</small></span>)}</div>
       <PlayerCardAvatar kind={player.kind} seat={player.seat}/>
     </header>

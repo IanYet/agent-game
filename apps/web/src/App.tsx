@@ -10,6 +10,7 @@ import {controller} from './application';
 import {Modal} from './Modal';
 import {CuriosityToggle} from './CuriosityToggle';
 import {AgentConversationAccess,AgentConversationModal} from './AgentConversations';
+import {AgentRuntimeContext} from './games/AgentPlayerCard';
 import {SetupModal,NextRunModal,createDraft,type SetupDraft} from './TableSetup';
 import {PlayerSettingsModal} from './PlayerSettingsModal';
 import {ConnectionPanel} from './ConnectionPanel';
@@ -39,6 +40,7 @@ export function App(){
   const overlay=setup||connection||rules||players||next;
   const gate=useRef(false);
   const run=async(action:()=>Promise<void>)=>{if(gate.current)return;gate.current=true;setBusy(true);try{await action();}catch(e){setToast((e as Error).message);}finally{gate.current=false;setBusy(false);}};
+  const clearStorage=()=>{try{controller.clearLocalStorage();setToast('本地存储已清理。');}catch{setToast('本地存储清理失败，请检查浏览器是否允许本站使用存储。');}};
   const scrollTarget=useRef<'top'|'games'>('top');
   useEffect(()=>{if(scrollTarget.current==='games'){document.getElementById('games')?.scrollIntoView({behavior:effects.reduced?'instant':'smooth'});scrollTarget.current='top';}else window.scrollTo({top:0,behavior:'instant'});},[page]);
   const navigate=(to:Page)=>{
@@ -62,7 +64,7 @@ export function App(){
   useEffect(()=>{const visibility=()=>document.documentElement.classList.toggle('page-hidden',document.hidden);visibility();document.addEventListener('visibilitychange',visibility);return()=>document.removeEventListener('visibilitychange',visibility);},[]);
   useEffect(()=>{document.documentElement.dataset.scene=page==='table'?'game':'public';return()=>{delete document.documentElement.dataset.scene;};},[page]);
   useEffect(()=>{const flush=()=>controller.flushConversations();const hidden=()=>{if(document.hidden)flush();};window.addEventListener('pagehide',flush);document.addEventListener('visibilitychange',hidden);return()=>{window.removeEventListener('pagehide',flush);document.removeEventListener('visibilitychange',hidden);flush();};},[]);
-  return <div className="app-shell">{page==='table'&&state.room&&<GameBackground enabled={!overlay} theme={(state.room.moduleId==='baohuang'||state.room.moduleId==='guandan'?'doudizhu':state.room.moduleId) as TableTheme}/>}<div className="app-content" data-motion-paused={overlay}>
+  return <AgentRuntimeContext.Provider value={state.seats}><div className="app-shell">{page==='table'&&state.room&&<GameBackground enabled={!overlay} theme={(state.room.moduleId==='baohuang'||state.room.moduleId==='guandan'?'doudizhu':state.room.moduleId) as TableTheme}/>}<div className="app-content" data-motion-paused={overlay}>
     <a className="skip-link" href="#main">跳到内容</a><header className="site-header"><button className="brand" onClick={()=>navigate('lobby')} aria-label="同桌，返回首页"><Logo/><strong>同桌</strong><small>TONGZHUO</small></button><nav aria-label="主导航"><button className="nav-roll" aria-label="游戏" onClick={gallery}><span aria-hidden="true" data-text="游戏">游戏</span></button>{state.room&&<button className={`nav-current ${page==='table'?'active':''}`} onClick={()=>navigate('table')}>当前桌<span className="nav-current-status" data-state={state.room.finished?'finished':state.paused?'paused':'playing'}><Dot on={!state.paused&&!state.room.finished}/>{state.room.finished?'已结束':state.paused?'已暂停':'进行中'}</span></button>}<button className={`nav-roll ${page==='history'?'active':''}`} aria-label="已完成记录" onClick={()=>navigate('history')}><span aria-hidden="true" data-text="已完成记录">已完成记录</span>{state.history.length>0&&<small>{state.history.length}</small>}</button></nav><button className="connect-button" onClick={()=>{setConnectTarget(null);setConnection(true);}}><Dot on={state.connected}/>{state.connected?'本机已连接':'连接本机'}<ArrowUpRight size={15}/></button></header>
     <main id="main" tabIndex={-1}>
       {page==='lobby'&&<Lobby onSelect={choose} onGallery={gallery} enabled={!overlay}/>}
@@ -83,10 +85,10 @@ export function App(){
     {rules&&<Modal symbol={currentModule?.presentation.symbol} title={`${currentModule?.name??'游戏'}规则`} subtitle="规则来自游戏模块" onClose={()=>setRules(false)}><div className="rules-copy">{controller.rules().split('\n').map((p,i)=><p key={i}>{p}</p>)}</div></Modal>}
     {players&&<PlayerSettingsModal onCuriosityModeChange={enabled=>controller.setCuriosityMode(enabled)} state={state} busy={busy} onClose={()=>setPlayers(false)} onConnect={()=>{setPlayers(false);setConnectTarget('table');setConnection(true);}} onPause={()=>controller.pause()} onSave={configs=>{controller.configurePlayers(configs);setPlayers(false);}}/>}
     {next&&<NextRunModal state={state} controller={controller} players={nextPlayers??state.room!.roster.map(p=>({...p}))} onPlayers={setNextPlayers} onClose={()=>setNext(false)} onConnect={()=>{setNext(false);setConnectTarget('next');setConnection(true);}} onStart={async configs=>{await controller.nextRound(configs);setNext(false);}}/>}
-    {conversationPlayer&&<AgentConversationModal state={state} playerId={conversationPlayer.playerId} onPlayer={setConversationPlayerId} onClose={()=>setConversationPlayerId(null)}/>}
-    {state.error&&<AppNotice message={state.error} hidden={overlay} onClose={()=>controller.clearError()} onConnect={!state.connected?()=>{setConnectTarget(state.room?'table':null);setConnection(true);}:undefined}/>}
+    {conversationPlayer&&<AgentConversationModal state={state} playerId={conversationPlayer.playerId} onPlayer={setConversationPlayerId} onClose={()=>setConversationPlayerId(null)} onClearStorage={clearStorage}/>}
+    {(state.error||state.storageError)&&<AppNotice message={(state.error??state.storageError)!} hidden={overlay} onClose={()=>controller.clearError()} onClearStorage={!state.error&&state.storageError?clearStorage:undefined} onConnect={state.error&&!state.connected?()=>{setConnectTarget(state.room?'table':null);setConnection(true);}:undefined}/>}
     {toast&&<div className="toast" role="status"><span>{toast}</span><button className="icon-button" onClick={()=>setToast('')} aria-label="关闭消息"><X size={16}/></button></div>}
-  </div>;
+  </div></AgentRuntimeContext.Provider>;
 }
 
 function Lobby({onSelect,onGallery,enabled}:{onSelect:(id:string)=>void;onGallery:()=>void;enabled:boolean}){

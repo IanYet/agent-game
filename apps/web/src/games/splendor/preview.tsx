@@ -92,7 +92,7 @@ function SplendorPreview(){
     const view=viewSplendor(motionState,spectator?null:0,reveal||spectator);
     return {...view,players:view.players.map((player,seat)=>({...player,...roster[seat]}))};
   },[roster,reveal,spectator,loaded,motion,motionState]);
-  const state:AppSnapshot={connector:null,connected:true,connectorUpdateRequired:false,game,room:{moduleId:'splendor',moduleVersion:'1.0.0',stateVersion:1,roomId:game.id,runId:game.id,index:1,roster,config:{edition:'base-2024'},finished:false},seats:roster.map((player,seat)=>({...player,seat,status:'ready',turns:20,tokens:0})),paused,curiosityMode:reveal,conversations:{},conversationError:null,error:null,history:[],activity:{phase:'满载界面展示',actors:[]}};
+  const state:AppSnapshot={connector:null,connected:true,connectorUpdateRequired:false,game,room:{moduleId:'splendor',moduleVersion:'1.0.0',stateVersion:1,roomId:game.id,runId:game.id,index:1,roster,config:{edition:'base-2024'},finished:false},seats:roster.map((player,seat)=>({...player,seat,status:'ready',turns:20,tokens:0})),paused,curiosityMode:reveal,conversations:{},conversationError:null,error:null,storageError:null,history:[],activity:{phase:'满载界面展示',actors:[]}};
   const perform=(action?:Action)=>{if(!action||paused)return;try{setMotionState(applyAction(motionState,motionState.turn,action));}catch(error){setMessage((error as Error).message);}};
   const choices=motion?legalActions(motionState,motionState.turn):[];
   const marketBuy=choices.find(choice=>choice.action.type==='buy'&&motionState.market[CARD_BY_ID[choice.action.cardId].level].includes(choice.action.cardId));

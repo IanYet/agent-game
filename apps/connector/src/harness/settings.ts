@@ -12,6 +12,11 @@ export function resolveSettings(models: ModelInfo[], settings: AgentSettings): A
   return { model: model?.id ?? settings.model, reasoningEffort: settings.reasoningEffort ?? model?.defaultReasoningEffort };
 }
 
+export function settingsFromAcpModel(modelId: string | undefined): AgentSettings {
+  const variant = modelId?.match(/^(.*)\[([^\]]+)\]$/);
+  return variant ? { model: variant[1], reasoningEffort: variant[2] } : { model: modelId };
+}
+
 export function selectAcpModel(models: Array<{ modelId: string }>, currentModelId: string | undefined, settings: AgentSettings): string | undefined {
   const model = settings.model ?? currentModelId?.replace(/\[[^\]]+\]$/, '');
   if (!model) {

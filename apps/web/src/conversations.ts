@@ -48,6 +48,13 @@ export class ConversationStore {
     // A stream can deliver many tokens per frame; write the full text in batches.
     if (!this.timer) this.timer = setTimeout(() => this.flush(), 1000);
   }
+  clear(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.dirty = false;
+    this.data = { version: 2, runs: {} };
+    this.error = null;
+  }
   flush(): void {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
