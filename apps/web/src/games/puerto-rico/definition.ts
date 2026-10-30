@@ -14,6 +14,7 @@ const tools:ToolDefinition[]=[
 const validateConfig=(c:any)=>{if(!c||typeof c!=='object'||Array.isArray(c)||c.edition!=='classic-2002'||Object.keys(c).some(k=>k!=='edition'))throw Error('波多黎各采用固定的 2002 经典基础版，支持 3–5 人');};
 const observe=(run:StoredRun<PuertoRicoState>,actor:string|null)=>decorateView(viewPuertoRico(run.state,actor===null?null:seatFor(run,actor)),run.roster);
 export const puertoRicoModule:GameModule<PuertoRicoState>={
+  setupOrderHint:"1 号玩家担任首任总督并首先选择角色。",
   id:'puerto-rico',version:'1.0.0',stateVersion:1,name:'波多黎各',description:'选择角色，经营岛屿，让每一桶货物找到商路。',tagline:'经典基础版 · 角色与商路',presentation:{english:'PUERTO RICO',symbol:'puerto-ship',tone:'warm'},
   minPlayers:3,maxPlayers:5,defaultPlayers:3,defaultConfig:{edition:'classic-2002'},runNoun:'局',validateConfig,lifecycle:{sessionScope:'run',eagerAgents:false},rules:()=>RULES,
   activity:run=>({phase:PHASE_NAMES[run.state.phase],detail:`第 ${run.state.round} 轮${run.state.finalReasons.length?' · 最后一轮':''}`}),

@@ -27,7 +27,7 @@ export function createGame(id:string,players:PlayerConfig[],options:{random:()=>
   const deck=shuffledDeck(options.random),createdAt=now();
   const state:GuandanState={gameId:'guandan',id,round:options.round??1,revision:1,createdAt,
     phase:'playing',players:players.map((p,seat)=>({...p,seat,team:team(seat),hand:sortHand(deck.slice(seat*27,(seat+1)*27),level)})),
-    turn:Math.min(3,Math.floor(options.random()*4)),level,levelTeam,levels,
+    turn:previous?Math.min(3,Math.floor(options.random()*4)):0,level,levelTeam,levels,
     matchNumber:(previous?.matchNumber??1)+(newMatch?1:0),matchWins:[...(previous?.matchWins??[0,0])],
     tribute:null,lastPlay:null,lastActions:[null,null,null,null],passed:[],finishOrder:[],played:[],events:[],result:null};
   addEvent(state,'deal',`第 ${state.matchNumber} 盘 · 第 ${state.round} 副，${teamName(levelTeam)}打 ${label(level)}；每人 27 张，对家同队。`);
@@ -40,7 +40,7 @@ export function createGame(id:string,players:PlayerConfig[],options:{random:()=>
       for(const entry of kings)addEvent(state,'anti','亮出大王；应贡方合计两张大王，抗贡，本副免贡还。',entry.seat,[entry.card]);
     }else{state.phase='tribute';state.turn=donors[0];}
   }
-  if(state.phase==='playing')addEvent(state,'start',`${state.tribute?.anti?'抗贡后由上副头游':'首副随机确定'}领出。`,state.turn);
+  if(state.phase==='playing')addEvent(state,'start',`${state.tribute?.anti?'抗贡后由上副头游':previous?'新盘随机确定':'新桌由1号玩家'}领出。`,state.turn);
   return state;
 }
 

@@ -1,7 +1,7 @@
 import {toolResult,type BrowserToolRequest} from '@agent-game/protocol';
 import type {GameModule,StoredRun} from '../../runtime/types';
 import {historyCursor,historyInstructions,incrementalObservation,checkDecision,decisionKey,decorateView,emptySchema,enginePlayers,readOnly,seatFor,agentObservation,agentIdentity} from '../shared';
-import {applyCitadels,assertCitadels,createCitadels,DEFAULT_CONFIG,nextCitadels,validateConfig,viewCitadels,type Action,type CitadelsState} from './engine';
+import {applyCitadels,assertCitadels,createCitadels,nextCitadels,validateConfig,viewCitadels,type Action,type CitadelsState} from './engine';
 import {roleName} from './cards';
 import {RULES,THIEF_TARGET_REMINDER} from './rules';
 import {actionTool,ACTION_HELP} from './actions';
@@ -21,11 +21,12 @@ function actTool(run:StoredRun<CitadelsState>,request:BrowserToolRequest){
   const next=applyCitadels(s,seat,request.args.action as Action);return {state:next,result:toolResult({success:true,revision:next.revision,message:'行动已完成。结束本次任务，等待新决策。'})};
 }
 export const definition:GameModule<CitadelsState>={
+  setupOrderHint:"1 号玩家持有初始王冠并首先选角。",
   id:'citadels',version:'3.0.0',stateVersion:3,name:'富饶之城',description:'暗选身份，依序叫号。让城里的每一枚金币都有去处。',tagline:'经典八身份 · 3–7 人',presentation:{english:'CITADELS',symbol:'castle',tone:'warm'},
-  minPlayers:3,maxPlayers:7,defaultPlayers:4,defaultConfig:DEFAULT_CONFIG,runNoun:'局',validateConfig,
+  minPlayers:3,maxPlayers:7,defaultPlayers:4,defaultConfig:{},runNoun:'局',
   rules:()=>RULES,lifecycle:{sessionScope:'run',eagerAgents:false},
   activity:run=>({phase:({draft:'秘密选角',income:'正常收入',keep:'保留收入牌',main:'建造与技能',graveyard:'墓地收回',finished:'本局已结算'})[run.state.phase],detail:`第 ${run.state.round} 轮${run.state.phase==='draft'?'':` · ${roleName(run.state.called)}`}`}),
-  create:(run,random)=>createCitadels(run.runId,enginePlayers(run.roster),run.config,random,run.index),
+  create:(run,random)=>createCitadels(run.runId,enginePlayers(run.roster),{firstCrown:1},random,run.index),
   next:(previous,run,random)=>nextCitadels(previous.state,run.runId,enginePlayers(run.roster),random),
   finished:s=>s.phase==='finished',observe,
   tableView:(run,actor,{revealHands})=>decorateView(viewCitadels(run.state,actor===null?null:seatFor(run,actor),revealHands),run.roster),

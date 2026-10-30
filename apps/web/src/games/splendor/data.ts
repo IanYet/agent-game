@@ -1,6 +1,6 @@
 import type {Card, Noble, Color, Level} from './types';
 
-// Fixed base-game data. Cost order: white, blue, green, red, black. Sources: SOURCES.md.
+// Fixed base-game data. Cost order: white, blue, green, red, black. Sources: docs/games/splendor.md.
 const rows: Array<[Level, Color, number, number, number, number, number, number]> = [
   [1,"white",0,0,0,0,2,1],
   [1,"white",0,0,2,2,0,1],

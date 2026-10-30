@@ -21,6 +21,7 @@ export interface GameModule<S = any,V = any> {
   id:string; version:string; stateVersion:number; name:string; description:string; tagline:string;
   presentation:{english:string;symbol:GameSymbol;tone:'warm'|'cool'};
   minPlayers:number; maxPlayers:number; defaultPlayers:number; defaultConfig:any; runNoun:string;
+  setupOrderHint?:string;
   rules:(run?:StoredRun<S>)=>string;
   validateConfig?:(config:any)=>void;
   activity:(run:StoredRun<S>)=>{phase:string;detail?:string};

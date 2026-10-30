@@ -1,5 +1,5 @@
-import {useLayoutEffect,useRef,useState} from 'react';
-import {ArrowLeft,ArrowUpRight,Loader2,Plus,Trash2} from 'lucide-react';
+import {useEffect,useLayoutEffect,useRef,useState,type PointerEvent} from 'react';
+import {ArrowLeft,ArrowUpRight,GripVertical,Loader2,Plus,Trash2} from 'lucide-react';
 import {modelsForHarness,type HarnessId} from '@agent-game/protocol';
 import type {AppSnapshot,PlayerConfig,GameModule} from './runtime/types';
 import {gameRegistry} from './games/registry';
@@ -28,20 +28,58 @@ export function playerProblem(state:AppSnapshot,p:PlayerConfig):string|undefined
 }
 
 type Planning=ReturnType<GameController['planning']>;
-export function RosterEditor({state,players,onChange,module,planning,errors,active,onActive,onRemove,onAdd,participation,allowBelowMinimum=false}:{state:AppSnapshot;players:PlayerConfig[];onChange:(p:PlayerConfig[])=>void;module:GameModule;planning?:Planning;errors:Array<string|undefined>;active:number;onActive:(i:number)=>void;onRemove?:(i:number)=>void;onAdd?:()=>void;participation?:{mode:string;onChange:(value:string)=>void};allowBelowMinimum?:boolean}){
+export function RosterEditor({state,players,onChange,module,planning,errors,active,onActive,onRemove,onAdd,participation,allowBelowMinimum=false,reorderable=false}:{state:AppSnapshot;players:PlayerConfig[];onChange:(p:PlayerConfig[])=>void;module:GameModule;planning?:Planning;errors:Array<string|undefined>;active:number;onActive:(i:number)=>void;onRemove?:(i:number)=>void;onAdd?:()=>void;participation?:{mode:string;onChange:(value:string)=>void};allowBelowMinimum?:boolean;reorderable?:boolean}){
   const index=Math.max(0,Math.min(active,players.length-1)),player=players[index];
-  const entries=useRef<HTMLDivElement>(null);
+  const entries=useRef<HTMLDivElement>(null),focusMoved=useRef<string|null>(null);
+  const dragging=useRef<{playerId:string;pointerId:number;startY:number;active:boolean}|null>(null),pointer=useRef({x:0,y:0}),dragFrame=useRef<number|null>(null),dropTarget=useRef<{playerId:string;edge:'before'|'after'}|null>(null);
+  const [dragged,setDragged]=useState<string|null>(null),[drop,setDrop]=useState<{playerId:string;edge:'before'|'after'}|null>(null),[announcement,setAnnouncement]=useState('');
   useLayoutEffect(()=>{const list=entries.current,row=list?.querySelector('[aria-pressed="true"]')?.parentElement;if(!list||!row)return;const bounds=list.getBoundingClientRect(),item=row.getBoundingClientRect();if(item.bottom>bounds.bottom)list.scrollTop+=item.bottom-bounds.bottom;else if(item.top<bounds.top)list.scrollTop-=bounds.top-item.top;},[index,players.length]);
+  useLayoutEffect(()=>{if(!focusMoved.current)return;entries.current?.querySelector<HTMLButtonElement>(`[data-roster-player="${focusMoved.current}"] .roster-drag`)?.focus();focusMoved.current=null;},[players]);
+  const movePlayer=(from:number,to:number)=>{
+    if(from<0||to<0||from===to||to>=players.length)return;
+    const reordered=[...players],[moved]=reordered.splice(from,1);reordered.splice(to,0,moved);
+    focusMoved.current=moved.playerId??null;onChange(reordered);onActive(to);setAnnouncement(`${moved.name||'玩家'}已移至 ${to+1} 号。`);
+  };
+  const endDrag=()=>{dragging.current=null;dropTarget.current=null;if(dragFrame.current!==null)cancelAnimationFrame(dragFrame.current);dragFrame.current=null;setDragged(null);setDrop(null);};
+  useEffect(()=>()=>{if(dragFrame.current!==null)cancelAnimationFrame(dragFrame.current);},[]);
+  const locateDrop=()=>{
+    const list=entries.current;if(!list)return;
+    const bounds=list.getBoundingClientRect(),{x,y}=pointer.current,rows=Array.from(list.querySelectorAll<HTMLElement>('[data-roster-player]'));
+    let target:typeof dropTarget.current=null;
+    if(x>=bounds.left-24&&x<=bounds.right+24&&y>=bounds.top-24&&y<=bounds.bottom+24&&rows.length){
+      const row=rows.find(row=>y<=row.getBoundingClientRect().bottom)??rows[rows.length-1],rect=row.getBoundingClientRect();
+      target={playerId:row.dataset.rosterPlayer!,edge:y>rect.top+rect.height/2?'after':'before'};
+    }
+    dropTarget.current=target;setDrop(current=>current?.playerId===target?.playerId&&current?.edge===target?.edge?current:target);
+  };
+  const scrollDrag=()=>{
+    if(!dragging.current?.active)return;
+    const list=entries.current;if(list){const bounds=list.getBoundingClientRect(),y=pointer.current.y;if(y<bounds.top+24)list.scrollTop-=8;else if(y>bounds.bottom-24)list.scrollTop+=8;}
+    locateDrop();dragFrame.current=requestAnimationFrame(scrollDrag);
+  };
+  const dragMove=(event:PointerEvent<HTMLButtonElement>)=>{
+    const current=dragging.current;if(!current||current.pointerId!==event.pointerId)return;
+    pointer.current={x:event.clientX,y:event.clientY};
+    if(!current.active&&Math.abs(event.clientY-current.startY)>4){current.active=true;setDragged(current.playerId);dragFrame.current=requestAnimationFrame(scrollDrag);}
+    if(current.active)locateDrop();
+  };
+  const dragEnd=(event:PointerEvent<HTMLButtonElement>)=>{
+    const current=dragging.current,target=dropTarget.current;
+    if(current?.pointerId===event.pointerId&&current.active&&target){const from=players.findIndex(p=>p.playerId===current.playerId),at=players.findIndex(p=>p.playerId===target.playerId),insertion=at+(target.edge==='after'?1:0);movePlayer(from,insertion>from?insertion-1:insertion);}
+    endDrag();if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
+  };
   const update=(patch:Partial<PlayerConfig>)=>onChange(players.map((p,i)=>i===index?{...p,...patch}:p));
   const variable=module.minPlayers<module.maxPlayers,minimum=allowBelowMinimum?1:module.minPlayers;
   return <>{participation&&<div className="participation-field"><span className="eyebrow">参与方式</span><Select showDetails label="参与方式" value={participation.mode} options={[{value:'play',label:'亲自入座',detail:'你与 Agent 一起玩'},{value:'watch',label:'只看他们过招',detail:'交给 Agent，你来观战'}]} onChange={participation.onChange}/></div>}<div className="roster-editor"><nav className="roster-list" aria-label="完整玩家名单">
     <div className="roster-list-heading"><span>玩家名单</span><small>{players.length} / {module.maxPlayers}</small></div>
     <div ref={entries} className="roster-entries">
-    {players.map((p,i)=><div className="roster-row" key={p.playerId??i}>
-      <button aria-pressed={i===index} className={errors[i]?'has-error':''} onClick={()=>onActive(i)}><Avatar seat={i} kind={p.kind}/><span><b>{p.name||'未命名'}</b><small>{p.kind==='human'?'真人':kindName[p.kind]}</small></span><em>{errors[i]?'!':'↗'}</em></button>
+    {players.map((p,i)=><div className="roster-row" key={p.playerId??i} data-roster-player={p.playerId} data-dragging={dragged===p.playerId||undefined} data-drop-edge={drop&&drop.playerId===p.playerId?drop.edge:undefined}>
+      {reorderable&&<button type="button" className="roster-drag" aria-label={`拖拽调整 ${p.name||'玩家'} 的顺序，当前 ${i+1} 号`} title="拖拽调整顺序；也可用上下方向键移动" onClick={()=>onActive(i)} onPointerDown={event=>{if(event.button!==0||!p.playerId)return;event.preventDefault();event.currentTarget.focus();event.currentTarget.setPointerCapture(event.pointerId);dragging.current={playerId:p.playerId,pointerId:event.pointerId,startY:event.clientY,active:false};pointer.current={x:event.clientX,y:event.clientY};onActive(i);}} onPointerMove={dragMove} onPointerUp={dragEnd} onPointerCancel={endDrag} onLostPointerCapture={endDrag} onKeyDown={event=>{const next=event.key==='ArrowUp'?i-1:event.key==='ArrowDown'?i+1:event.key==='Home'?0:event.key==='End'?players.length-1:null;if(next===null)return;event.preventDefault();movePlayer(i,next);}}><GripVertical size={15}/></button>}
+      <button aria-pressed={i===index} className={`roster-select${errors[i]?' has-error':''}`} onClick={()=>onActive(i)}><Avatar seat={i} kind={p.kind}/><span><b>{p.name||'未命名'}</b><small>{i+1} 号 · {p.kind==='human'?'真人':kindName[p.kind]}</small></span><em>{errors[i]?'!':'↗'}</em></button>
       {onRemove&&variable&&<button className="roster-remove" disabled={players.length<=minimum} title={players.length<=minimum?'至少保留 '+minimum+' 位玩家':'移除玩家'} aria-label={'移除第 '+(i+1)+' 位玩家 '+(p.name||'未命名')} onClick={()=>onRemove(i)}><Trash2 size={13}/></button>}
     </div>)}
     </div>{onAdd&&variable&&<button className="roster-add" disabled={players.length>=module.maxPlayers} onClick={onAdd}><Plus size={14}/>{players.length>=module.maxPlayers?'已达到人数上限':'新增玩家'}</button>}
+    {reorderable&&<p className="roster-order-hint">拖拽左侧手柄调整顺序。{module.setupOrderHint}</p>}<span className="roster-reorder-status" role="status">{announcement}</span>
     <p className="roster-limit">{variable?module.minPlayers+'–'+module.maxPlayers+' 位参与者':'固定 '+module.minPlayers+' 位参与者'}</p>
   </nav><section className="player-editor">{player?<><div className="player-editor-heading"><span className="eyebrow">PLAYER / {String(index+1).padStart(2,'0')}</span><strong>{player.name||'未命名'}</strong></div>{planning?.balances&&<p className="resource-note">{planning.balances.has(player.playerId??'')?'继承资源 '+planning.balances.get(player.playerId!):'新玩家 · '+(planning.newPlayerLabel??'使用模块默认值')}</p>}<div className="field-pair"><label className="field"><span>玩家名称</span><input aria-label={'第 '+(index+1)+' 位玩家名称'} value={player.name} maxLength={100} aria-invalid={!player.name.trim()} onChange={e=>update({name:e.target.value})}/></label><div className="field"><span>玩家类型</span><Select label={'第 '+(index+1)+' 位玩家类型'} value={player.kind==='human'?'human':'agent'} options={[{value:'human',label:'真人',disabled:players.some((p,i)=>i!==index&&p.kind==='human'),detail:'一桌最多一位真人'},{value:'agent',label:'Agent'}]} onChange={v=>update(changePlayerKind(player,v==='human'?'human':defaultHarness(state),index))}/></div></div>{player.kind!=='human'?<><AgentHarnessField harnesses={state.connector?.harnesses} kind={player.kind} label={player.name||'第 '+(index+1)+' 位'} onChange={kind=>update({kind,model:undefined,reasoningEffort:undefined})}/><AgentModelFields label={player.name||'第 '+(index+1)+' 位'} models={modelsForHarness(state.connector,player.kind)} settings={player} onChange={update}/></>:<p className="quiet-note">你将直接操作这位参与者。其他 Agent 只会读取游戏允许它们看到的信息。</p>}{errors[index]&&<p className="form-error" role="alert">{errors[index]}</p>}</>:<p className="quiet-note">点击「新增玩家」开始配置。</p>}</section></div></>;
 }
@@ -55,7 +93,7 @@ export function SetupModal({state,gameId,draft,onDraft,onClose,onBack,onStart,on
   const remove=(i:number)=>{if(players.length<=module.minPlayers)return;updatePlayers(players.filter((_,at)=>at!==i));setActive(at=>at>i?at-1:Math.min(at,players.length-2));};
   const start=async()=>{if(reason||pending)return;if(state.room&&!confirm){setConfirm(true);return;}setPending(true);setError('');try{await onStart(players,draft.curiosityMode,gameId,draft.config);}catch(e){setError((e as Error).message);}finally{setPending(false);}};
   return <Modal wide symbol={module.presentation.symbol} dismissible={!pending} title={confirm?'替换当前游戏桌？':'创建对局 · '+module.name} subtitle={confirm?'请确认最后一步':'配置搭档 / CONFIGURE'} onClose={onClose} footer={<><div className="footer-reason" role="status">{error?<span className="form-error">{error}</span>:reason?<button onClick={()=>errorIndex>=0&&setActive(errorIndex)} disabled={errorIndex<0}>{reason}</button>:<span>{confirm?'已完成的记录会保留。':'确认后开始游戏，Agent 将按游戏需要行动。'}</span>}</div><div className="footer-actions"><button className="text-button" disabled={pending} onClick={confirm?()=>setConfirm(false):onBack}><ArrowLeft size={14}/>{confirm?'取消替换':'返回选游戏'}</button>{!state.connected&&<button className="text-button" disabled={pending} onClick={onConnect}>连接本机 ↗</button>}<PrimaryButton disabled={pending||!!reason} onClick={start}>{pending?<Loader2 size={15} className="spin"/>:null}{confirm?'确认替换并开始':'开始对局'}<ArrowUpRight size={20}/></PrimaryButton></div></>}>
-    {confirm?<div className="replace-confirm"><span className="large-symbol">↗</span><h3>{state.room&&gameRegistry.get(state.room.moduleId).name} → {module.name}</h3><p>{state.room?.finished?'当前结果已完成。新桌将使用这次配置，资源按新桌规则初始化。':'当前桌尚未结束，替换后无法继续这次进度。你也可以取消，回到当前桌。'}</p><p>已配置的 {players.length} 位玩家将进入新桌。取消不会清空配置。</p></div>:<><RosterEditor state={state} module={module} players={players} onChange={updatePlayers} errors={errors} active={active} onActive={setActive} onRemove={remove} onAdd={add} participation={{mode:players.some(p=>p.kind==='human')?'play':'watch',onChange:v=>updatePlayers(players.map((p,i)=>v==='play'&&i===0?changePlayerKind(p,'human',i):p.kind==='human'?changePlayerKind(p,defaultHarness(state),i):p))}}/><details className="advanced-settings"><summary>{players.some(player=>player.kind==='human')?'游戏参数与好奇模式':'游戏参数'} <Plus size={14}/></summary>{Fields?<Fields value={draft.config} onChange={config=>onDraft({...draft,config})}/>:<p>本游戏使用固定规则，无需额外参数。</p>}{configError&&<p className="form-error">{configError}</p>}{players.some(player=>player.kind==='human')&&<CuriosityToggle enabled={draft.curiosityMode} onChange={curiosityMode=>onDraft({...draft,curiosityMode})}/>}</details><p className="quiet-note">在名单中选择玩家进行配置。返回选游戏会保留本页草稿。</p></>}
+    {confirm?<div className="replace-confirm"><span className="large-symbol">↗</span><h3>{state.room&&gameRegistry.get(state.room.moduleId).name} → {module.name}</h3><p>{state.room?.finished?'当前结果已完成。新桌将使用这次配置，资源按新桌规则初始化。':'当前桌尚未结束，替换后无法继续这次进度。你也可以取消，回到当前桌。'}</p><p>已配置的 {players.length} 位玩家将进入新桌。取消不会清空配置。</p></div>:<><RosterEditor reorderable={!pending} state={state} module={module} players={players} onChange={updatePlayers} errors={errors} active={active} onActive={setActive} onRemove={remove} onAdd={add} participation={{mode:players.some(p=>p.kind==='human')?'play':'watch',onChange:v=>updatePlayers(v==='play'&&players.some(p=>p.kind==='human')?players:players.map((p,i)=>v==='play'&&i===0?changePlayerKind(p,'human',i):p.kind==='human'?changePlayerKind(p,defaultHarness(state),i):p))}}/><details className="advanced-settings"><summary>{players.some(player=>player.kind==='human')?'游戏参数与好奇模式':'游戏参数'} <Plus size={14}/></summary>{Fields?<Fields value={draft.config} onChange={config=>onDraft({...draft,config})}/>:<p>本游戏使用固定规则，无需额外参数。</p>}{configError&&<p className="form-error">{configError}</p>}{players.some(player=>player.kind==='human')&&<CuriosityToggle enabled={draft.curiosityMode} onChange={curiosityMode=>onDraft({...draft,curiosityMode})}/>}</details><p className="quiet-note">在名单中选择玩家进行配置。返回选游戏会保留本页草稿。</p></>}
   </Modal>;
 }
 export function NextRunModal({state,controller,onClose,onConnect,onStart,players,onPlayers}:{state:AppSnapshot;controller:GameController;onClose:()=>void;onConnect:()=>void;onStart:(players:PlayerConfig[])=>Promise<void>;players:PlayerConfig[];onPlayers:(players:PlayerConfig[])=>void}){

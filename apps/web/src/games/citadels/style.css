@@ -79,7 +79,6 @@
 .ct-results td,.ct-results th{padding:8px 3px;text-align:right;border-bottom:1px solid #ffffff14}.ct-results th:first-child{text-align:left}
 .ct-progress>.ct-results table{font-size:9px}.ct-progress>.ct-results th,.ct-progress>.ct-results td{padding:6px 3px}
 .ct-config{display:grid;gap:10px}.ct-config p,.ct-config>small{font-size:12px;line-height:1.8;color:#a5a4ad}
-.ct-config label{display:flex;gap:20px;align-items:center;font-size:13px}.ct-config input{width:70px;padding:9px;border:1px solid #ffffff25;border-radius:7px;background:#11151b;color:#eee}
 .ct-replay{padding:20px}.ct-replay>p{color:#a7a6b1;font-size:12px;line-height:1.8}.ct-replay>label{display:grid;gap:12px;font-size:13px;margin:24px 0}
 .ct-replay-controls{display:flex;gap:18px;align-items:center}.ct-replay-controls>p{flex:1;font-size:13px;color:#cebfa5;line-height:1.8}
 .ct-replay-cities{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;margin:24px 0}.ct-replay-cities h3{font-size:14px}

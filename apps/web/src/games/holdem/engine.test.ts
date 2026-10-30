@@ -58,8 +58,9 @@ describe('无限注流程、底池与隔离', () => {
     const meta={moduleId:'holdem',moduleVersion:'1.0.0',stateVersion:1,roomId:'history-room',runId:'history-run',index:1,config:{initialChips:1000,smallBlind:5,bigBlind:10},roster:Array.from({length:9},(_,i)=>({playerId:`p${i}`,name:`P${i}`,kind:'codex' as const}))};
     const run={...meta,state:holdemModule.create(meta,seeded(5))};
     run.state=act(run.state,run.state.turn,{type:'raise',amount:20});
+    run.state=act(run.state,run.state.turn,{type:'fold'});
     while(run.state.events.length<=35){
-      const actions=getHoldemLegalActions(run.state,run.state.turn),choice=run.state.phase==='preflop'&&run.state.turn===0?actions.find(a=>a.id==='fold'):actions.find(a=>a.id==='check')??actions.find(a=>a.id==='call');
+      const actions=getHoldemLegalActions(run.state,run.state.turn),choice=actions.find(a=>a.id==='check')??actions.find(a=>a.id==='call');
       run.state=act(run.state,run.state.turn,choice!.action);
     }
     expect(run.state.phase).toBe('river');

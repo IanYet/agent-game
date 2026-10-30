@@ -25,7 +25,7 @@ export interface AzulState {
 export interface AzulFrame {round:number;turn:number;phase:'draft'|'finished';factories:Color[][];center:Color[];markerInCenter:boolean;firstOwner:number|null;players:AzulPlayer[]}
 export type AzulView = AzulFrame & {id:string;match:number;createdAt:string;revision:number;viewer:number|null;bagCount:number;discardCounts:Record<Color,number>;events:AzulEvent[];legalActions:LegalAction[];result:AzulResult|null};
 export const RULES_URL='https://cdn.svc.asmodee.net/production-nextmove/uploads/sites/4/2024/06/EN-Azul-Rules-Next-Move-web.pdf';
-export const AZUL_RULES=`采用 Next Move / Plan B 原版标准有色墙规则（2018 规则书，发行商 2024 年发布的 PDF），2–4 人；不含灰墙或扩展。2／3／4 人使用 5／7／9 个工厂盘。共 100 片花砖，五种颜色各 20 片。首局随机先手，以后每轮由拿到先手标记的人开始；座位按顺时针轮转。
+export const AZUL_RULES=`采用 Next Move / Plan B 原版标准有色墙规则（2018 规则书，发行商 2024 年发布的 PDF），2–4 人；不含灰墙或扩展。2／3／4 人使用 5／7／9 个工厂盘。共 100 片花砖，五种颜色各 20 片。新桌首局由名单1号玩家先手，以后每轮由拿到先手标记的人开始；座位按顺时针轮转。
 每回合从一个工厂盘或中央区拿走某一颜色的全部花砖。工厂盘剩余颜色全部流入中央。第一次从中央拿砖时，同时拿先手标记，先放入地板最左空格；地板已满则放在旁边，仍取得下一轮先手。不能只拿先手标记。
 拿到的花砖必须放进同一条图案行，或全部放地板。五行容量依次为 1–5；已有砖的行只收同色，已满的行不可选，对应墙行已有该颜色也不可选。装满后多出的砖落地板，不可拆到其他行。允许不同图案行同时收同一种颜色。地板从左到右最多七格，再溢出的砖直接进入回收盒。
 工厂盘和中央的彩砖取空后，所有玩家从上到下结算完整图案行：移一片到对应墙行的固定同色格，剩余花砖进回收盒；未满的图案行保留到下一轮。新铺砖无邻接得 1 分；若横向／纵向存在连续相邻砖，分别计算包含新砖的连续长度，两方向均连通时相加。
@@ -53,7 +53,7 @@ export function createAzul(id:string,roster:Array<{playerId:string;name:string;k
   if(roster.length<2||roster.length>4||new Set(roster.map(p=>p.playerId)).size!==roster.length)throw new Error('花砖物语需要 2–4 位身份不同的玩家');
   if(previous&&previous.phase!=='finished')throw new Error('请先完成当前局');
   const seed=Math.floor(rng()*4294967296)>>>0;
-  const starter=previous?(previous.roundStarter+1)%roster.length:Math.floor(rng()*roster.length);
+  const starter=previous?(previous.roundStarter+1)%roster.length:0;
   const state:AzulState={gameId:'azul',id,match,createdAt:new Date().toISOString(),revision:1,phase:'draft',round:1,turn:starter,roundStarter:starter,firstOwner:null,markerInCenter:true,
     players:roster.map((p,seat)=>{const prior=previous?.players.find(q=>q.playerId===p.playerId);return {...p,seat,score:0,totalScore:prior?.totalScore??0,wins:prior?.wins??0,wallPoints:0,floorLoss:0,...emptyBoard()};}),
     factories:[],center:[],bag:COLORS.flatMap(c=>Array(20).fill(c)),discard:[],rng:seed||0x9e3779b9,events:[],result:null};

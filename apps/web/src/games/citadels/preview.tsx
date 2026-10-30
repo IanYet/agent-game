@@ -67,7 +67,7 @@ function CitadelsPreview(){
   const effects=useEffectsPreference();
   useEffect(()=>{document.documentElement.dataset.reducedMotion=String(effects.reduced);},[effects.reduced]);
   const game=useMemo(()=>displayGame(scene,revision),[scene,revision]);
-  const state:AppSnapshot={connector:null,connected:false,connectorUpdateRequired:false,game,room:{moduleId:'citadels',moduleVersion:'3.0.0',stateVersion:3,roomId:game.id,runId:game.id,index:1,roster,config:{firstCrown:1},finished:game.phase==='finished'},seats:roster.map((player,seat)=>({...player,seat,status:'ready',turns:7,tokens:0})),paused:scene==='paused',curiosityMode:false,conversations:{},conversationError:null,error:null,storageError:null,history:[],activity:{phase:'八城区四手牌展示',actors:[]}};
+  const state:AppSnapshot={connector:null,connected:false,connectorUpdateRequired:false,game,room:{moduleId:'citadels',moduleVersion:'3.0.0',stateVersion:3,roomId:game.id,runId:game.id,index:1,roster,config:{},finished:game.phase==='finished'},seats:roster.map((player,seat)=>({...player,seat,status:'ready',turns:7,tokens:0})),paused:scene==='paused',curiosityMode:false,conversations:{},conversationError:null,error:null,storageError:null,history:[],activity:{phase:'八城区四手牌展示',actors:[]}};
   const controller={humanAction:()=>setMessage('这是展示场景；可选择卡牌和查看提示，确认行动不会修改正式对局。')} as unknown as GameController;
   return <div className="app-shell"><GameBackground enabled theme="citadels"/><VisualExperience enabled page="table"/><div className="app-content">
     <header className="site-header"><a className="brand" href="/"><Logo/><strong>同桌</strong><small>TONGZHUO</small></a><span style={{fontSize:11,color:'var(--muted)'}}>八张城区 · 四张手牌 · 五位玩家</span></header>

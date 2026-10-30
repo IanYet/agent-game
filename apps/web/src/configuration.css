@@ -33,8 +33,16 @@
 .roster-row{display:flex;align-items:stretch;position:relative;min-width:0;min-height:47px;border-bottom:1px solid #ffffff09;border-radius:6px}
 .roster-row:has([aria-pressed="true"]){background:#d0d8ef0b}
 .roster-row:has([aria-pressed="true"]):before{content:'';position:absolute;left:0;top:11px;bottom:11px;width:2px;background:var(--warm)}
-.roster-row>button:first-child,.roster-list>button:not(.roster-add){display:flex;align-items:center;gap:10px;min-width:0;flex:1;padding:7px 5px 7px 8px;text-align:left}
-.roster-row>button:first-child>span:nth-child(2),.roster-list>button>span:nth-child(2){flex:1;min-width:0}
+.roster-row>.roster-select,.roster-list>button:not(.roster-add){display:flex;align-items:center;gap:10px;min-width:0;flex:1;padding:7px 5px 7px 8px;text-align:left}
+.roster-row>.roster-select>span:nth-child(2),.roster-list>button>span:nth-child(2){flex:1;min-width:0}
+.roster-drag{display:grid;place-items:center;width:23px;flex:none;padding:0;color:#78879e;cursor:grab;touch-action:none;user-select:none}
+.roster-drag:is(:hover,:focus-visible){color:var(--warm)}
+.roster-drag:active{cursor:grabbing}
+.roster-row[data-dragging=true]{opacity:.4}
+.roster-row[data-drop-edge]::after{content:'';position:absolute;inset:0 0 auto;height:2px;background:var(--warm);pointer-events:none}
+.roster-row[data-drop-edge=after]::after{top:auto;bottom:0}
+.roster-order-hint{font-size:10px;line-height:1.8;color:#b6becf;margin:10px 0 0}
+.roster-reorder-status{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .roster-list .participant-mark{width:25px;min-width:25px;height:29px;font:16px/1 Anton;color:#b4bfd5;border-bottom:1px solid #aab6cf50}
 .roster-list b{display:block;font-size:12px;font-weight:400;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .roster-list small{display:block;color:#8f9cb5;font-size:9px;line-height:1.4;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -16,6 +16,7 @@ const descriptors:ToolDefinition[]=[
 function validateConfig(config:any){if(!config||config.ruleset!=='common-tribute'||Object.keys(config).some(k=>k!=='ruleset'))throw new Error('请选择四人对家常见贡牌版');}
 const observe=(run:StoredRun<GuandanState>,actor:string|null)=>agentObservation(decorateView(viewGame(run.state,actor===null?null:seatFor(run,actor),false,false),run.roster));
 export const guandanModule:GameModule<GuandanState>={
+  setupOrderHint:"1 号玩家首副领出；1、3 号同队，2、4 号同队。",
   id:'guandan',version:'2.0.0',stateVersion:1,name:'掼蛋',description:'四人对家，两副牌。配牌、接风、贡还，一起打过 A。',tagline:'双副牌 · 对家升级',
   presentation:{english:'GUANDAN',symbol:'2',tone:'warm'},minPlayers:4,maxPlayers:4,defaultPlayers:4,defaultConfig:{ruleset:'common-tribute'},runNoun:'副',
   rules:()=>GUANDAN_RULES,validateConfig,lifecycle:{sessionScope:'run',eagerAgents:false},
