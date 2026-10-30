@@ -57,7 +57,13 @@ function paintNode(ctx:CanvasRenderingContext2D,svg:SVGSVGElement,element:Elemen
     if(path){
       const fill=svgPaint(ctx,svg,element,style.fill),stroke=svgPaint(ctx,svg,element,style.stroke);
       if(fill){ctx.globalAlpha=opacity*Number(style.fillOpacity);ctx.fillStyle=fill;ctx.fill(path,style.fillRule==='evenodd'?'evenodd':'nonzero');}
-      if(stroke){ctx.globalAlpha=opacity*Number(style.strokeOpacity);ctx.strokeStyle=stroke;ctx.lineWidth=Number.parseFloat(style.strokeWidth)||1;ctx.lineCap=style.strokeLinecap as CanvasLineCap;ctx.lineJoin=style.strokeLinejoin as CanvasLineJoin;ctx.stroke(path);}
+      if(stroke){
+        ctx.globalAlpha=opacity*Number(style.strokeOpacity);ctx.strokeStyle=stroke;
+        // SVG screen-width strokes must keep their CSS pixel width in the lens raster too.
+        const transform=style.vectorEffect==='non-scaling-stroke'?element.getScreenCTM():null,scale=transform?Math.sqrt(Math.abs(transform.a*transform.d-transform.b*transform.c)):1;
+        ctx.lineWidth=(Number.parseFloat(style.strokeWidth)||1)/(scale||1);
+        ctx.lineCap=style.strokeLinecap as CanvasLineCap;ctx.lineJoin=style.strokeLinejoin as CanvasLineJoin;ctx.stroke(path);
+      }
     }
   }
   ctx.restore();

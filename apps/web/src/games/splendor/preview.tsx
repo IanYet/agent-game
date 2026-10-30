@@ -13,6 +13,28 @@ import {CARDS,CARD_BY_ID,NOBLES} from './data';
 import {applyAction,assertSplendor,cardName,createSplendor,defaultPayment,emptyTokens,legalActions,viewSplendor} from './engine';
 import {COLORS,LEVELS,type Action,type Card,type Event,type LegalAction,type SplendorView} from './types';
 import {SplendorTable} from './ui';
+import {AgentRuntimeContext} from '../AgentPlayerCard';
+
+type BoundaryCase=''|'screenshot'|'gems'|'return';
+const boundaryCases:Array<{value:BoundaryCase;label:string}>=[{value:'',label:'满载背包'},{value:'screenshot',label:'五枚宝石与拿取说明'},{value:'gems',label:'Agent 暂存 13 枚宝石'},{value:'return',label:'真人退还宝石'}];
+
+function boundaryGame(roster:StablePlayer[],spectator:boolean,scenario:Exclude<BoundaryCase,''>):ControlledView<SplendorView>{
+  let seed=24,state=createSplendor(`splendor-width-${scenario}`,roster.map(player=>({...player,kind:player.kind==='human'?'human':'agent'})),{random:()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}});
+  const seat=scenario==='return'?0:2,player=state.players[seat];state.turn=seat;state.turnsTaken=roster.map((_,index)=>index<seat?1:0);
+  const grant=(tokens:ReturnType<typeof emptyTokens>)=>{for(const color of [...COLORS,'gold' as const]){player.tokens[color]=tokens[color];state.bank[color]-=tokens[color];}};
+  if(scenario==='gems'||scenario==='return'){
+    if(scenario==='gems')for(const card of CARDS.filter(card=>card.bonus==='white').sort((a,b)=>a.points-b.points).slice(0,10)){
+      const slot=state.market[card.level].indexOf(card.id);
+      if(slot>=0)state.market[card.level][slot]=state.decks[card.level].shift()??null;else state.decks[card.level].splice(state.decks[card.level].indexOf(card.id),1);
+      player.bought.push(card.id);
+    }
+    grant({white:2,blue:1,green:1,red:2,black:2,gold:2});state=applyAction(state,seat,{type:'take',colors:['white','blue','green']});
+  }else{
+    grant({white:0,blue:0,green:0,red:2,black:0,gold:0});state=applyAction(state,seat,{type:'take',colors:['green','red','black']});
+  }
+  assertSplendor(state);
+  const view=viewSplendor(state,spectator?null:0,spectator);return {...view,players:view.players.map((player,seat)=>({...player,...roster[seat]}))};
+}
 
 // Manual display data only. This page never loads or writes a real game save.
 const previewRoster:StablePlayer[]=[
@@ -82,17 +104,20 @@ function displayGame(roster:StablePlayer[],reveal:boolean,spectator:boolean,load
   };
 }
 function SplendorPreview(){
+  const [boundary,setBoundary]=useState<BoundaryCase>('');
   const [reveal,setReveal]=useState(false),[spectator,setSpectator]=useState(false),[paused,setPaused]=useState(false),[loaded,setLoaded]=useState(true),[message,setMessage]=useState('');
   const [motion,setMotion]=useState(false),[motionState,setMotionState]=useState(motionGame);
   const effects=useEffectsPreference();
   useEffect(()=>{document.documentElement.dataset.reducedMotion=String(effects.reduced);},[effects.reduced]);
   const roster=useMemo<StablePlayer[]>(()=>previewRoster.map(player=>spectator&&player.kind==='human'?{...player,name:'南辰',kind:'codex-acp'}:player),[spectator]);
   const game=useMemo(()=>{
+    if(boundary)return boundaryGame(roster,spectator,boundary);
     if(!motion)return displayGame(roster,reveal,spectator,loaded);
     const view=viewSplendor(motionState,spectator?null:0,reveal||spectator);
     return {...view,players:view.players.map((player,seat)=>({...player,...roster[seat]}))};
-  },[roster,reveal,spectator,loaded,motion,motionState]);
+  },[roster,reveal,spectator,loaded,motion,motionState,boundary]);
   const state:AppSnapshot={connector:null,connected:true,connectorUpdateRequired:false,game,room:{moduleId:'splendor',moduleVersion:'1.0.0',stateVersion:1,roomId:game.id,runId:game.id,index:1,roster,config:{edition:'base-2024'},finished:false},seats:roster.map((player,seat)=>({...player,seat,status:'ready',turns:20,tokens:0})),paused,curiosityMode:reveal,conversations:{},conversationError:null,error:null,storageError:null,history:[],activity:{phase:'满载界面展示',actors:[]}};
+  if(boundary)state.seats[2]={...state.seats[2],settings:{model:'gpt-6.1-sol',modelName:'GPT-6.1-Sol',reasoningEffort:'xhigh'}};
   const perform=(action?:Action)=>{if(!action||paused)return;try{setMotionState(applyAction(motionState,motionState.turn,action));}catch(error){setMessage((error as Error).message);}};
   const choices=motion?legalActions(motionState,motionState.turn):[];
   const marketBuy=choices.find(choice=>choice.action.type==='buy'&&motionState.market[CARD_BY_ID[choice.action.cardId].level].includes(choice.action.cardId));
@@ -106,9 +131,9 @@ function SplendorPreview(){
   return <div className="app-shell"><GameBackground enabled theme="splendor"/><VisualExperience enabled page="table"/><div className="app-content">
     <header className="site-header"><a className="brand" href="/"><Logo/><strong>同桌</strong><small>TONGZHUO</small></a><span style={{fontSize:11,color:'var(--muted)'}}>手动检查 · {motion?'使用真实规则执行行动':'每人 16 张发展牌 / 3 张预留 / 3 位贵族'}</span></header>
     <main id="main"><div className="game-page">
-      <GameChrome title="璀璨宝石" status={motion?'卡牌动画检查':loaded?'满载界面展示':'空桌布局对照'} actions={<><button className="text-button" onClick={()=>setMotion(value=>!value)}>{motion?'返回布局检查':'检查卡牌动画'}</button>{motion?<button className="text-button" onClick={()=>setMotionState(motionGame())}>重置动画局面</button>:<button className="text-button" onClick={()=>setLoaded(value=>!value)}>{loaded?'切到空桌对照':'切回满载局面'}</button>}<button className="text-button" disabled={spectator} onClick={()=>setReveal(value=>!value)}>{reveal||spectator?'暗抽全部可见':'对手暗抽保密'}</button><button className="text-button" onClick={()=>setSpectator(value=>!value)}>{spectator?'切回真人视角':'检查 Agent 观战视角'}</button></>}/>
+      <GameChrome title="璀璨宝石" status={boundary?boundaryCases.find(item=>item.value===boundary)!.label:motion?'卡牌动画检查':loaded?'满载界面展示':'空桌布局对照'} actions={<><select aria-label="玩家卡检查场景" value={boundary} onChange={event=>{setBoundary(event.target.value as BoundaryCase);setMotion(false);setPaused(false);}}>{boundaryCases.map(item=><option key={item.value} value={item.value}>{item.label}</option>)}</select><button className="text-button" onClick={()=>{setBoundary('');setMotion(value=>!value);}}>{motion?'返回布局检查':'检查卡牌动画'}</button>{motion?<button className="text-button" onClick={()=>setMotionState(motionGame())}>重置动画局面</button>:<button className="text-button" onClick={()=>{setBoundary('');setLoaded(value=>!value);}}>{loaded?'切到空桌对照':'切回满载局面'}</button>}<button className="text-button" disabled={spectator} onClick={()=>setReveal(value=>!value)}>{reveal||spectator?'暗抽全部可见':'对手暗抽保密'}</button><button className="text-button" onClick={()=>setSpectator(value=>!value)}>{spectator?'切回真人视角':'检查 Agent 观战视角'}</button></>}/>
       {motion&&<div style={{display:'flex',alignItems:'center',gap:14,marginBottom:12,fontSize:11,color:'var(--muted)'}}><span>当前：{game.players[game.turn].name}</span>{motionButtons.map(([label,choice])=><button className="text-button" key={label} disabled={paused||!choice} onClick={()=>perform(choice?.action)}>{label}</button>)}</div>}
-      <SplendorTable state={state} controller={controller} onError={setMessage} tableActions={<div className="game-actions"><button className="button outline" onClick={()=>setPaused(value=>!value)}>{paused?'继续展示':'暂停展示'}</button></div>}/>
+      <AgentRuntimeContext.Provider value={state.seats}><SplendorTable state={state} controller={controller} onError={setMessage} tableActions={<div className="game-actions"><button className="button outline" onClick={()=>setPaused(value=>!value)}>{paused?'继续展示':'暂停展示'}</button></div>}/></AgentRuntimeContext.Provider>
     </div></main>
     <footer className="site-footer"><span style={{fontSize:10,color:'var(--muted)'}}>{motion?'动画检查局面':'界面展示数据 · 贵族数量特意加大'} · 不写入正式存档</span><EffectsControls/></footer>
     {message&&<div className="toast" role="status"><span>{message}</span><button className="icon-button" aria-label="关闭消息" onClick={()=>setMessage('')}>×</button></div>}
