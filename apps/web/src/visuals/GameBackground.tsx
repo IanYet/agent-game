@@ -5,6 +5,11 @@ import type {TablePhysics} from './table-physics';
 import {TILE_IMAGES} from '../games/azul/artwork';
 import {GemIcon} from '../games/splendor/gem';
 import {COLORS as GEM_COLORS} from '../games/splendor/types';
+import {BuildingIcon} from '../games/catan/board-ui';
+import {SEAT_COLORS} from '../games/catan/artwork';
+import {HexTile} from '../games/castles-of-burgundy/artwork';
+import {Barrel} from '../games/puerto-rico/artwork';
+import {GOODS as PUERTO_GOODS} from '../games/puerto-rico/data';
 import {CARD_SUIT_COLORS,CHESS_COLORS,POKER_CHIP_COLORS,CITADELS_CHIP_COLORS} from './table-palette';
 import {SvgIcon} from './SvgIcon';
 import type {SvgIconName} from './svg-icons';
@@ -84,8 +89,14 @@ export function GameBackground({enabled,theme}:{enabled:boolean;theme:TableTheme
   },[theme]);
   useEffect(()=>{window.dispatchEvent(new Event('tongzhuo:table-motion'));},[enabled,effects.reduced]);
   return <div className="game-background" data-table-theme={theme} aria-hidden="true">
-    <div className="table-object-fallback">{theme==='splendor'
+    <div className="table-object-fallback">{theme==='castles-of-burgundy'
+      ?Array.from({length:12},(_,i)=><span key={i}><HexTile id={['c-1','m-1','s-1','a-cow-3-1','b-market-1','k-8'][i%6]}/></span>)
+      :theme==='splendor'
       ?Array.from({length:12},(_,i)=><span className="table-fallback-gem" key={i}><GemIcon color={GEM_COLORS[i%GEM_COLORS.length]}/></span>)
+      :theme==='catan'
+      ?Array.from({length:12},(_,i)=><span key={i} style={{color:SEAT_COLORS[i%4],textShadow:'none'}}><BuildingIcon kind={i%3===0?'road':'settlement'}/></span>)
+      :theme==='puerto-rico'
+      ?Array.from({length:12},(_,i)=><span key={i} style={{textShadow:'none',opacity:.2}}><Barrel good={PUERTO_GOODS[i%5]}/></span>)
       :theme==='holdem'||theme==='citadels'
       ?Array.from({length:12},(_,i)=><span className="table-fallback-chip" key={i} style={{background:chipPalettes[theme][i%chipPalettes[theme].length],textShadow:'none'}}/>)
       :Array.from({length:12},(_,i)=><span key={i} style={{color:theme==='chess'?CHESS_COLORS[i%2]:CARD_SUIT_COLORS[i%CARD_SUIT_COLORS.length],textShadow:'none',...(theme==='azul'?{backgroundImage:`url("${TILE_IMAGES[i%5]}")`,filter:'none',boxShadow:'none'}:{})}}>{theme!=='azul'&&<SvgIcon name={fallbackSymbols[theme][i%fallbackSymbols[theme].length]}/>}</span>)}</div>
