@@ -16,11 +16,12 @@ const tools=[
   {name:'game_rules',description:'读取卡坦岛2025第六版3–4人基础版完整中文规则、来源、交易协商和全部行动字段。',inputSchema:emptySchema,annotations:readOnly},
 ];
 export const definition:GameModule<CatanState>={
+  setupOrderHint:"1 号玩家首先布置；初始布置依次进行正序与逆序两轮。",
   id:'catan',version:'1.0.0',stateVersion:1,name:'卡坦岛',description:'掷骰收获，协商交易，在岛上修路建城。',tagline:'随机岛屿 · 3–4 人',presentation:{english:'CATAN',symbol:'island',tone:'warm'},minPlayers:3,maxPlayers:4,defaultPlayers:3,defaultConfig:DEFAULT_CONFIG,runNoun:'局',
   validateConfig(config){if(!config||Array.isArray(config)||config.edition!=='base-2025'||Object.keys(config).some(k=>k!=='edition'))throw Error('卡坦岛使用固定的 2025 第六版基础版规则和随机布置');},
   lifecycle:{sessionScope:'run',eagerAgents:false},rules:()=>RULES,
   activity:run=>({phase:phaseNames[run.state.phase],detail:`第 ${run.index} 局 · ${run.state.phase.startsWith('setup')?'正逆序初始布置':`第 ${run.state.turnNumber} 回合`}`}),
-  create:(run,random)=>{definition.validateConfig!(run.config);return createCatan(run.runId,enginePlayers(run.roster),{random,round:run.index});},
+  create:(run,random)=>{definition.validateConfig!(run.config);return createCatan(run.runId,enginePlayers(run.roster),{random,round:run.index,firstSeat:0});},
   next:(previous,run,random)=>{definition.validateConfig!(run.config);return nextCatan(previous.state,run.runId,enginePlayers(run.roster),random,run.index);},
   finished:s=>s.phase==='finished',observe,
   tableView:(run,actor,{revealHands})=>decorateView(viewCatan(run.state,actor===null?null:seatFor(run,actor),revealHands),run.roster),

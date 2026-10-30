@@ -16,6 +16,7 @@ const descriptors:ToolDefinition[]=[
 const observe=(run:StoredRun<BurgundyState>,actor:string|null)=>decorateView(viewBurgundy(run.state,actor===null?null:seatFor(run,actor)),run.roster);
 const decisions=(run:StoredRun<BurgundyState>)=>run.state.phase==='finished'?[]:[{decisionId:decisionKey(run,run.state.revision,run.state.turn),actorId:run.roster[run.state.turn].playerId,allowedTools:['game_act']}];
 export const burgundyModule:GameModule<BurgundyState>={
+  setupOrderHint:"1 号玩家先选庄园或先行动，开局工人数随座位顺序递增。",
   id:'castles-of-burgundy',version:'1.0.0',stateVersion:1,name:'勃艮第城堡',description:'调度骰子与工人，将城堡、河流和城市铺入自己的庄园。',tagline:'2011 原版 · 骰子与庄园',presentation:{english:'BURGUNDY',symbol:'fleur-de-lis',tone:'warm'},
   minPlayers:2,maxPlayers:4,defaultPlayers:2,defaultConfig:{setup:'classic'},runNoun:'局',validateConfig:validateBurgundyConfig,lifecycle:{sessionScope:'run',eagerAgents:false},rules:()=>BURGUNDY_RULES,
   activity:run=>({phase:run.state.phase==='setup'?'选择庄园与起始城堡':run.state.phase==='finished'?'终局已结算':run.state.pending?'处理立即效果':'骰子行动',detail:`第 ${run.index} 局${run.state.round?` · ${PHASES[run.state.phaseIndex]} 阶段 · 第 ${run.state.round}/5 轮`:''}`}),

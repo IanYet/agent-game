@@ -133,7 +133,6 @@ export function createPuertoRico(id:string,inputs:PlayerInput[],random:()=>numbe
     players:inputs.map((p,seat)=>({...p,seat,coins:n-1,goods:emptyGoods(),colonists:0,island:[],buildings:[],vp:0,totalScore:previous?.players.find(o=>o.playerId===p.playerId)?.totalScore??0,wins:previous?.players.find(o=>o.playerId===p.playerId)?.wins??0})),
     buildingStock:Object.fromEntries(BUILDINGS.map(b=>[b.key,b.quantity])) as Record<BuildingKey,number>,supply:clone(GOOD_SUPPLY),colonistSupply:[55,75,95][n-3],colonistShip:n,vpSupply:[75,100,122][n-3],bank:86-n*(n-1),
     plantationMarket:[],quarrySupply:8,deck:GOODS.flatMap(kind=>Array.from({length:PLANTATION_COUNTS[kind]},(_,i)=>({id:`${kind}-${i+1}`,kind}))),discard:[],rng:Math.floor(random()*4294967296)>>>0||0x8ce971bd,finalReasons:[],result:null,events:[],ships:[n+1,n+2,n+3].map(capacity=>({capacity,good:null,count:0})),tradingHouse:[]};
-  s.governor=Math.floor(nextRandom(s)*n);
   if(previous){const oldId=previous.players[(previous.initialGovernor+1)%previous.players.length].playerId;const found=inputs.findIndex(p=>p.playerId===oldId);s.governor=found<0?0:found;}
   s.initialGovernor=s.governor;s.turn=s.governor;s.chooser=s.governor;
   for(let i=0;i<n;i++){const kind:Good=i<(n===5?3:2)?'indigo':'corn';const index=s.deck.findIndex(t=>t.kind===kind);s.players[(s.governor+i)%n].island.push({...s.deck.splice(index,1)[0],workers:0});}

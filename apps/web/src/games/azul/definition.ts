@@ -13,6 +13,7 @@ const descriptors:ToolDefinition[]=[
 const observe=(run:StoredRun<AzulState>,actor:string|null)=>agentObservation(decorateView(viewAzul(run.state,actor===null?null:seatFor(run,actor),false),run.roster));
 const decision=(run:StoredRun<AzulState>)=>({decisionId:decisionKey(run,run.state.revision,run.state.turn),actorId:run.roster[run.state.turn].playerId,allowedTools:['game_act']});
 export const azulModule:GameModule<AzulState>={
+  setupOrderHint:"1 号玩家首轮先选砖，后续轮次由先手标记决定。",
   id:'azul',version:'2.0.0',stateVersion:1,name:'花砖物语',description:'从工厂盘挑选花砖，把每一片铺进你的宫殿。',tagline:'有色墙 · 原版',presentation:{english:'AZUL',symbol:'tiles',tone:'cool'},
   minPlayers:2,maxPlayers:4,defaultPlayers:2,defaultConfig:{},runNoun:'局',
   validateConfig:config=>{if(!config||typeof config!=='object'||Array.isArray(config)||Object.keys(config).length)throw new Error('花砖物语使用原版标准有色墙，无额外配置');},

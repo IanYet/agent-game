@@ -15,11 +15,12 @@ const observe=(run:StoredRun<ChessState>,actor:string|null)=>agentObservation(vi
 // The current board and incremental events suffice; game_get_state retains the full score sheet.
 function promptView(run:StoredRun<ChessState>,actor:string){const v=observe(run,actor);return {revision:v.revision,you:actor,viewer:v.viewer,color:v.players[v.viewer].color,turn:v.turn,players:v.players,initialFen:v.initialFen,fen:v.fen,board:v.board,check:v.check,phase:v.phase,drawOffer:v.drawOffer,claimable:v.claimable,halfmoveClock:v.halfmoveClock,repetitions:v.repetitions,events:v.events};}
 export const definition:GameModule<ChessState>={
+  setupOrderHint:"1 号玩家执白先行，2 号玩家执黑。",
   id:'chess',version:'2.0.0',stateVersion:1,name:'国际象棋',description:'黑白之间，步步为营。交换先后，在同一张桌上继续较量。',tagline:'标准对弈',presentation:{english:'CHESS',symbol:'chess-pawn',tone:'cool'},
-  minPlayers:2,maxPlayers:2,defaultPlayers:2,defaultConfig:DEFAULT_CHESS_OPTIONS,runNoun:'局',validateConfig:validateChessOptions,
+  minPlayers:2,maxPlayers:2,defaultPlayers:2,defaultConfig:{alternateColors:DEFAULT_CHESS_OPTIONS.alternateColors},runNoun:'局',validateConfig:config=>validateChessOptions({firstWhite:'first',alternateColors:config?.alternateColors}),
   rules:()=>CHESS_RULES,lifecycle:{sessionScope:'run',eagerAgents:false},
   activity:run=>({phase:run.state.phase==='finished'?'本局已结束':new Chess(run.state.fen).isCheck()?'将军':'行棋中',detail:`第 ${run.index} 局 · ${COLOR_NAMES[run.state.players[run.state.turn].color]}行棋`}),
-  create:(run,random)=>createChess(run.runId,enginePlayers(run.roster),run.config,random,run.index),
+  create:(run,random)=>createChess(run.runId,enginePlayers(run.roster),{firstWhite:'first',alternateColors:run.config.alternateColors},random,run.index),
   next:(old,run,random)=>createChess(run.runId,enginePlayers(run.roster),old.state.options,random,run.index,old.state),
   finished:state=>state.phase==='finished',observe,
   tableView:(run,actor)=>decorateView(viewChess(run.state,actor===null?null:seatFor(run,actor)),run.roster),

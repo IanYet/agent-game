@@ -1,5 +1,7 @@
 # 新增游戏
 
+[文档目录](../README.md) · [本地开发](README.md)
+
 新增游戏的规则与操作界面放在 `apps/web/src/games/<id>/`，在 `games/registry.ts` 注册后发布静态网站。独立背景物件也放在游戏目录，并在 `visuals/table-models.ts` 注册主题、在 `GameBackground.tsx` 提供静态图案。已经满足协议、能力和最低修复版本要求的连接器可以继续使用。
 
 ## 目录与注册
@@ -29,9 +31,11 @@ export const gameRegistry = new GameRegistry([existingGame, myGame]);
 
 生产模块应提供 `ui.Table` 与 `ui.Replay`，设置栏 `ConfigFields` 可选。中央界面从模块读取名称、人数范围、默认人数、描述、tagline、runNoun 与 `presentation` 的英文名、抽象字标和材质色调。`Table` 仅挂载具体游戏场景与行动；导航、暂停、玩家查看和下一局确认由公共框架负责。不要修改 App/controller/protocol/Harness 来增加游戏分支。
 
+游戏的规则版本、操作、来源和实现边界统一写在 `docs/games/<id>.md`，并更新[游戏目录](../games/README.md)。游戏源码目录只保留实现、资源与规则测试。
+
 ## 模块 API
 
-准确类型见 [runtime/types.ts](../apps/web/src/runtime/types.ts)。
+准确类型见 [runtime/types.ts](../../apps/web/src/runtime/types.ts)。
 
 | API | 约定 |
 | --- | --- |
@@ -56,6 +60,7 @@ export const gameRegistry = new GameRegistry([existingGame, myGame]);
 | `restore(data,stateVersion)` | 校验当前格式的浏览器状态；不进行旧格式迁移 |
 | `summary(run)` | 为通用历史页返回标题、说明、条目和日期 |
 | `planning?(run)` | 下一轮设置文案、按玩家 ID 的余额、新玩家说明及不能继续的玩家原因；公共层不判断筹码等领域条件 |
+| `setupOrderHint?` | 创建对局时说明名单顺序与开局角色、先手之间的关系 |
 | `rules(run?)` | 规则说明，可使用当前房间配置 |
 
 `StoredRun<S>` 封装 `moduleId/moduleVersion/stateVersion/roomId/runId/index/roster/config/state`。规则只消费需要的领域数据；从 roster 转成引擎玩家时不要把 Harness 模型设置当作规则枚举。

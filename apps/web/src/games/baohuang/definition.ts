@@ -35,6 +35,7 @@ export function restoreBao(data:unknown,version:number):BaoState{
   return structuredClone(s);
 }
 export const baohuangModule:GameModule<BaoState,Omit<BaoView,'legalActions'>>={
+  setupOrderHint:"名单顺序决定座位；皇牌持有者决定登基，皇帝首引。",
   id:'baohuang',version:'2.0.0',stateVersion:1,name:'山东保皇',description:'皇帝在明，侍卫在暗。五人四副牌，皇保与平民争先走完。',tagline:'五人 · 固定保 · 明暗博弈',
   presentation:{english:'BAOHUANG',symbol:'crown',tone:'warm'},minPlayers:5,maxPlayers:5,defaultPlayers:5,defaultConfig:{ruleset:'jj-fixed168',baseScore:1},runNoun:'局',
   validateConfig,rules:()=>BAOHUANG_RULES,lifecycle:{sessionScope:'run',eagerAgents:false},

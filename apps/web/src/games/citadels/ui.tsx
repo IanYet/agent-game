@@ -8,8 +8,8 @@ import type {CitadelsState,CitadelsView} from './engine';
 
 export {Table} from './table';
 
-export function ConfigFields({value,onChange}:{value:{firstCrown:number};onChange:(value:{firstCrown:number})=>void}){
-  return <div className="ct-config"><p>经典八身份 · 3–7 人 · 八建筑终局。人数通过玩家名单增减；三人每位选两个身份。</p><label>初始王冠座位<input type="number" min="1" max="7" value={value.firstCrown} onChange={event=>onChange({...value,firstCrown:Number(event.target.value)})}/></label><small>请将年龄最大的玩家安排在该座位，座位不能超过实际人数。</small></div>;
+export function ConfigFields(){
+  return <div className="ct-config"><p>经典八身份 · 3–7 人 · 八建筑终局。人数通过玩家名单增减；三人每位选两个身份。</p><small>新桌由名单 1 号玩家持有王冠并首先选角，可拖拽名单调整。后续轮次按国王与王冠规则推进。</small></div>;
 }
 
 export function Replay({run}:{run:StoredRun<CitadelsState>}){
