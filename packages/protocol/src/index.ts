@@ -3,10 +3,13 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 // Wire contract only. Game engines, React, rules and game lists do not belong here.
 export const CONNECTOR_PORT = 3211;
 export const PROTOCOL_VERSION = 5;
-export const CONNECTOR_CAPABILITIES = ['dynamic-tools-v1', 'json-schema-2020-12', 'player-scopes-v1', 'concurrent-decisions-v1', 'structured-results-v1', 'local-conversations-v1'] as const;
+export const CONNECTOR_CAPABILITIES = ['dynamic-tools-v1', 'json-schema-2020-12', 'player-scopes-v1', 'concurrent-decisions-v1', 'structured-results-v1', 'local-conversations-v1', 'session-settings-v1'] as const;
 export type HarnessId = 'codex' | 'codex-acp' | 'dsh' | 'workbuddy';
 export type PlayerKind = HarnessId | 'human';
 export interface AgentSettings { model?: string; reasoningEffort?: string }
+export interface SessionSettings { model: string | null; modelName: string | null; reasoningEffort: string | null }
+export interface SessionResult { sessionId: string; settings: SessionSettings }
+export interface TurnResult { completed: boolean; settings: SessionSettings }
 export interface ModelInfo { id: string; name: string; isDefault: boolean; defaultReasoningEffort?: string; supportedReasoningEfforts?: Array<{ effort: string; description: string }> }
 export interface HarnessInfo { id: HarnessId; name: string; protocol: string; available: boolean; path?: string; version?: string; detail?: string; models?: ModelInfo[]; auth?: 'ready' | 'missing' | 'unknown'; ephemeral?: boolean }
 export interface ConnectorInfo { version: string; protocolVersion: number; capabilities: string[]; platform: string; port: number; harnesses: HarnessInfo[]; models: ModelInfo[]; auth: 'chatgpt' | 'missing' | 'apiKey' | 'unknown' }

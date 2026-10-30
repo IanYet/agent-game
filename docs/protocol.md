@@ -21,6 +21,7 @@
 - `concurrent-decisions-v1`
 - `structured-results-v1`
 - `local-conversations-v1`
+- `session-settings-v1`
 
 ## HTTP 与事件
 
@@ -31,8 +32,8 @@
 | GET /health | 连接器版本、协议、能力、原生 Harness 状态与各自模型目录 |
 | POST /api/connect | 协议/能力握手，返回控制令牌 |
 | GET /api/events | 授权 SSE：ready、tool、activity、usage、conversation |
-| POST /api/sessions | 创建单玩家原生会话及固定工具注册表 |
-| POST /api/sessions/:id/turn | 传 decisionId、模块提示词和可选模型/强度；网页按待决策顺序逐个派发 |
+| POST /api/sessions | 创建单玩家原生会话及固定工具注册表，返回会话编号与实际模型配置 |
+| POST /api/sessions/:id/turn | 传 decisionId、模块提示词和可选模型/强度；返回任务结果与实际模型配置，网页按待决策顺序逐个派发 |
 | POST /api/tool-results | 网页返回标准 MCP 结果 |
 | POST /api/pause | 取消并等待全部活动推理 |
 | DELETE /api/sessions | 撤销全部会话；可用 ids 数组只关闭指定会话 |
@@ -56,7 +57,9 @@ interface SessionRequest {
 
 没有 gameId 枚举、座位上界、牌类规则、固定行动参数或网页代码。创建时给会话生成随机 capability 和隔离工作目录。capability 封装玩家和作用域；MCP 参数不能改变绑定。
 
-`/turn` 接受 `{decisionId,prompt,settings?}`。同一原生会话中的决策不能重叠；网页对全部玩家串行派发，上一条任务结束后至少等待 3 秒再发送下一条。创建玩家会话也由网页依次完成。桥只报告原生任务 completed；决策是否完成由网页模块检查。决策统一使用取消、超时与限流处理。
+创建会话返回 `{sessionId,settings}`，每轮任务完成返回 `{completed,settings}`。`settings` 使用 `{model,modelName,reasoningEffort}`，分别是原生会话确认的模型标识、对应显示名与思考强度，未提供的字段为 `null`。Codex App Server 读取已生效的会话配置，Codex ACP 从当前模型变体读取强度，其他 ACP 程序读取当前配置选项；模型显示名取自该程序自己的模型目录。网页按 playerId 保存到玩家运行状态，玩家卡只展示这些实际值。`session-settings-v1` 是必需能力，不回退到旧响应或占位文字。
+
+`/turn` 接受 `{decisionId,prompt,settings?}`。同一原生会话中的决策不能重叠；网页对全部玩家串行派发，上一条任务结束后至少等待 3 秒再发送下一条。创建玩家会话也由网页依次完成。桥报告原生任务是否 completed 及实际模型配置；决策是否完成由网页模块检查。决策统一使用取消、超时与限流处理。
 
 初始化不携带局面快照。网页为每个实际会话维护记录游标：首条消息包含完整可见上下文，之后只发新增记录；成功才确认本次快照的截止序号。更换 Agent、模型设置或重建会话时重新同步，连接器不在原句柄下隐式恢复已关闭的会话。
 
@@ -68,7 +71,7 @@ interface SessionRequest {
 
 连接器记录初始化指令、工具声明、实际发送给 Harness 的提示、回复、可见思考、工具参数和完整结果，以及权限答复、暂停与错误。原生会话结束前仍可转发收尾消息，避免最后一次行动丢失记录。认证交换、进程配置和带凭据的 MCP 地址不进入对话。
 
-网页按作用域与玩家归属接收对话，按 runId/playerId 存入 `agent-arcade.conversations.v1`。流式内容合并后分批保存，页面隐藏或关闭前立即保存。开关只控制显示，记录不依赖好奇模式；刷新可重新查看已保存内容。原生 Harness 始终使用临时会话，不提供客户端历史保留开关。
+网页按作用域与玩家归属接收对话，按 runId/playerId 压缩存入 `agent-arcade.conversations.v2`。流式内容合并后按一秒分批保存，页面隐藏或关闭前立即保存。开关只控制显示，记录不依赖好奇模式；刷新可重新查看已保存内容。原生 Harness 始终使用临时会话，不提供客户端历史保留开关。
 
 观战与好奇模式的对话面板仅过滤 event，其他记录各占一个条目，展示来源、去向、类型、原标题与时间。工具参数和结果完整显示；JSON 字符串解码后按层级展示，混合正文中的 JSON 也独立呈现。“全部展开／全部折叠”作用于当前玩家的全部条目和 JSON 层级，仍可单独切换。渲染不修改存档内容。
 

@@ -34,7 +34,7 @@ function TablePreview(){
   const viewer=run.roster.find(player=>player.kind==='human')?.playerId??null;
   const view=gameModule.tableView(run,viewer,{revealHands:!human||curious});
   const {state:_engineState,...room}=run;
-  const state:AppSnapshot={connector:null,connected:true,connectorUpdateRequired:false,game:view,room:{...room,finished:false},seats:run.roster.map((player,seat)=>({...player,seat,status:'ready',turns:0,tokens:0})),paused,curiosityMode:!human||curious,conversations:{},conversationError:null,error:null,history:[],activity:{...gameModule.activity(run),actors:[]}};
+  const state:AppSnapshot={connector:null,connected:true,connectorUpdateRequired:false,game:view,room:{...room,finished:false},seats:run.roster.map((player,seat)=>({...player,seat,status:'ready',turns:0,tokens:0})),paused,curiosityMode:!human||curious,conversations:{},conversationError:null,error:null,storageError:null,history:[],activity:{...gameModule.activity(run),actors:[]}};
   const controller={humanAction:()=>setMessage('这是牌桌展示，不会执行正式游戏行动。')} as unknown as GameController;
   const Table=gameModule.ui!.Table,theme=(['baohuang','guandan'].includes(gameId)?'doudizhu':gameId) as TableTheme;
   const label=`最大人数 · ${gameModule.maxPlayers} 人 · ${human?'真人参与':'全 Agent'}`;

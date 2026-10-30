@@ -4,7 +4,7 @@ import { executableCommand } from './discovery';
 import { gameConfig, subscriptionEnvironment } from './codex';
 import { sessionInstructions } from './instructions';
 import { readFile } from 'node:fs/promises';
-import { selectAcpModel } from './settings';
+import { selectAcpModel, settingsFromAcpModel } from './settings';
 import { captureConversation } from './conversation';
 import type { AgentSession, HarnessAdapter, HarnessContext } from '../types';
 
@@ -64,6 +64,7 @@ export class AcpAdapter implements HarnessAdapter {
       await configure(context);
       return {
         sessionId: createdSessionId,
+        get settings() { return settingsFromAcpModel(currentModelId); },
         playTurn: async (prompt, signal, settings) => {
           if (signal.aborted) throw abortError();
           if (settings) await configure(settings);

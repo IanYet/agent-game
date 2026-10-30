@@ -8,15 +8,16 @@ import {GEMS,LEVELS,type Card,type Gem,type SplendorView} from './types';
 
 type Rect={left:number;top:number;width:number;height:number};
 type View=ControlledView<SplendorView>;
-type CardTransfer={kind:'card';id:string;card:Card|null;level:Card['level'];from:Rect;target:HTMLElement;reserved:boolean;deck:boolean;replacement?:HTMLElement};
-type GemTransfer={kind:'gem';id:string;gem:Gem;from:Rect;target:SVGElement;delay:number};
+type CardTransfer={kind:'card';id:string;card:Card|null;level:Card['level'];from:Rect;to:Rect;target:HTMLElement;reserved:boolean;deck:boolean;replacement?:HTMLElement};
+type GemTransfer={kind:'gem';id:string;gem:Gem;from:Rect;to:Rect;target:SVGElement;delay:number};
 type Transfer=CardTransfer|GemTransfer;
 const visible=(rect:Rect)=>rect.width>0&&rect.height>0&&rect.left<innerWidth&&rect.top<innerHeight&&rect.left+rect.width>0&&rect.top+rect.height>0;
+const sameRect=(a:Rect,b:Rect)=>Math.abs(a.left-b.left)<.5&&Math.abs(a.top-b.top)<.5&&Math.abs(a.width-b.width)<.5&&Math.abs(a.height-b.height)<.5;
 
 function FlyingCard({transfer,renderCard,onFinish}:{transfer:CardTransfer;renderCard:(card:Card|null,level:Card['level'])=>ReactNode;onFinish:(id:string)=>void}){
   const element=useRef<HTMLDivElement>(null);
   useLayoutEffect(()=>{
-    const {id,from,target,reserved,deck,replacement}=transfer,to=target.getBoundingClientRect();
+    const {id,from,to,target,reserved,deck,replacement}=transfer;
     if(!visible(to)){onFinish(id);return;}
     const width=from.width,height=width*91/64;
     const x=to.left+to.width/2-from.left-width/2,y=to.top+(reserved?to.width*91/64:to.height)/2-from.top-height/2;
@@ -46,7 +47,7 @@ function FlyingCard({transfer,renderCard,onFinish}:{transfer:CardTransfer;render
 function FlyingGem({transfer,onFinish}:{transfer:GemTransfer;onFinish:(id:string)=>void}){
   const element=useRef<HTMLDivElement>(null);
   useLayoutEffect(()=>{
-    const {id,from,target,delay}=transfer,to=target.getBoundingClientRect();
+    const {id,from,to,target,delay}=transfer;
     if(!visible(to)){onFinish(id);return;}
     const x=to.left+to.width/2-from.left-from.width/2,y=to.top+to.height/2-from.top-from.height/2;
     const scale=to.width/from.width,turn=x<0?-12:12;
@@ -69,16 +70,18 @@ function FlyingGem({transfer,onFinish}:{transfer:GemTransfer;onFinish:(id:string
 // Origins are measured before cards and gems leave the table. Only the
 // projected view is used, so a private deck draw never supplies a card face.
 export function TableTransfers({game,market,renderCard}:{game:View;market:RefObject<HTMLDivElement|null>;renderCard:(card:Card|null,level:Card['level'])=>ReactNode}){
-  const {reduced}=useEffectsPreference(),previous=useRef<View|null>(null),origins=useRef(new Map<string,Rect>());
+  const {reduced}=useEffectsPreference(),previous=useRef<View|null>(null),origins=useRef(new Map<string,Rect>()),selectedOrigins=useRef(new Map<Gem,Rect[]>());
   const [transfers,setTransfers]=useState<Transfer[]>([]);
   const finish=useCallback((id:string)=>setTransfers(items=>items.filter(item=>item.id!==id)),[]);
   const measure=useCallback(()=>{
     const root=market.current?.closest('.sp-layout');
     const measured=new Map(Array.from(root?.querySelectorAll<HTMLElement>('[data-sp-card-origin]')??[],element=>[element.dataset.spCardOrigin!,element.getBoundingClientRect()]));
+    const selected=new Map<Gem,Rect[]>();
     for(const stock of root?.querySelectorAll<HTMLElement>('[data-sp-bank-color]')??[]){
-      stock.querySelectorAll('.sp-bank-gems>.sp-gem').forEach((gem,index)=>measured.set(`bank:${stock.dataset.spBankColor}:${index}`,gem.getBoundingClientRect()));
+      stock.querySelectorAll('.sp-bank-gems .sp-gem').forEach((gem,index)=>measured.set(`bank:${stock.dataset.spBankColor}:${index}`,gem.getBoundingClientRect()));
+      selected.set(stock.dataset.spBankColor as Gem,Array.from(stock.querySelectorAll('.sp-gem-choice[aria-pressed="true"]>.sp-gem'),gem=>gem.getBoundingClientRect()));
     }
-    origins.current=measured;
+    origins.current=measured;selectedOrigins.current=selected;
   },[market]);
   useLayoutEffect(()=>{
     const before=previous.current;previous.current=game;
@@ -95,10 +98,11 @@ export function TableTransfers({game,market,renderCard}:{game:View;market:RefObj
         let order=0;
         for(const gem of GEMS){
           const count=Math.min(event.tokens?.[gem]??0,player.tokens[gem]-oldPlayer.tokens[gem]);
-          const destinations=root?.querySelectorAll<SVGElement>(`[data-sp-held-seat="${event.seat}"] [data-sp-held-gem="${gem}"]>.sp-gem`);
+          const destinations=root?.querySelectorAll<SVGElement>(`[data-sp-held-seat="${event.seat}"] [data-sp-held-gem="${gem}"] .sp-gem`);
+          const selected=event.type==='take'&&event.seat===before.viewer?selectedOrigins.current.get(gem):undefined;
           for(let index=0;index<count;index++){
-            const from=origins.current.get(`bank:${gem}:${before.bank[gem]-count+index}`),target=destinations?.[oldPlayer.tokens[gem]+index];
-            if(from&&target&&visible(from)&&visible(target.getBoundingClientRect()))added.push({kind:'gem',id:`${game.id}:${event.seq}:${gem}:${index}`,gem,from,target,delay:(event.type==='take'?0:120)+order++*60});
+            const from=selected?.[index]??origins.current.get(`bank:${gem}:${before.bank[gem]-count+index}`),target=destinations?.[oldPlayer.tokens[gem]+index];
+            if(from&&target&&visible(from)&&visible(target.getBoundingClientRect()))added.push({kind:'gem',id:`${game.id}:${event.seq}:${gem}:${index}`,gem,from,to:target.getBoundingClientRect(),target,delay:(event.type==='take'?0:120)+order++*60});
           }
         }
       }
@@ -127,7 +131,7 @@ export function TableTransfers({game,market,renderCard}:{game:View;market:RefObj
         const width=root?.querySelector('.sp-market-slot')?.getBoundingClientRect().width??112;
         from={left:from.left+from.width/2-width/2,top:from.top+from.height/2-width*91/128,width,height:width*91/64};
       }
-      added.push({kind:'card',id:`${game.id}:${event.seq}`,card:deck?null:card??null,level,from,target,reserved,deck,replacement});
+      added.push({kind:'card',id:`${game.id}:${event.seq}`,card:deck?null:card??null,level,from,to:target.getBoundingClientRect(),target,reserved,deck,replacement});
     }
     setTransfers(items=>{
       const active=items.filter(item=>item.target.isConnected);
@@ -135,12 +139,20 @@ export function TableTransfers({game,market,renderCard}:{game:View;market:RefObj
     });
     measure();
   },[game,reduced,market,measure]);
+  useLayoutEffect(measure);
   useLayoutEffect(()=>{
     const root=market.current?.closest('.sp-layout');
-    const reset=()=>{setTransfers(items=>items.length?[]:items);measure();};
-    const observer=new ResizeObserver(reset);if(root)observer.observe(root);
-    window.addEventListener('resize',reset);window.addEventListener('scroll',reset,true);document.addEventListener('visibilitychange',reset);
-    return()=>{observer.disconnect();window.removeEventListener('resize',reset);window.removeEventListener('scroll',reset,true);document.removeEventListener('visibilitychange',reset);};
+    const updateLayout=()=>{
+      setTransfers(items=>{
+        const active=items.filter(item=>item.target.isConnected&&sameRect(item.to,item.target.getBoundingClientRect()));
+        return active.length===items.length?items:active;
+      });
+      measure();
+    };
+    const hide=()=>{setTransfers(items=>items.length?[]:items);measure();};
+    const observer=new ResizeObserver(updateLayout);if(root)observer.observe(root);
+    window.addEventListener('resize',updateLayout);window.addEventListener('scroll',updateLayout,true);document.addEventListener('visibilitychange',hide);
+    return()=>{observer.disconnect();window.removeEventListener('resize',updateLayout);window.removeEventListener('scroll',updateLayout,true);document.removeEventListener('visibilitychange',hide);};
   },[game.id,market,measure]);
   // These non-interactive copies must remain paintable: the card material
   // renderer suspends inert subtrees. Pointer input is disabled by the layer.

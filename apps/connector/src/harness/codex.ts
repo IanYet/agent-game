@@ -85,13 +85,16 @@ export class CodexAdapter implements HarnessAdapter {
       const result = await rpc.call('thread/start', {
         cwd: context.cwd, ...(context.model ? { model: context.model } : {}),
         sandbox: 'read-only', approvalPolicy: 'on-request', developerInstructions: sessionInstructions(context),
-        config: gameConfig(context.mcpUrl, this.disabledServers), ephemeral: true,
+        config: { ...gameConfig(context.mcpUrl, this.disabledServers), ...(context.reasoningEffort ? { model_reasoning_effort: context.reasoningEffort } : {}) }, ephemeral: true,
       }, 90_000);
       const createdSessionId: string = result.thread.id; sessionId = createdSessionId;
+      let applied = { model: typeof result.model === 'string' ? result.model : context.model, reasoningEffort: typeof result.reasoningEffort === 'string' ? result.reasoningEffort : context.reasoningEffort };
       return {
         sessionId: createdSessionId,
+        get settings() { return { ...applied }; },
         playTurn: async (prompt, signal, settings) => {
           if (signal.aborted) throw abortError();
+          const next = { model: settings?.model ?? applied.model, reasoningEffort: settings?.reasoningEffort ?? applied.reasoningEffort };
           turnId = null; gameCalls.clear(); activeSignal = signal;
           await new Promise<void>((resolve, reject) => {
             let settled = false;
@@ -102,8 +105,9 @@ export class CodexAdapter implements HarnessAdapter {
             const interrupt = () => { if (turnId && !interrupting) { interrupting = true; void rpc.call('turn/interrupt', { threadId: sessionId, turnId }).catch(finish); } };
             const abort = () => { interrupt(); };
             activeDone = error => finish(signal.aborted ? abortError() : error); signal.addEventListener('abort', abort, { once: true });
-            rpc.call('turn/start', { threadId: sessionId, input: [{ type: 'text', text: prompt }], model: settings?.model ?? context.model ?? result.model, effort: settings?.reasoningEffort ?? context.reasoningEffort ?? result.reasoningEffort }).then(result => {
+            rpc.call('turn/start', { threadId: sessionId, input: [{ type: 'text', text: prompt }], model: next.model, effort: next.reasoningEffort }).then(result => {
               if (settled) return;
+              applied = next;
               turnId = result.turn?.id ?? turnId;
               if (signal.aborted) interrupt();
             }).catch(finish);

@@ -10,6 +10,10 @@
 .azul-source-tile.selected{outline:2px solid #f7df9e;outline-offset:3px;transform:translateY(-2px)}
 .azul-tile{display:block;width:100%;height:100%;object-fit:contain;border-radius:4px;filter:drop-shadow(0 2px 1px #0009);user-select:none}
 .azul-tile.ghost{opacity:.17;filter:grayscale(.3)}
+.azul-tile[data-azul-tile-arriving]{opacity:0}
+.azul-tile-transfers{position:fixed;inset:0;z-index:45;pointer-events:none}
+.azul-flying-tile{position:absolute;transform-origin:center;will-change:transform,opacity;filter:drop-shadow(0 4px 7px #0007)}
+.azul-flying-tile>.azul-tile{display:block;width:100%;height:100%;filter:none}
 .azul-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:9px;width:54%;min-width:0;padding:0;border:0;background:transparent;box-shadow:none;text-align:center}
 .azul-center-label{display:flex;flex-direction:column;align-items:center;gap:4px;max-width:100%}
 .azul-center-label strong{font-size:11px;font-weight:400}
@@ -49,10 +53,8 @@
 .azul-layout .human-player-metrics{min-width:88px;justify-content:flex-end}
 .azul-opponents{--board-player-min-height:316px}
 .game-layout.board-game-layout.azul-layout>.game-surface>.azul-opponents{width:100%;justify-self:start;--board-player-template-rows:initial}
-.game-layout.board-game-layout.azul-layout[data-board-mode=player]>.game-surface>.azul-opponents{justify-self:end}
 .azul-layout .azul-opponents .board-player-slots{scrollbar-gutter:auto;align-items:flex-start}
 .azul-opponents .player-card-grid{width:100%}
-.azul-layout[data-board-mode=player] .azul-opponents .board-player-slots{align-items:safe flex-end}
 .azul-opponents .player-card-action{white-space:normal;line-height:1.5}
 .azul-opponents .agent-player-card>.player-card-footer{grid-template-columns:max-content minmax(0,1fr)}
 .azul-opponents .azul-board{--tile:clamp(12px,calc((100cqw - 38px)/12),18px);--tile-gap:2px;--board-row-gap:3px;--arrow-width:8px;width:100%;max-width:254px;margin-inline:auto}

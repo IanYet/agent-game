@@ -2,7 +2,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { EventEmitter } from 'node:events';
-import { modelsForHarness, type AgentSettings, type BrowserToolRequest, type ConnectorEvent, type ConversationUpdate, type SessionRequest, type ToolResponse } from '@agent-game/protocol';
+import { modelsForHarness, type AgentSettings, type BrowserToolRequest, type ConnectorEvent, type ConversationUpdate, type SessionRequest, type SessionResult, type SessionSettings, type TurnResult, type ToolResponse } from '@agent-game/protocol';
 import { ToolRegistry } from '../../../packages/protocol/src/validation';
 import type { AgentSession, ConnectorInfo, HarnessAdapter } from './types';
 import { sessionInstructions } from './harness/instructions';
@@ -65,10 +65,14 @@ export class LocalBridge extends EventEmitter {
     const pending = this.pending.get(id); if (!pending) throw new Error('工具请求已过期');
     this.pending.delete(id); clearTimeout(pending.timer); pending.resolve(response);
   }
-  async createSession(request: SessionRequest): Promise<{ sessionId: string }> {
+  private sessionSettings(session: AgentSession, kind: SessionRequest['kind']): SessionSettings {
+    const applied = session.settings, model = applied.model || null;
+    return { model, modelName: model ? modelsForHarness(this.info, kind).find(item => item.id === model)?.name || model : null, reasoningEffort: applied.reasoningEffort || null };
+  }
+  async createSession(request: SessionRequest): Promise<SessionResult> {
     return this.startSession(request, randomUUID());
   }
-  private async startSession(request: SessionRequest, sessionId: string): Promise<{ sessionId: string }> {
+  private async startSession(request: SessionRequest, sessionId: string): Promise<SessionResult> {
     await this.cooldowns.ready();
     const cooling = this.cooldowns.error(request.kind); if (cooling) throw cooling;
     if (!this.owner?.attached) throw new Error('请先连接游戏网页');
@@ -101,26 +105,29 @@ export class LocalBridge extends EventEmitter {
       const cooling = this.cooldowns.error(request.kind); if (cooling) { await session.close(); throw cooling; }
       // A replaced native session must receive a new browser handle so its
       // first message supplies the full current context again.
-      capability.sessionId = sessionId; this.sessions.set(sessionId, { session, capability, token, cwd }); return { sessionId };
+      capability.sessionId = sessionId; this.sessions.set(sessionId, { session, capability, token, cwd });
+      return { sessionId, settings: this.sessionSettings(session, request.kind) };
     } catch (error) {
       const failure = this.cooldowns.error(request.kind) ?? error as Error;
       conversation.record('error', '创建玩家会话失败', failure.message); this.capabilities.delete(token); await this.removeTemporaryWorkspace(cwd); await this.cooldowns.flush(); throw failure;
     }
     finally { this.creating.delete(key); }
   }
-  async playTurn(sessionId: string, prompt: string, decisionId: string, settings?: AgentSettings): Promise<{ completed: boolean }> {
+  async playTurn(sessionId: string, prompt: string, decisionId: string, settings?: AgentSettings): Promise<TurnResult> {
     await this.cooldowns.ready();
     const player = this.sessions.get(sessionId); if (!player) throw new Error('找不到玩家会话，请重新连接');
     const cooling = this.cooldowns.error(player.capability.request.kind); if (cooling) throw cooling;
     if (this.active.has(sessionId)) throw new Error('此玩家已有正在处理的消息');
     const resolved = resolveSettings(modelsForHarness(this.info, player.capability.request.kind), settings ?? player.capability.request);
+    const nativeSession = player.session;
+    if (!nativeSession) throw new Error('上次会话已关闭，请重新创建玩家会话并同步当前上下文。');
     const controller = new AbortController();
     const active: ActiveTurn = { decisionId, controller, done: Promise.resolve(), kind: player.capability.request.kind }; this.active.set(sessionId, active);
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 180_000);
     const stopTimer = () => clearTimeout(timer); controller.signal.addEventListener('abort', stopTimer, { once: true });
     active.done = this.runTurn(sessionId, player, prompt, controller.signal, resolved);
-    try { await active.done; player.capability.conversation.record('event', '本次决策结束', 'Agent 已结束本次任务。'); return { completed: true }; }
+    try { await active.done; player.capability.conversation.record('event', '本次决策结束', 'Agent 已结束本次任务。'); return { completed: true, settings: this.sessionSettings(nativeSession, player.capability.request.kind) }; }
     catch (error) {
       const notice = rateLimitNotice({ message: (error as Error)?.message });
       if (notice && !(controller.signal.reason instanceof UpstreamCooldownError)) this.rateLimited(player.capability, notice);

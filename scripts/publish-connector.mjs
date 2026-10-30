@@ -58,7 +58,7 @@ export async function publish({ repository, token, directory, sourceCommit, runI
   }
   if (!release) {
     release = await request(`${base}/releases`, { method: 'POST', body: { tag_name: tag, target_commitish: sourceCommit, name: `同桌连接器 ${tag}`, draft: true, prerelease: false,
-      body: `同桌连接器 ${tag}，协议 5，自带 Node.js。配合当前游戏网页使用。\n\n- 修复 Codex 正在自行重试 429 时，连接器提前取消任务并强制冷却 10 分钟的问题。App Server 与 ACP 均保留原生退避重试。\n- 最终限流失败时，在对话中保留脱敏后的上游错误原因、错误代码与 HTTP 状态，便于区分请求限流与账户额度问题。\n- 原生重试仍受 180 秒决策时限与主动暂停控制；未提供恢复时间时的 10 分钟冷却仅用于最终限流失败。\n\nWindows 下载「同桌连接器 ${tag} · Windows 64 位」EXE；macOS 13.5+ 按芯片选择「同桌连接器 ${tag} · macOS Apple Silicon」或「同桌连接器 ${tag} · macOS Intel」ZIP，解压后将应用拖入「应用程序」。\n\nWindows 包自带 .NET 与 Windows App SDK，支持 Windows 10 2004（19041）及更新版本，尚未做 Authenticode 签名。macOS 包只有 ad-hoc 签名，尚未完成 Developer ID 签名与公证，首次启动说明位于 ZIP 根目录的「请先阅读.txt」。安装包启动由用户验收。\n\n每个包附带 .sha256 校验和与 .build.json 构建信息，SHA256SUMS.txt 汇总全部安装包。源提交：${sourceCommit}。` } });
+      body: `同桌连接器 ${tag}，协议 5，自带 Node.js。配合当前游戏网页使用。\n\n- 创建玩家会话和完成决策时，回传原生会话实际使用的模型与思考强度，网页玩家卡据此显示，不再使用默认值或占位文字。\n- 支持 Codex App Server、Codex ACP、dsh 与 WorkBuddy 的实际配置回传；Codex App Server 创建会话时同步应用所选思考强度。\n- 新增 session-settings-v1 能力；网页 v0.5.14 需要本版或更新连接器。\n\nWindows 下载「同桌连接器 ${tag} · Windows 64 位」EXE；macOS 13.5+ 按芯片选择「同桌连接器 ${tag} · macOS Apple Silicon」或「同桌连接器 ${tag} · macOS Intel」ZIP，解压后将应用拖入「应用程序」。\n\nWindows 包自带 .NET 与 Windows App SDK，支持 Windows 10 2004（19041）及更新版本，尚未做 Authenticode 签名。macOS 包只有 ad-hoc 签名，尚未完成 Developer ID 签名与公证，首次启动说明位于 ZIP 根目录的「请先阅读.txt」。安装包启动由用户验收。\n\n每个包附带 .sha256 校验和与 .build.json 构建信息，SHA256SUMS.txt 汇总全部安装包。源提交：${sourceCommit}。` } });
   }
   if (release.prerelease) throw new Error('Refusing to publish stable downloads into a prerelease.');
   const publishDraft = release.draft;

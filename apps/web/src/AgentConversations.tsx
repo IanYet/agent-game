@@ -7,13 +7,14 @@ import {Modal} from './Modal';
 import {conversationContent,type ConversationContent} from './conversation-content';
 import {ConversationBody} from './ConversationBody';
 import {ConversationExpansion,useConversationExpansion} from './conversation-expansion';
+import {StorageCleanup} from './StorageCleanup';
 import './conversations.css';
 
 export const AgentConversationAccess=createContext<((seat:number)=>void)|null>(null);
 const labels:Record<ConversationContent['kind'],string>={instructions:'初始化说明',prompt:'输入消息',message:'回复',reasoning:'思考','tool-call':'工具调用','tool-result':'工具结果',error:'错误'};
 const empty:ConversationEntry[]=[];
 
-export function AgentConversationModal({state,playerId,onPlayer,onClose}:{state:AppSnapshot;playerId:string;onPlayer:(id:string)=>void;onClose:()=>void}){
+export function AgentConversationModal({state,playerId,onPlayer,onClose,onClearStorage}:{state:AppSnapshot;playerId:string;onPlayer:(id:string)=>void;onClose:()=>void;onClearStorage:()=>void}){
   const agents=state.room!.roster.filter(p=>p.kind!=='human'),player=agents.find(p=>p.playerId===playerId)!;
   const entries=state.conversations[playerId]??empty,thread=useRef<HTMLDivElement>(null),follow=useRef(true),[following,setFollowing]=useState(true);
   const messages=useMemo(()=>entries.map(conversationContent).filter((entry):entry is ConversationContent=>entry!==null),[entries]);
@@ -27,6 +28,7 @@ export function AgentConversationModal({state,playerId,onPlayer,onClose}:{state:
     <nav className="conversation-players" aria-label="选择 Agent 对话">{agents.map(p=><button key={p.playerId} aria-pressed={p.playerId===playerId} onClick={()=>onPlayer(p.playerId)}><strong>{p.name}</strong><small>{kindName[p.kind]}</small></button>)}</nav>
     <div className="conversation-toolbar"><span>{messages.length} 条记录</span><div><button className="text-button" disabled={!messages.length} onClick={()=>expandAll(true)}><ChevronsUpDown size={13}/>全部展开</button><button className="text-button" disabled={!messages.length} onClick={()=>expandAll(false)}><ChevronsDownUp size={13}/>全部折叠</button></div></div>
     {state.conversationError&&<p className="form-error" role="alert">{state.conversationError}</p>}
+    {state.conversationError&&<StorageCleanup onClear={onClearStorage}/>}
     <ConversationExpansion.Provider value={command}><div className="conversation-thread" ref={thread} role="log" aria-label={`${player.name}的对话`} aria-live="off" tabIndex={0} onScroll={()=>{const el=thread.current;if(!el)return;const near=el.scrollHeight-el.scrollTop-el.clientHeight<64;follow.current=near;setFollowing(near);}}>
       {messages.length?messages.map(entry=><ConversationMessage key={`${playerId}:${entry.id}`} entry={entry} playerName={player.name}/>):<div className="conversation-empty"><MessageCircle size={25}/><p>这位 Agent 还没有对话内容。</p><small>需要行动时，指令、回复、可见思考和工具交互会逐条出现在这里。</small></div>}
     </div></ConversationExpansion.Provider>

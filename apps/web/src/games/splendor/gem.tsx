@@ -18,7 +18,7 @@ export function GemIcon({color,className='',engraved=false}:{color:Gem;className
     <polygon points={points(outline)} fill={palette[0]}/>
     {outline.map((a,i)=>{const b=outline[(i+1)%outline.length];return <polygon key={i} points={points([a,b,[b[0]*GEM_FACET_SCALE,b[1]*GEM_FACET_SCALE],[a[0]*GEM_FACET_SCALE,a[1]*GEM_FACET_SCALE]])} fill={gemFacetColor(color,i)}/>;})}
     <polygon points={points(outline.map(([x,y])=>[x*GEM_FACET_SCALE,y*GEM_FACET_SCALE]))} fill={`url(#${id})`}/>
-    <polygon points={points(outline)} fill="none" stroke={mixGemColor(palette[1],palette[2],.4)} strokeWidth=".65" strokeLinejoin="round"/>
+    <polygon className="sp-gem-outline" points={points(outline)} fill="none" stroke={mixGemColor(palette[1],palette[2],.4)} strokeWidth=".65" strokeLinejoin="round"/>
     </g>
   </svg>;
 }
